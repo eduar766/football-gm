@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: football-gm-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: football_gm
+    # Host port 5544 (not 5432) to avoid clashing with a local Postgres.
+    ports:
+      - '5544:5432'
+    volumes:
+      - football_gm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d football_gm']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  football_gm_pgdata:

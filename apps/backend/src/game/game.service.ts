@@ -1,0 +1,1703 @@
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import {
+  advanceMatchday as engineAdvanceMatchday,
+  advanceSeason as engineAdvanceSeason,
+  closeSeason as engineCloseSeason,
+  computeStandings,
+  addNorm as engineAddNorm,
+  applyImpulse as engineApplyImpulse,
+  applyPointPenalties,
+  cancelContract as engineCancelContract,
+  createCup as engineCreateCup,
+  createGame as engineCreateGame,
+  createOwnTeam as engineCreateOwnTeam,
+  financialHealth,
+  negotiableTeams,
+  normBreaches,
+  operatingCost,
+  pendingEvents,
+  pendingIntegrationTeams,
+  playerTier,
+  pointPenaltiesForYear,
+  removeNorm as engineRemoveNorm,
+  resolveEvent as engineResolveEvent,
+  runLevelingLeague as engineRunLevelingLeague,
+  sanctionTeam as engineSanctionTeam,
+  setEconomyPolicy as engineSetEconomyPolicy,
+  setLeagueFormat as engineSetLeagueFormat,
+  signContract as engineSignContract,
+  startNegotiation as engineStartNegotiation,
+  removePrize as engineRemovePrize,
+  setCupPrize as engineSetCupPrize,
+  setLeaguePrize as engineSetLeaguePrize,
+  startSeason as engineStartSeason,
+  tierOf,
+  wageBill,
+  type GameState,
+} from '@football-gm/engine';
+import type {
+  CreateGameRequest,
+  FederationListItem,
+  FederationOverview,
+  GameListItem,
+  GameSummary,
+  HistoryResponse,
+  CreateCupRequest,
+  ComplianceResponse,
+  CupsResponse,
+  CupType,
+  EconomyResponse,
+  PrizesResponse,
+  TransfersResponse,
+  EventsResponse,
+  MarketResponse,
+  NegotiationDto,
+  NextFixturesResponse,
+  NormsResponse,
+  StandingsResponse,
+  StructureResponse,
+  TeamDetail,
+  TeamListItem,
+} from '@football-gm/contracts';
+import type { Database } from '../db/drizzle';
+import { DRIZZLE } from '../db/drizzle.module';
+import * as s from '../db/schema';
+import { buildWeakSquad, generateWorld } from './world-generator';
+
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+@Injectable()
+export class GameService {
+  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+
+  /* ----------------------------------------------------------- helpers */
+
+  private async loadState(gameId: number, tx?: Tx): Promise<GameState> {
+    const db = tx ?? this.db;
+    const [row] = await db
+      .select({ state: s.gameEngineStates.state })
+      .from(s.gameEngineStates)
+      .where(eq(s.gameEngineStates.gameId, gameId));
+    if (!row) throw new NotFoundException(`Game ${gameId} not found`);
+    return row.state as unknown as GameState;
+  }
+
+  private async saveState(tx: Tx, gameId: number, state: GameState) {
+    await tx
+      .update(s.gameEngineStates)
+      .set({ state: state as unknown as Record<string, unknown>, updatedAt: new Date() })
+      .where(eq(s.gameEngineStates.gameId, gameId));
+  }
+
+  // engine team id (1..N) -> db team id
+  private async engineToDbTeam(gameId: number, tx?: Tx): Promise<Map<number, number>> {
+    const db = tx ?? this.db;
+    const rows = await db
+      .select({ id: s.teams.id, engineTeamId: s.teams.engineTeamId })
+      .from(s.teams)
+      .where(eq(s.teams.gameId, gameId));
+    const map = new Map<number, number>();
+    for (const r of rows) if (r.engineTeamId != null) map.set(r.engineTeamId, r.id);
+    return map;
+  }
+
+  // engine federation id -> db federation id
+  private async engineToDbFederation(
+    gameId: number,
+    tx?: Tx,
+  ): Promise<Map<number, number>> {
+    const db = tx ?? this.db;
+    const rows = await db
+      .select({ id: s.federations.id, eng: s.federations.engineFederationId })
+      .from(s.federations)
+      .where(eq(s.federations.gameId, gameId));
+    const map = new Map<number, number>();
+    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
+    return map;
+  }
+
+  // engine cup id -> db cup id
+  private async engineToDbCup(
+    gameId: number,
+    tx?: Tx,
+  ): Promise<Map<number, number>> {
+    const db = tx ?? this.db;
+    const rows = await db
+      .select({ id: s.cups.id, eng: s.cups.engineCupId })
+      .from(s.cups)
+      .where(eq(s.cups.gameId, gameId));
+    const map = new Map<number, number>();
+    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
+    return map;
+  }
+
+  // engine player id -> db player id
+  private async engineToDbPlayer(
+    gameId: number,
+    tx?: Tx,
+  ): Promise<Map<number, number>> {
+    const db = tx ?? this.db;
+    const rows = await db
+      .select({ id: s.players.id, eng: s.players.enginePlayerId })
+      .from(s.players)
+      .where(eq(s.players.gameId, gameId));
+    const map = new Map<number, number>();
+    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
+    return map;
+  }
+
+  // Ensure a db divisions row exists for every engine division; returns
+  // engine division orden -> db division id.
+  private async ensureDivisions(
+    tx: Tx,
+    gameId: number,
+    leagueId: number,
+    divisions: Array<{ orden: number; name: string }>,
+    teams: Array<{ divisionOrden: number | null }>,
+  ): Promise<Map<number, number>> {
+    const existing = await tx
+      .select({ id: s.divisions.id, orden: s.divisions.orden })
+      .from(s.divisions)
+      .where(eq(s.divisions.gameId, gameId));
+    const map = new Map<number, number>();
+    for (const r of existing) map.set(r.orden, r.id);
+    for (const d of divisions) {
+      if (map.has(d.orden)) {
+        await tx
+          .update(s.divisions)
+          .set({ name: d.name })
+          .where(eq(s.divisions.id, map.get(d.orden)!));
+        continue;
+      }
+      const plazas =
+        teams.filter((t) => t.divisionOrden === d.orden).length || 20;
+      const [row] = await tx
+        .insert(s.divisions)
+        .values({ gameId, leagueId, name: d.name, orden: d.orden, plazas })
+        .returning({ id: s.divisions.id });
+      map.set(d.orden, row.id);
+    }
+    return map;
+  }
+
+  private async playerLeagueId(gameId: number, tx?: Tx): Promise<number> {
+    const db = tx ?? this.db;
+    const [row] = await db
+      .select({ id: s.leagues.id })
+      .from(s.leagues)
+      .where(eq(s.leagues.gameId, gameId));
+    if (!row) throw new NotFoundException(`Game ${gameId} has no league`);
+    return row.id;
+  }
+
+  private async playerFederation(gameId: number, tx?: Tx) {
+    const db = tx ?? this.db;
+    const [fed] = await db
+      .select()
+      .from(s.federations)
+      .where(and(eq(s.federations.gameId, gameId), eq(s.federations.isPlayer, true)));
+    if (!fed) throw new NotFoundException(`Game ${gameId} has no player federation`);
+    return fed;
+  }
+
+  private async summaryFrom(gameId: number, state: GameState): Promise<GameSummary> {
+    const [game] = await this.db.select().from(s.games).where(eq(s.games.id, gameId));
+    if (!game) throw new NotFoundException(`Game ${gameId} not found`);
+    const fed = await this.playerFederation(gameId);
+    return {
+      id: gameId,
+      name: game.name,
+      seed: game.seed,
+      year: state.year,
+      phase: state.phase,
+      currentMatchday: state.currentMatchday,
+      totalMatchdays: state.totalMatchdays,
+      seasonOver: state.seasonOver,
+      impulsesRemaining: state.impulsesRemaining,
+      impulsesPerSeason: state.impulsesPerSeason,
+      pendingEventsCount: pendingEvents(state).length,
+      leagueFormat: state.leagueFormat,
+      federation: {
+        id: fed.id,
+        name: fed.name,
+        prestige: state.prestige,
+        tier: tierOf(state.prestige),
+        isPlayer: fed.isPlayer,
+      },
+    };
+  }
+
+  /* ------------------------------------------------------ create / list */
+
+  async createGame(input: CreateGameRequest): Promise<{ id: number }> {
+    const seed = input.seed ?? Math.floor(Math.random() * 2_147_483_647);
+    const world = generateWorld(seed);
+    const state = engineCreateGame(seed, {
+      playerFederationName: world.federationName,
+      teams: world.teams.map((t) => ({
+        name: t.name,
+        strength: t.strength,
+        arraigo: t.arraigo,
+        // Youth/cantera strength from the academy rating (§4.4 youth cups).
+        youthStrength: Math.max(20, Math.round(t.academiaRating * 0.9)),
+        squad: t.squad, // engine tracks players for the §6 awards
+      })),
+      rivals: world.rivals.map((r) => ({
+        name: r.name,
+        prestige: r.prestige,
+        teams: r.teams.map((rt) => ({
+          name: rt.name,
+          strength: rt.strength,
+          arraigo: rt.arraigo,
+        })),
+      })),
+    });
+
+    return this.db.transaction(async (tx) => {
+      const [game] = await tx
+        .insert(s.games)
+        .values({ name: input.name, seed, currentYear: state.year })
+        .returning({ id: s.games.id });
+
+      // Federations (player + rivals), keyed back to their engine ids.
+      const fedByEngine = new Map<number, number>();
+      for (const f of state.federations) {
+        const [row] = await tx
+          .insert(s.federations)
+          .values({
+            gameId: game.id,
+            engineFederationId: f.id,
+            name: f.name,
+            prestige: f.prestige,
+            isPlayer: f.isPlayer,
+          })
+          .returning({ id: s.federations.id });
+        fedByEngine.set(f.id, row.id);
+      }
+      const playerFedDbId = fedByEngine.get(state.playerFederationId)!;
+
+      const [league] = await tx
+        .insert(s.leagues)
+        .values({ gameId: game.id, federationId: playerFedDbId, name: world.leagueName })
+        .returning({ id: s.leagues.id });
+
+      const [division] = await tx
+        .insert(s.divisions)
+        .values({
+          gameId: game.id,
+          leagueId: league.id,
+          name: world.divisionName,
+          orden: 1,
+          plazas: world.teams.length,
+        })
+        .returning({ id: s.divisions.id });
+
+      // Teams: league teams get the rich domain attributes + squad; rival teams
+      // are negotiation targets (lighter projection).
+      let leagueIdx = 0;
+      for (const t of state.teams) {
+        const rich = t.divisionOrden !== null ? world.teams[leagueIdx++] : undefined;
+        const [row] = await tx
+          .insert(s.teams)
+          .values({
+            gameId: game.id,
+            engineTeamId: t.id,
+            name: t.name,
+            strength: t.strength,
+            arraigo: t.arraigo,
+            prestige: rich?.prestige ?? Math.max(0, t.strength - 5),
+            presupuesto: rich?.presupuesto ?? t.strength * 80_000,
+            aficion: rich?.aficion ?? 0,
+            estadioNombre: rich?.estadioNombre ?? null,
+            estadioAforo: rich?.estadioAforo ?? null,
+            academiaRating: rich?.academiaRating ?? 50,
+            medicoRating: rich?.medicoRating ?? 50,
+            ojeadoresRating: rich?.ojeadoresRating ?? 50,
+            cuerpoTecnicoRating: rich?.cuerpoTecnicoRating ?? 50,
+            federationId: fedByEngine.get(t.federationId) ?? playerFedDbId,
+            divisionId: t.divisionOrden !== null ? division.id : null,
+          })
+          .returning({ id: s.teams.id });
+        if (rich) {
+          // Persist players using the engine state as source of truth so
+          // engine_player_id is preserved for awards/rankings (§6).
+          const enginePlayers = state.players.filter((p) => p.teamId === t.id);
+          if (enginePlayers.length > 0) {
+            await tx.insert(s.players).values(
+              enginePlayers.map((p) => ({
+                gameId: game.id,
+                teamId: row.id,
+                enginePlayerId: p.id,
+                name: p.name,
+                posicion: p.posicion,
+                calidad: p.calidad,
+              })),
+            );
+          }
+        }
+      }
+
+      await tx.insert(s.seasons).values({
+        gameId: game.id,
+        anio: state.year,
+        impulsosRestantes: state.impulsesRemaining,
+      });
+
+      await tx
+        .insert(s.gameEngineStates)
+        .values({ gameId: game.id, state: state as unknown as Record<string, unknown> });
+
+      return { id: game.id };
+    });
+  }
+
+  async list(): Promise<GameListItem[]> {
+    const rows = await this.db
+      .select()
+      .from(s.games)
+      .orderBy(desc(s.games.createdAt));
+    return rows.map((g) => ({
+      id: g.id,
+      name: g.name,
+      seed: g.seed,
+      currentYear: g.currentYear,
+      createdAt: g.createdAt.toISOString(),
+    }));
+  }
+
+  async getSummary(gameId: number): Promise<GameSummary> {
+    const state = await this.loadState(gameId);
+    return this.summaryFrom(gameId, state);
+  }
+
+  async setLeagueFormat(
+    gameId: number,
+    format: 'ida' | 'ida_vuelta',
+  ): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'cambiar el formato de la liga');
+      const next = engineSetLeagueFormat(state, format);
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  /* ------------------------------------------------------- the loop */
+
+  private assertNoPendingEvents(state: GameState): void {
+    if (pendingEvents(state).length > 0) {
+      throw new BadRequestException(
+        'Hay una polémica sin resolver: atiéndela en Eventos antes de avanzar',
+      );
+    }
+  }
+
+  // Structural commands (cups, leveling, format, create team, prizes) can only
+  // run in pretemporada so the calendar contemplates them from kickoff (§4.8).
+  private assertPretemporada(state: GameState, action: string): void {
+    if (state.phase !== 'pretemporada') {
+      throw new BadRequestException(
+        `No se puede ${action} con la temporada en curso: hazlo entre temporadas`,
+      );
+    }
+  }
+
+  private assertTemporada(state: GameState, action: string): void {
+    if (state.phase !== 'temporada') {
+      throw new BadRequestException(
+        `No se puede ${action} en pretemporada: pulsa "Comenzar temporada" primero`,
+      );
+    }
+  }
+
+  // Build the season's calendar and start the playable phase (§4.8).
+  async startSeason(gameId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'comenzar la temporada');
+      const next = engineStartSeason(state);
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async advanceMatchday(gameId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertTemporada(state, 'avanzar la jornada');
+      this.assertNoPendingEvents(state);
+      const next = engineAdvanceMatchday(state);
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  // Simulate the remaining matchdays to the end of the season and STOP. The
+  // final table stays visible so the player can review it before closing
+  // (this is the validated prototype loop: advance -> see table -> close).
+  async advanceSeason(gameId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertTemporada(state, 'avanzar la temporada');
+      this.assertNoPendingEvents(state);
+      const next = engineAdvanceSeason(state);
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  // Close the finished season: write the append-only history (§6) and land in
+  // pretemporada of the next year. Requires the season to be over.
+  async closeSeason(gameId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const finished = await this.loadState(gameId, tx);
+      if (finished.phase !== 'temporada' || !finished.seasonOver) {
+        throw new BadRequestException('Season is not finished yet');
+      }
+      const closedYear = finished.year;
+      const next = engineCloseSeason(finished);
+
+      const map = await this.engineToDbTeam(gameId, tx);
+      const fedMap = await this.engineToDbFederation(gameId, tx);
+      const leagueId = await this.playerLeagueId(gameId, tx);
+      // Cover both the finished structure (for history) and the next one
+      // (for reprojection after promotion/relegation).
+      const divMap = await this.ensureDivisions(
+        tx,
+        gameId,
+        leagueId,
+        [...finished.divisions, ...next.divisions],
+        next.teams,
+      );
+
+      // Append-only history (§6): one acta per division of the finished
+      // season — with sanction point penalties applied (matches the engine).
+      const closedPenalties = pointPenaltiesForYear(finished, closedYear);
+      for (const d of finished.divisions) {
+        const dTeams = finished.teams.filter((t) => t.divisionOrden === d.orden);
+        const dResults = finished.results.filter(
+          (r) => r.divisionOrden === d.orden,
+        );
+        const table = applyPointPenalties(
+          computeStandings(dTeams, dResults),
+          closedPenalties,
+        );
+        if (table.length === 0) continue;
+        const [record] = await tx
+          .insert(s.seasonRecords)
+          .values({
+            gameId,
+            anio: closedYear,
+            divisionId: divMap.get(d.orden) ?? null,
+            championTeamId: map.get(table[0].teamId)!,
+          })
+          .returning({ id: s.seasonRecords.id });
+        await tx.insert(s.seasonRecordPositions).values(
+          table.map((r, i) => ({
+            seasonRecordId: record.id,
+            teamId: map.get(r.teamId)!,
+            posicion: i + 1,
+            puntos: r.points,
+            ganados: r.won,
+            empatados: r.drawn,
+            perdidos: r.lost,
+            golesFavor: r.goalsFor,
+            golesContra: r.goalsAgainst,
+          })),
+        );
+        await tx.insert(s.trajectories).values(
+          table.map((r, i) => ({
+            gameId,
+            teamId: map.get(r.teamId)!,
+            anio: closedYear,
+            divisionOrden: d.orden,
+            puestoFinal: i + 1,
+          })),
+        );
+      }
+
+      // Cup actas (§4.4): a season_records row per cup finalised this year.
+      // No positions table (single-elimination bracket has only one champion);
+      // palmarés counts the title automatically via vw_palmares.
+      const cupMap = await this.engineToDbCup(gameId, tx);
+      const cupsThisYear = next.cups.filter(
+        (c) => c.year === closedYear && c.status === 'finalizada' && c.championTeamId !== null,
+      );
+      if (cupsThisYear.length > 0) {
+        await tx.insert(s.seasonRecords).values(
+          cupsThisYear.map((c) => ({
+            gameId,
+            anio: closedYear,
+            divisionId: null,
+            cupId: cupMap.get(c.id) ?? null,
+            championTeamId: map.get(c.championTeamId!)!,
+          })),
+        );
+      }
+
+      // Awards (§6) emitted by the engine for the closed year. Persisted as
+      // append-only history; the historical scorer ranking is a SQL view.
+      const yearAwards = next.awards.filter((a) => a.year === closedYear);
+      if (yearAwards.length > 0) {
+        const playerMap = await this.engineToDbPlayer(gameId, tx);
+        await tx.insert(s.awards).values(
+          yearAwards.map((a) => ({
+            gameId,
+            anio: a.year,
+            tipo: a.tipo,
+            playerId: playerMap.get(a.playerId)!,
+            teamId: map.get(a.teamId) ?? null,
+            valor: a.valor,
+          })),
+        );
+      }
+
+      // Sync read-model projections from the engine's evolved state: team
+      // strength, ownership (adhesions), division placement, federation prestige.
+      for (const t of next.teams) {
+        const dbId = map.get(t.id);
+        if (dbId) {
+          await tx
+            .update(s.teams)
+            .set({
+              strength: t.strength,
+              arraigo: t.arraigo,
+              federationId: fedMap.get(t.federationId) ?? undefined,
+              divisionId:
+                t.divisionOrden !== null
+                  ? (divMap.get(t.divisionOrden) ?? null)
+                  : null,
+            })
+            .where(eq(s.teams.id, dbId));
+        }
+      }
+      for (const f of next.federations) {
+        const dbId = fedMap.get(f.id);
+        if (dbId) {
+          await tx
+            .update(s.federations)
+            .set({ prestige: f.prestige })
+            .where(eq(s.federations.id, dbId));
+        }
+      }
+      await tx
+        .update(s.games)
+        .set({ currentYear: next.year })
+        .where(eq(s.games.id, gameId));
+      await tx.insert(s.seasons).values({
+        gameId,
+        anio: next.year,
+        impulsosRestantes: next.impulsesRemaining,
+      });
+
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  /* ----------------------------------------------------- read screens */
+
+  async getStandings(
+    gameId: number,
+    divisionOrden = 1,
+  ): Promise<StandingsResponse> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const div =
+      state.divisions.find((d) => d.orden === divisionOrden) ??
+      state.divisions[0];
+    const orden = div?.orden ?? 1;
+    const divTeams = state.teams.filter((t) => t.divisionOrden === orden);
+    const divResults = state.results.filter((r) => r.divisionOrden === orden);
+    const rows = applyPointPenalties(
+      computeStandings(divTeams, divResults),
+      pointPenaltiesForYear(state, state.year),
+    ).map((r) => ({
+      teamId: map.get(r.teamId) ?? r.teamId,
+      name: r.name,
+      played: r.played,
+      won: r.won,
+      drawn: r.drawn,
+      lost: r.lost,
+      goalsFor: r.goalsFor,
+      goalsAgainst: r.goalsAgainst,
+      goalDiff: r.goalDiff,
+      points: r.points,
+    }));
+    return {
+      year: state.year,
+      divisionOrden: orden,
+      divisionName: div?.name ?? 'División',
+      availableDivisions: state.divisions.map((d) => ({
+        orden: d.orden,
+        name: d.name,
+      })),
+      rows,
+    };
+  }
+
+  async getStructure(gameId: number): Promise<StructureResponse> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const toDto = (t: GameState['teams'][number]) => ({
+      teamId: map.get(t.id) ?? t.id,
+      name: t.name,
+      strength: t.strength,
+      arraigo: t.arraigo,
+    });
+    return {
+      divisions: state.divisions.map((d) => ({
+        orden: d.orden,
+        name: d.name,
+        teams: state.teams
+          .filter((t) => t.divisionOrden === d.orden)
+          .map(toDto),
+      })),
+      pending: pendingIntegrationTeams(state).map(toDto),
+    };
+  }
+
+  async runLevelingLeague(gameId: number): Promise<StructureResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'celebrar la liga de nivelación');
+      if (state.treasury < 0) {
+        throw new BadRequestException(
+          'Tesorería en negativo: no puedes permitirte expandir la estructura (§5)',
+        );
+      }
+      const next = engineRunLevelingLeague(state);
+      const map = await this.engineToDbTeam(gameId, tx);
+      const leagueId = await this.playerLeagueId(gameId, tx);
+      const divMap = await this.ensureDivisions(
+        tx,
+        gameId,
+        leagueId,
+        next.divisions,
+        next.teams,
+      );
+      for (const t of next.teams) {
+        const dbId = map.get(t.id);
+        if (dbId) {
+          await tx
+            .update(s.teams)
+            .set({
+              divisionId:
+                t.divisionOrden !== null
+                  ? (divMap.get(t.divisionOrden) ?? null)
+                  : null,
+            })
+            .where(eq(s.teams.id, dbId));
+        }
+      }
+      await this.saveState(tx, gameId, next);
+      const toDto = (t: GameState['teams'][number]) => ({
+        teamId: map.get(t.id) ?? t.id,
+        name: t.name,
+        strength: t.strength,
+        arraigo: t.arraigo,
+      });
+      return {
+        divisions: next.divisions.map((d) => ({
+          orden: d.orden,
+          name: d.name,
+          teams: next.teams
+            .filter((t) => t.divisionOrden === d.orden)
+            .map(toDto),
+        })),
+        pending: pendingIntegrationTeams(next).map(toDto),
+      };
+    });
+  }
+
+  async createOwnTeam(
+    gameId: number,
+    name: string,
+  ): Promise<StructureResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'crear un equipo propio');
+      // The engine assigns the new team id as max(team.id) + 1; compute it
+      // here so we can pre-build a matching squad and feed it to the engine.
+      const expectedNewId =
+        state.teams.reduce((m, t) => Math.max(m, t.id), 0) + 1;
+      const squad = buildWeakSquad(state.seed, expectedNewId);
+      const next = engineCreateOwnTeam(state, name, squad);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo crear el equipo: nombre vacío o fondos insuficientes (coste 5 M€)',
+        );
+      }
+      const existing = new Set(state.teams.map((t) => t.id));
+      const created = next.teams.find((t) => !existing.has(t.id))!;
+
+      const fedMap = await this.engineToDbFederation(gameId, tx);
+      const leagueId = await this.playerLeagueId(gameId, tx);
+      const divMap = await this.ensureDivisions(
+        tx,
+        gameId,
+        leagueId,
+        next.divisions,
+        next.teams,
+      );
+
+      const [row] = await tx
+        .insert(s.teams)
+        .values({
+          gameId,
+          engineTeamId: created.id,
+          name: created.name,
+          strength: created.strength,
+          arraigo: created.arraigo,
+          prestige: Math.max(0, created.strength - 5),
+          presupuesto: 2_000_000,
+          aficion: 1_000,
+          estadioNombre: null,
+          estadioAforo: null,
+          academiaRating: 40,
+          medicoRating: 40,
+          ojeadoresRating: 40,
+          cuerpoTecnicoRating: 40,
+          federationId: fedMap.get(next.playerFederationId) ?? null,
+          divisionId:
+            created.divisionOrden !== null
+              ? (divMap.get(created.divisionOrden) ?? null)
+              : null,
+        })
+        .returning({ id: s.teams.id });
+
+      const newPlayers = next.players.filter((p) => p.teamId === created.id);
+      await tx.insert(s.players).values(
+        newPlayers.map((p) => ({
+          gameId,
+          teamId: row.id,
+          enginePlayerId: p.id,
+          name: p.name,
+          posicion: p.posicion,
+          calidad: p.calidad,
+        })),
+      );
+
+      await this.saveState(tx, gameId, next);
+
+      const map = await this.engineToDbTeam(gameId, tx);
+      const toDto = (t: GameState['teams'][number]) => ({
+        teamId: map.get(t.id) ?? t.id,
+        name: t.name,
+        strength: t.strength,
+        arraigo: t.arraigo,
+      });
+      return {
+        divisions: next.divisions.map((d) => ({
+          orden: d.orden,
+          name: d.name,
+          teams: next.teams
+            .filter((t) => t.divisionOrden === d.orden)
+            .map(toDto),
+        })),
+        pending: pendingIntegrationTeams(next).map(toDto),
+      };
+    });
+  }
+
+  async listTeams(gameId: number): Promise<TeamListItem[]> {
+    const rows = await this.db
+      .select({
+        id: s.teams.id,
+        name: s.teams.name,
+        strength: s.teams.strength,
+        prestige: s.teams.prestige,
+        divisionName: s.divisions.name,
+      })
+      .from(s.teams)
+      .leftJoin(s.divisions, eq(s.teams.divisionId, s.divisions.id))
+      .where(eq(s.teams.gameId, gameId))
+      .orderBy(desc(s.teams.strength));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      strength: r.strength,
+      prestige: r.prestige,
+      divisionName: r.divisionName ?? null,
+    }));
+  }
+
+  async getTeam(gameId: number, teamId: number): Promise<TeamDetail> {
+    const [team] = await this.db
+      .select({
+        id: s.teams.id,
+        name: s.teams.name,
+        strength: s.teams.strength,
+        prestige: s.teams.prestige,
+        arraigo: s.teams.arraigo,
+        presupuesto: s.teams.presupuesto,
+        aficion: s.teams.aficion,
+        estadioNombre: s.teams.estadioNombre,
+        estadioAforo: s.teams.estadioAforo,
+        academiaRating: s.teams.academiaRating,
+        medicoRating: s.teams.medicoRating,
+        ojeadoresRating: s.teams.ojeadoresRating,
+        cuerpoTecnicoRating: s.teams.cuerpoTecnicoRating,
+        federationName: s.federations.name,
+        divisionName: s.divisions.name,
+      })
+      .from(s.teams)
+      .leftJoin(s.federations, eq(s.teams.federationId, s.federations.id))
+      .leftJoin(s.divisions, eq(s.teams.divisionId, s.divisions.id))
+      .where(and(eq(s.teams.gameId, gameId), eq(s.teams.id, teamId)));
+    if (!team) throw new NotFoundException(`Team ${teamId} not found`);
+
+    const dbSquad = await this.db
+      .select({
+        id: s.players.id,
+        enginePlayerId: s.players.enginePlayerId,
+        name: s.players.name,
+        posicion: s.players.posicion,
+        calidad: s.players.calidad,
+      })
+      .from(s.players)
+      .where(eq(s.players.teamId, teamId))
+      .orderBy(desc(s.players.calidad));
+
+    // Enrich with engine stats (cards / availability) when present.
+    const state = await this.loadState(gameId);
+    const enginePlayers = new Map(state.players.map((p) => [p.id, p]));
+    const squad = dbSquad.map((p) => {
+      const eng = p.enginePlayerId !== null ? enginePlayers.get(p.enginePlayerId) : undefined;
+      return {
+        id: p.id,
+        name: p.name,
+        posicion: p.posicion,
+        calidad: p.calidad,
+        yellowCardsThisSeason: eng?.season.yellowCards ?? 0,
+        redCardsThisSeason: eng?.season.redCards ?? 0,
+        matchesSuspendedLeft: eng?.matchesSuspendedLeft ?? 0,
+        injuredMatchesLeft: eng?.injuredMatchesLeft ?? 0,
+      };
+    });
+
+    const trajectory = await this.db
+      .select({
+        anio: s.trajectories.anio,
+        divisionOrden: s.trajectories.divisionOrden,
+        puestoFinal: s.trajectories.puestoFinal,
+      })
+      .from(s.trajectories)
+      .where(and(eq(s.trajectories.gameId, gameId), eq(s.trajectories.teamId, teamId)))
+      .orderBy(asc(s.trajectories.anio));
+
+    return {
+      ...team,
+      divisionName: team.divisionName ?? null,
+      federationName: team.federationName ?? null,
+      squad,
+      trajectory,
+    };
+  }
+
+  async getFederation(gameId: number): Promise<FederationOverview> {
+    const fed = await this.playerFederation(gameId);
+    const [league] = await this.db
+      .select({ id: s.leagues.id, name: s.leagues.name })
+      .from(s.leagues)
+      .where(eq(s.leagues.federationId, fed.id));
+
+    const divisions = league
+      ? await this.db
+          .select({
+            id: s.divisions.id,
+            name: s.divisions.name,
+            orden: s.divisions.orden,
+            plazas: s.divisions.plazas,
+          })
+          .from(s.divisions)
+          .where(eq(s.divisions.leagueId, league.id))
+          .orderBy(asc(s.divisions.orden))
+      : [];
+
+    const counts = await this.db
+      .select({
+        divisionId: s.teams.divisionId,
+        c: sql<number>`count(*)::int`,
+      })
+      .from(s.teams)
+      .where(eq(s.teams.gameId, gameId))
+      .groupBy(s.teams.divisionId);
+    const countByDiv = new Map(counts.map((r) => [r.divisionId, r.c]));
+    const teamCount = counts.reduce((a, r) => a + r.c, 0);
+
+    return {
+      id: fed.id,
+      name: fed.name,
+      prestige: fed.prestige,
+      tier: tierOf(fed.prestige),
+      isPlayer: fed.isPlayer,
+      leagueName: league?.name ?? null,
+      teamCount,
+      divisions: divisions.map((d) => ({
+        id: d.id,
+        name: d.name ?? 'División',
+        orden: d.orden,
+        plazas: d.plazas,
+        teamCount: countByDiv.get(d.id) ?? 0,
+      })),
+    };
+  }
+
+  async getHistory(gameId: number): Promise<HistoryResponse> {
+    const records = await this.db
+      .select({
+        anio: s.seasonRecords.anio,
+        championTeamId: s.seasonRecords.championTeamId,
+        championName: s.teams.name,
+        divisionName: s.divisions.name,
+      })
+      .from(s.seasonRecords)
+      .leftJoin(s.teams, eq(s.seasonRecords.championTeamId, s.teams.id))
+      .leftJoin(s.divisions, eq(s.seasonRecords.divisionId, s.divisions.id))
+      .where(eq(s.seasonRecords.gameId, gameId))
+      .orderBy(desc(s.seasonRecords.anio));
+
+    const palmares = await this.db
+      .select({
+        teamId: s.vwPalmares.teamId,
+        teamName: s.teams.name,
+        titles: s.vwPalmares.titles,
+      })
+      .from(s.vwPalmares)
+      .leftJoin(s.teams, eq(s.vwPalmares.teamId, s.teams.id))
+      .where(eq(s.vwPalmares.gameId, gameId))
+      .orderBy(desc(s.vwPalmares.titles));
+
+    const awards = await this.db
+      .select({
+        anio: s.awards.anio,
+        tipo: s.awards.tipo,
+        playerName: s.players.name,
+        teamName: s.teams.name,
+        valor: s.awards.valor,
+      })
+      .from(s.awards)
+      .leftJoin(s.players, eq(s.awards.playerId, s.players.id))
+      .leftJoin(s.teams, eq(s.awards.teamId, s.teams.id))
+      .where(eq(s.awards.gameId, gameId))
+      .orderBy(desc(s.awards.anio), s.awards.tipo);
+
+    const topScorers = await this.db
+      .select({
+        playerId: s.vwRankingGoleadores.playerId,
+        playerName: s.players.name,
+        teamName: s.teams.name,
+        seasonsWon: s.vwRankingGoleadores.seasonsWon,
+        totalGoles: s.vwRankingGoleadores.totalGoles,
+      })
+      .from(s.vwRankingGoleadores)
+      .leftJoin(s.players, eq(s.vwRankingGoleadores.playerId, s.players.id))
+      .leftJoin(s.teams, eq(s.players.teamId, s.teams.id))
+      .where(eq(s.vwRankingGoleadores.gameId, gameId))
+      .orderBy(desc(s.vwRankingGoleadores.totalGoles));
+
+    return {
+      records: records.map((r) => ({
+        anio: r.anio,
+        championTeamId: r.championTeamId,
+        championName: r.championName ?? '—',
+        divisionName: r.divisionName ?? null,
+      })),
+      palmares: palmares.map((p) => ({
+        teamId: p.teamId,
+        teamName: p.teamName ?? '—',
+        titles: p.titles,
+      })),
+      awards: awards.map((a) => ({
+        year: a.anio,
+        tipo: a.tipo,
+        playerName: a.playerName ?? '—',
+        teamName: a.teamName ?? '—',
+        valor: a.valor,
+      })),
+      topScorers: topScorers.map((r) => ({
+        playerId: r.playerId,
+        playerName: r.playerName ?? '—',
+        teamName: r.teamName ?? '—',
+        seasonsWon: r.seasonsWon,
+        totalGoles: r.totalGoles,
+      })),
+    };
+  }
+
+  /* ------------------------------- commissioner: federations & market */
+
+  async getFederations(gameId: number): Promise<FederationListItem[]> {
+    const state = await this.loadState(gameId);
+    return state.federations
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        prestige: f.prestige,
+        tier: tierOf(f.prestige),
+        isPlayer: f.isPlayer,
+        teamCount: state.teams.filter((t) => t.federationId === f.id).length,
+      }))
+      .sort((a, b) => b.prestige - a.prestige);
+  }
+
+  async getMarket(gameId: number): Promise<MarketResponse> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const fedName = new Map(state.federations.map((f) => [f.id, f]));
+    const teams = negotiableTeams(state).map((t) => {
+      const owner = fedName.get(t.federationId);
+      return {
+        teamId: map.get(t.id) ?? t.id,
+        name: t.name,
+        strength: t.strength,
+        arraigo: t.arraigo,
+        tier: tierOf(owner?.prestige ?? 0),
+        currentFederationId: t.federationId,
+        currentFederationName: owner?.name ?? '—',
+      };
+    });
+    return { playerTier: playerTier(state), teams };
+  }
+
+  async getNegotiations(gameId: number): Promise<NegotiationDto[]> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    const fedName = new Map(state.federations.map((f) => [f.id, f.name]));
+    return state.negotiations.map((n) => ({
+      id: n.id,
+      targetTeamId: map.get(n.targetTeamId) ?? n.targetTeamId,
+      targetTeamName: teamName.get(n.targetTeamId) ?? '—',
+      state: n.state,
+      startedYear: n.startedYear,
+      requirementsSeasonsLeft: n.requirementsSeasonsLeft,
+      acceptedYear: n.acceptedYear,
+      effectiveYear: n.effectiveYear,
+      fromFederationName: fedName.get(n.fromFederationId) ?? '—',
+      byFederationName: fedName.get(n.byFederationId) ?? '—',
+    }));
+  }
+
+  async startNegotiation(
+    gameId: number,
+    dbTeamId: number,
+  ): Promise<NegotiationDto[]> {
+    return this.db.transaction(async (tx) => {
+      const [team] = await tx
+        .select({ eng: s.teams.engineTeamId })
+        .from(s.teams)
+        .where(and(eq(s.teams.gameId, gameId), eq(s.teams.id, dbTeamId)));
+      if (!team || team.eng == null) {
+        throw new NotFoundException(`Team ${dbTeamId} not found`);
+      }
+      const state = await this.loadState(gameId, tx);
+      const next = engineStartNegotiation(state, team.eng);
+      if (next === state) {
+        throw new BadRequestException(
+          'No puedes negociar por este equipo (tier, ya en curso o propio)',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      // Inline projection of the just-created negotiations list.
+      const map = await this.engineToDbTeam(gameId, tx);
+      const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
+      const fedName = new Map(next.federations.map((f) => [f.id, f.name]));
+      return next.negotiations.map((n) => ({
+        id: n.id,
+        targetTeamId: map.get(n.targetTeamId) ?? n.targetTeamId,
+        targetTeamName: teamName.get(n.targetTeamId) ?? '—',
+        state: n.state,
+        startedYear: n.startedYear,
+        requirementsSeasonsLeft: n.requirementsSeasonsLeft,
+        acceptedYear: n.acceptedYear,
+        effectiveYear: n.effectiveYear,
+        fromFederationName: fedName.get(n.fromFederationId) ?? '—',
+        byFederationName: fedName.get(n.byFederationId) ?? '—',
+      }));
+    });
+  }
+
+  /* ------------------------------------- commissioner: economy (§4.5) */
+
+  private economyResponse(state: GameState): EconomyResponse {
+    const competing = state.teams.filter(
+      (t) => t.divisionOrden !== null,
+    ).length;
+    return {
+      treasury: state.treasury,
+      financialHealth: financialHealth(state.treasury),
+      operatingCostNow: operatingCost(competing, state.divisions.length),
+      policy: {
+        talentInvestment: state.economy.talentInvestment,
+      },
+      last: state.lastEconomy,
+      contracts: state.commercialContracts.map((c) => ({
+        id: c.id,
+        tipo: c.tipo,
+        valorAnual: c.valorAnual,
+        yearsLeft: c.yearsLeft,
+      })),
+      offers: state.contractOffers.map((o) => ({
+        id: o.id,
+        tipo: o.tipo,
+        valorAnual: o.valorAnual,
+        years: o.years,
+      })),
+    };
+  }
+
+  async getEconomy(gameId: number): Promise<EconomyResponse> {
+    return this.economyResponse(await this.loadState(gameId));
+  }
+
+  async setEconomyPolicy(
+    gameId: number,
+    policy: { talentInvestment: number },
+  ): Promise<EconomyResponse> {
+    return this.db.transaction(async (tx) => {
+      const next = engineSetEconomyPolicy(await this.loadState(gameId, tx), policy);
+      await this.saveState(tx, gameId, next);
+      return this.economyResponse(next);
+    });
+  }
+
+  async signContract(
+    gameId: number,
+    offerId: number,
+  ): Promise<EconomyResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineSignContract(state, offerId);
+      if (next === state) {
+        throw new BadRequestException('Oferta no disponible');
+      }
+      await this.saveState(tx, gameId, next);
+      return this.economyResponse(next);
+    });
+  }
+
+  async cancelContract(
+    gameId: number,
+    contractId: number,
+  ): Promise<EconomyResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineCancelContract(state, contractId);
+      if (next === state) {
+        throw new BadRequestException('Contrato no encontrado');
+      }
+      await this.saveState(tx, gameId, next);
+      return this.economyResponse(next);
+    });
+  }
+
+  // Fase 6.5: prize definitions per competition + the payouts ledger. cupId
+  // is passed through as the engine id (matches what /cups returns); team ids
+  // are mapped engine→db so the UI can navigate to team pages.
+  private prizesResponse(
+    state: GameState,
+    teamMap: Map<number, number>,
+  ): PrizesResponse {
+    const cupName = new Map(state.cups.map((c) => [c.id, c.name]));
+    return {
+      prizes: state.competitionPrizes.map((p) => ({
+        id: p.id,
+        kind: p.kind,
+        cupId: p.cupId,
+        cupName: p.cupId !== null ? (cupName.get(p.cupId) ?? null) : null,
+        pool: p.pool,
+        shares: p.shares,
+      })),
+      latestPaidYear: state.prizePayments.reduce(
+        (m, p) => Math.max(m, p.year),
+        0,
+      ),
+      payments: state.prizePayments.map((p) => ({
+        year: p.year,
+        competitionLabel: p.competitionLabel,
+        teamId: teamMap.get(p.teamId) ?? p.teamId,
+        teamName: p.teamName,
+        position: p.position,
+        amount: p.amount,
+      })),
+    };
+  }
+
+  async getPrizes(gameId: number): Promise<PrizesResponse> {
+    const state = await this.loadState(gameId);
+    return this.prizesResponse(state, await this.engineToDbTeam(gameId));
+  }
+
+  async setLeaguePrize(
+    gameId: number,
+    pool: number,
+    shares: number[],
+  ): Promise<PrizesResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineSetLeaguePrize(state, pool, shares);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pueden definir premios fuera de pretemporada',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async setCupPrize(
+    gameId: number,
+    cupId: number, // engine cup id (matches what /cups returns)
+    pool: number,
+    shares: number[],
+  ): Promise<PrizesResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineSetCupPrize(state, cupId, pool, shares);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo asignar el premio: copa no existe o no estás en pretemporada',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async removePrize(gameId: number, prizeId: number): Promise<PrizesResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineRemovePrize(state, prizeId);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo eliminar el premio (no existe o no estás en pretemporada)',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  // Fase 6.4: transfer window report. `year` is the year the transfers belong
+  // to (the pretemporada of the year stamped on each entry); `entries` is the
+  // latest window, `history` is every move ever recorded.
+  async getTransfers(gameId: number): Promise<TransfersResponse> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const dto = state.transfers.map((t) => ({
+      year: t.year,
+      playerId: t.playerId,
+      playerName: t.playerName,
+      fromTeamId: map.get(t.fromTeamId) ?? t.fromTeamId,
+      fromTeamName: t.fromTeamName,
+      toTeamId: map.get(t.toTeamId) ?? t.toTeamId,
+      toTeamName: t.toTeamName,
+      calidad: t.calidad,
+    }));
+    // Latest year present in the log; 0 when there's no history yet.
+    const latestYear = dto.reduce((acc, t) => Math.max(acc, t.year), 0);
+    return {
+      year: latestYear,
+      entries: dto.filter((t) => t.year === latestYear),
+      history: dto,
+    };
+  }
+
+  // Fase 6.3: salary-cap compliance per team. One row per competing team in
+  // the player's league, with the wage bill and whether it fits the active
+  // tope_salarial cap (null cap => everybody trivially complies, just shows
+  // the bills).
+  async getCompliance(gameId: number): Promise<ComplianceResponse> {
+    const state = await this.loadState(gameId);
+    const map = await this.engineToDbTeam(gameId);
+    const cap =
+      state.norms.find((n) => n.tipo === 'tope_salarial')?.valor ?? null;
+    const divName = new Map(state.divisions.map((d) => [d.orden, d.name]));
+    const rows = state.teams
+      .filter(
+        (t) =>
+          t.divisionOrden !== null &&
+          t.federationId === state.playerFederationId,
+      )
+      .map((t) => {
+        const bill = wageBill(t.id, state.players);
+        return {
+          teamId: map.get(t.id) ?? t.id,
+          teamName: t.name,
+          divisionName: divName.get(t.divisionOrden!) ?? null,
+          wageBill: bill,
+          cap,
+          complies: cap === null ? true : bill <= cap,
+        };
+      })
+      .sort((a, b) => b.wageBill - a.wageBill);
+    return { cap, rows };
+  }
+
+  /* ------------------------------ commissioner: norms & sanctions (§4.7) */
+
+  private normsResponse(
+    state: GameState,
+    map: Map<number, number>,
+  ): NormsResponse {
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    return {
+      norms: state.norms.map((n) => ({
+        id: n.id,
+        tipo: n.tipo,
+        valor: n.valor,
+      })),
+      breaches: normBreaches(state).map((b) => ({
+        teamId: map.get(b.teamId) ?? b.teamId,
+        teamName: b.teamName,
+        normId: b.normId,
+        tipo: b.tipo,
+        valor: b.valor,
+        valorActual: b.valorActual,
+        sanctioned: b.sanctioned,
+      })),
+      sanctions: state.sanctions.map((sa) => ({
+        id: sa.id,
+        teamId: map.get(sa.teamId) ?? sa.teamId,
+        teamName: teamName.get(sa.teamId) ?? '—',
+        normId: sa.normId,
+        year: sa.year,
+        appliesToYear: sa.appliesToYear,
+        motivo: sa.motivo,
+        castigo: sa.castigo,
+      })),
+    };
+  }
+
+  async getNorms(gameId: number): Promise<NormsResponse> {
+    const state = await this.loadState(gameId);
+    return this.normsResponse(state, await this.engineToDbTeam(gameId));
+  }
+
+  async addNorm(
+    gameId: number,
+    tipo: 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial',
+    valor: number,
+  ): Promise<NormsResponse> {
+    return this.db.transaction(async (tx) => {
+      const next = engineAddNorm(await this.loadState(gameId, tx), tipo, valor);
+      await this.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async removeNorm(gameId: number, normId: number): Promise<NormsResponse> {
+    return this.db.transaction(async (tx) => {
+      const next = engineRemoveNorm(await this.loadState(gameId, tx), normId);
+      await this.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async sanctionTeam(
+    gameId: number,
+    dbTeamId: number,
+    normId: number,
+  ): Promise<NormsResponse> {
+    return this.db.transaction(async (tx) => {
+      const [team] = await tx
+        .select({ eng: s.teams.engineTeamId })
+        .from(s.teams)
+        .where(and(eq(s.teams.gameId, gameId), eq(s.teams.id, dbTeamId)));
+      if (!team || team.eng == null) {
+        throw new NotFoundException(`Team ${dbTeamId} not found`);
+      }
+      const state = await this.loadState(gameId, tx);
+      const next = engineSanctionTeam(state, team.eng, normId);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se puede sancionar: el equipo no incumple esa norma o ya está sancionado',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  /* --------------------------------------- commissioner: impulses (§4.6) */
+
+  private nextFixturesResponse(
+    state: GameState,
+    map: Map<number, number>,
+  ): NextFixturesResponse {
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    const divName = new Map(state.divisions.map((d) => [d.orden, d.name]));
+    const fixtures = state.fixtures
+      .filter((f) => f.matchday === state.currentMatchday)
+      .map((f) => {
+        const imp = state.pendingImpulses.find(
+          (p) =>
+            p.matchday === f.matchday &&
+            p.homeId === f.homeId &&
+            p.awayId === f.awayId,
+        );
+        return {
+          matchday: f.matchday,
+          divisionOrden: f.divisionOrden,
+          divisionName: divName.get(f.divisionOrden) ?? 'División',
+          homeTeamId: map.get(f.homeId) ?? f.homeId,
+          homeTeamName: teamName.get(f.homeId) ?? '—',
+          awayTeamId: map.get(f.awayId) ?? f.awayId,
+          awayTeamName: teamName.get(f.awayId) ?? '—',
+          favoredTeamId: imp
+            ? (map.get(imp.favoredTeamId) ?? imp.favoredTeamId)
+            : null,
+        };
+      });
+
+    // Fase 6.2: copas programadas en esta jornada. Rondas futuras de eliminatoria
+    // se generan dinámicamente al jugarse, así que pueden venir sin matches.
+    const cupRounds = state.cupSchedule
+      .filter((e) => e.matchday === state.currentMatchday)
+      .map((e) => {
+        const cup = state.cups.find((c) => c.id === e.cupId);
+        const round = cup?.rounds.find((r) => r.numero === e.roundNumero);
+        const matches =
+          round?.matches.map((m) => ({
+            homeTeamId: m.homeTeamId > 0 ? (map.get(m.homeTeamId) ?? m.homeTeamId) : null,
+            homeTeamName: m.homeTeamId > 0 ? (teamName.get(m.homeTeamId) ?? '—') : null,
+            awayTeamId: m.awayTeamId > 0 ? (map.get(m.awayTeamId) ?? m.awayTeamId) : null,
+            awayTeamName: m.awayTeamId > 0 ? (teamName.get(m.awayTeamId) ?? '—') : null,
+          })) ?? [];
+        return {
+          cupId: cup?.id ?? e.cupId,
+          cupName: cup?.name ?? '—',
+          cupFormato: (cup?.formato ?? 'eliminatoria') as 'eliminatoria' | 'liga',
+          roundNumero: e.roundNumero,
+          matchesKnown: !!round,
+          matches,
+        };
+      });
+
+    return {
+      matchday: state.currentMatchday,
+      seasonOver: state.seasonOver,
+      impulsesRemaining: state.impulsesRemaining,
+      impulsesPerSeason: state.impulsesPerSeason,
+      fixtures,
+      cupRounds,
+    };
+  }
+
+  async getNextFixtures(gameId: number): Promise<NextFixturesResponse> {
+    const state = await this.loadState(gameId);
+    return this.nextFixturesResponse(state, await this.engineToDbTeam(gameId));
+  }
+
+  async applyImpulse(
+    gameId: number,
+    dbHomeId: number,
+    dbAwayId: number,
+    dbFavoredId: number,
+  ): Promise<NextFixturesResponse> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: s.teams.id, eng: s.teams.engineTeamId })
+        .from(s.teams)
+        .where(eq(s.teams.gameId, gameId));
+      const dbToEng = new Map<number, number>();
+      for (const r of rows) if (r.eng != null) dbToEng.set(r.id, r.eng);
+
+      const engHome = dbToEng.get(dbHomeId);
+      const engAway = dbToEng.get(dbAwayId);
+      const engFav = dbToEng.get(dbFavoredId);
+      if (engHome == null || engAway == null || engFav == null) {
+        throw new NotFoundException('Equipo no encontrado');
+      }
+      if (engFav !== engHome && engFav !== engAway) {
+        throw new BadRequestException(
+          'El equipo beneficiado debe jugar ese partido',
+        );
+      }
+
+      const state = await this.loadState(gameId, tx);
+      const fixture = state.fixtures.find(
+        (f) =>
+          f.matchday === state.currentMatchday &&
+          f.homeId === engHome &&
+          f.awayId === engAway,
+      );
+      if (!fixture) {
+        throw new BadRequestException(
+          'Ese partido no está en la próxima jornada',
+        );
+      }
+      const next = engineApplyImpulse(state, fixture, engFav);
+      if (next === state) {
+        throw new BadRequestException(
+          'Sin impulsos disponibles o ya aplicado a ese partido',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.nextFixturesResponse(
+        next,
+        await this.engineToDbTeam(gameId, tx),
+      );
+    });
+  }
+
+  /* --------------------------------- season events / polémicas (§1, §2) */
+
+  private eventsResponse(
+    state: GameState,
+    map: Map<number, number>,
+  ): EventsResponse {
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    const toDto = (e: GameState['events'][number]) => ({
+      id: e.id,
+      year: e.year,
+      matchday: e.matchday,
+      tipo: e.tipo,
+      status: e.status,
+      teamId: e.teamId !== null ? (map.get(e.teamId) ?? null) : null,
+      teamName: e.teamId !== null ? (teamName.get(e.teamId) ?? null) : null,
+      message: e.message,
+      resolvedAction: e.resolvedAction,
+    });
+    const sorted = [...state.events].sort(
+      (a, b) => b.year - a.year || b.matchday - a.matchday || b.id - a.id,
+    );
+    return {
+      pending: sorted.filter((e) => e.status === 'pendiente').map(toDto),
+      recent: sorted.filter((e) => e.status !== 'pendiente').slice(0, 12).map(toDto),
+    };
+  }
+
+  async getEvents(gameId: number): Promise<EventsResponse> {
+    const state = await this.loadState(gameId);
+    return this.eventsResponse(state, await this.engineToDbTeam(gameId));
+  }
+
+  async resolveEvent(
+    gameId: number,
+    eventId: number,
+    action: 'actuar' | 'ignorar',
+  ): Promise<EventsResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineResolveEvent(state, eventId, action);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se puede resolver: evento no encontrado o ya resuelto',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.eventsResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  /* --------------------------------------- cups / tournaments (§4.4) */
+
+  private cupsResponse(
+    state: GameState,
+    map: Map<number, number>,
+  ): CupsResponse {
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    const dbTeamId = (id: number) => (id === -1 ? -1 : (map.get(id) ?? id));
+    const name = (id: number) => (id === -1 ? 'BYE' : (teamName.get(id) ?? '—'));
+    return {
+      cups: state.cups.map((c) => ({
+        id: c.id,
+        name: c.name,
+        tipo: c.tipo,
+        formato: c.formato,
+        categoria: c.categoria,
+        year: c.year,
+        status: c.status,
+        championTeamId:
+          c.championTeamId !== null ? (map.get(c.championTeamId) ?? null) : null,
+        championTeamName:
+          c.championTeamId !== null ? (teamName.get(c.championTeamId) ?? null) : null,
+        rounds: c.rounds.map((r) => ({
+          numero: r.numero,
+          matches: r.matches.map((m) => ({
+            homeTeamId: dbTeamId(m.homeTeamId),
+            homeTeamName: name(m.homeTeamId),
+            awayTeamId: dbTeamId(m.awayTeamId),
+            awayTeamName: name(m.awayTeamId),
+            homeGoals: m.homeGoals,
+            awayGoals: m.awayGoals,
+            played: m.played,
+            winnerTeamId:
+              m.winnerTeamId !== null ? (map.get(m.winnerTeamId) ?? null) : null,
+          })),
+        })),
+      })),
+    };
+  }
+
+  async getCups(gameId: number): Promise<CupsResponse> {
+    const state = await this.loadState(gameId);
+    return this.cupsResponse(state, await this.engineToDbTeam(gameId));
+  }
+
+  async createCup(
+    gameId: number,
+    input: CreateCupRequest,
+  ): Promise<CupsResponse> {
+    return this.db.transaction(async (tx) => {
+      // Map db team ids -> engine ids for the engine call.
+      const rows = await tx
+        .select({ id: s.teams.id, eng: s.teams.engineTeamId })
+        .from(s.teams)
+        .where(eq(s.teams.gameId, gameId));
+      const dbToEng = new Map<number, number>();
+      for (const r of rows) if (r.eng != null) dbToEng.set(r.id, r.eng);
+      const engineIds: number[] = [];
+      for (const dbId of input.participantTeamIds) {
+        const eng = dbToEng.get(dbId);
+        if (eng == null) {
+          throw new BadRequestException(`Equipo ${dbId} no encontrado`);
+        }
+        engineIds.push(eng);
+      }
+
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'crear una copa');
+      const next = engineCreateCup(
+        state,
+        input.name,
+        input.tipo as CupType,
+        input.formato,
+        input.categoria,
+        engineIds,
+      );
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo crear la copa: nombre vacío, participantes inválidos o demasiados/pocos',
+        );
+      }
+
+      const existing = new Set(state.cups.map((c) => c.id));
+      const created = next.cups.find((c) => !existing.has(c.id))!;
+      const fedMap = await this.engineToDbFederation(gameId, tx);
+
+      await tx.insert(s.cups).values({
+        gameId,
+        engineCupId: created.id,
+        federationId: fedMap.get(next.playerFederationId)!,
+        name: created.name,
+        tipo: created.tipo,
+        formato: 'single_elimination',
+      });
+
+      await this.saveState(tx, gameId, next);
+      return this.cupsResponse(next, await this.engineToDbTeam(gameId, tx));
+    });
+  }
+}

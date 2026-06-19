@@ -1,0 +1,106 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project overview
+
+Football league management simulator inspired by *Total Extreme Wrestling*. The player acts as a **commissioner** — not a coach or player — running a competition and growing it into a world-class league. Full design is in `diseno-simulador-liga.md` (Spanish).
+
+## Planned stack
+
+- **Backend:** NestJS + TypeScript
+- **Database:** PostgreSQL — the entity model is fully relational; history tables are append-only
+- **Frontend:** React (data-only UI: tables and lists, no 3D engine)
+- **Phase 3 (future):** Python service for narrative pattern detection; LLM-generated season chronicles
+
+## Build roadmap
+
+The design document marks phases 1–2 as done (design). Remaining phases:
+
+1. **Data schema** — translate entity model to DB tables
+2. **Minimum loop** — simulate a season, produce a standings table (match engine = weighted random by squad quality)
+3. **Commissioner systems** — prestige, tiers, negotiation, snowball brakes, reactive federations
+4. **History layer** — append-only tables + derived views (standings, top scorers, awards)
+5. **Polish** — match engine realism, events, controversies
+
+**Prototype path:** single React artifact, in-memory, no backend. 10 teams, table, "advance season" button, prestige. Validates fun before multi-week investment.
+
+## Core entity model
+
+```
+Federation  →  League  →  Division  →  Team  →  Player
+Federation  →  Cup/Tournament
+Season      →  Matchday  →  Match (2 teams)
+```
+
+Key modeling decisions (from the design doc):
+- **Federation is one entity type** — the player's federation and rival federations share the same model; distinguished by an `is_player` flag.
+- **Nothing is hard-deleted** — a team leaving a league changes federation association, never gets deleted (preserves history).
+- **History is append-only** — season records, trajectories, and awards are written once at season close and never mutated. Derived views (palmarés, rankings) are computed from those records, not stored separately.
+- **Impulses** — limited per-season "thumb on the scale" actions; they hang off `Season` (counter) and point to a specific `Match`.
+- **Negotiation** has its own lifecycle: tier check → requirement gathering (1–2 years) → offer/acceptance → effective **two years after acceptance**. Total: up to 5 years.
+
+## Key game mechanics to preserve
+
+- **Prestige & tiers (1–5):** prestige is the main score; tier gates which teams you can negotiate with. A tier-4 federation cannot approach tier-1+ clubs.
+- **Snowball brakes:** two-year adhesion delay, tier gate, team `arraigo` (loyalty to current federation), financial tension (commercial income must scale with league size), reactive rival federations.
+- **Team autonomy:** teams manage their own squads, coaches, youth academies. The player never signs players for a club — doing so would break the commissioner identity.
+
+## Monorepo layout
+
+pnpm + Turborepo workspace (package manager: `pnpm`, Node >= 22):
+
+```
+apps/backend      @football-gm/backend    NestJS API (imperative shell: persistence + HTTP)
+apps/frontend     @football-gm/frontend   React + Vite (data-only UI)
+packages/engine   @football-gm/engine     pure, seeded simulation core (no I/O)
+packages/contracts @football-gm/contracts shared zod schemas + inferred DTOs (back/front contract)
+packages/config   @football-gm/config     shared tsconfig / eslint / prettier
+```
+
+`engine` and `contracts` are built with **tsup** (emits `dist/` with `.d.ts`). The backend
+and frontend consume them as workspace packages, so those `dist/` types must exist before
+the backend typechecks — see the dev note below.
+
+## Ports
+
+| Service  | URL                     | Notes                                   |
+|----------|-------------------------|-----------------------------------------|
+| Frontend | http://localhost:5290   | **Open this in the browser** — the app  |
+| Backend  | http://localhost:3000   | API only; routes under `/games/...`. `GET /` 404s by design |
+| Postgres | localhost:**5544**      | Docker (`5544:5432` to avoid clashing with a local Postgres on 5432) |
+
+The frontend reads `VITE_API_URL` (default `http://localhost:3000`) from `apps/frontend/.env.local`.
+The backend reads `DATABASE_URL` (port 5544) from `apps/backend/.env`.
+
+## Commands
+
+```bash
+# First-time / each session: start the DB, then apply migrations
+docker compose up -d            # starts football-gm-db (Postgres 16) on :5544
+pnpm --filter @football-gm/backend db:migrate   # apply drizzle migrations
+
+# Run everything (turbo): builds engine+contracts, then watches all apps
+pnpm dev                        # backend :3000, frontend :5290, engine/contracts watchers
+
+# Per-package / repo-wide
+pnpm build                      # turbo run build
+pnpm typecheck                  # turbo run typecheck
+pnpm test                       # turbo run test (engine has vitest + fast-check)
+pnpm lint
+
+# Database (drizzle-kit, run from apps/backend or via --filter)
+pnpm --filter @football-gm/backend db:generate  # generate migration from schema changes
+pnpm --filter @football-gm/backend db:migrate   # apply migrations
+```
+
+### Dev build-order gotcha (important)
+
+`engine`/`contracts` are built by `tsup --watch`. Two things keep the backend's
+`nest --watch` from failing with `TS7016: Could not find a declaration file`:
+- `turbo.json` → the `dev` task has `dependsOn: ["^build"]`, so deps are built before backend starts.
+- `packages/{engine,contracts}/tsup.config.ts` → `clean: !options.watch`, so the watcher
+  does **not** wipe `dist/` (and its `.d.ts`) on startup, which previously left a window where
+  the backend resolved those imports as `any` and got stuck on stale errors.
+
+If you ever see that error, the dist types are missing — run `pnpm build` once, then `pnpm dev`.
