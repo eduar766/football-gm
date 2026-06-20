@@ -99,6 +99,8 @@ export function sanctionTeam(
 
   const s = structuredClone(prev);
   const actual = valorActual(team, norm, prev.players);
+  const prevCount = s.violationHistory[teamId]?.[normId] ?? 0;
+  const escalatedPoints = prevCount >= 2 ? 8 : prevCount === 1 ? 5 : SANCTION_POINTS;
   const motivo =
     norm.tipo === 'tope_plantilla'
       ? `Supera el tope de plantilla (${actual} > ${norm.valor})`
@@ -112,10 +114,12 @@ export function sanctionTeam(
     year: s.year,
     appliesToYear: s.year,
     motivo,
-    castigo: `−${SANCTION_POINTS} puntos`,
-    pointsPenalty: SANCTION_POINTS,
+    castigo: `−${escalatedPoints} puntos`,
+    pointsPenalty: escalatedPoints,
   });
   s.nextSanctionId += 1;
+  if (!s.violationHistory[teamId]) s.violationHistory[teamId] = {};
+  s.violationHistory[teamId][normId] = prevCount + 1;
   return s;
 }
 
@@ -167,4 +171,19 @@ export function governancePenalty(state: GameState): number {
     }
   }
   return unsanctioned > 0 ? -Math.min(GOVERNANCE_CAP, unsanctioned) : 0;
+}
+
+export function decayViolationHistory(s: GameState): void {
+  const penalizedThisYear = new Set(
+    s.sanctions.filter(san => san.year === s.year).map(san => san.teamId),
+  );
+  for (const teamId of Object.keys(s.violationHistory).map(Number)) {
+    if (penalizedThisYear.has(teamId)) continue;
+    for (const normId of Object.keys(s.violationHistory[teamId]).map(Number)) {
+      const count = s.violationHistory[teamId][normId];
+      if (count > 0) {
+        s.violationHistory[teamId][normId] = Math.max(0, count - 1);
+      }
+    }
+  }
 }

@@ -34,6 +34,7 @@ export interface Team {
   // Strength of the club's academy/reserve side (§4.4 youth competitions). Set
   // from the academy rating; falls back to a value below the first team.
   youthStrength: number;
+  wageCap: number;
 }
 
 // How the player's league is contested (§4.4 "define su liga como quiera").
@@ -180,7 +181,14 @@ export interface CupScheduleEntry {
 export type EventType =
   | 'arbitraje_dudoso'
   | 'incidente_aficion'
-  | 'declaraciones_polemicas';
+  | 'declaraciones_polemicas'
+  | 'doping_positivo'
+  | 'conflicto_jugadores'
+  | 'crisis_economica_club'
+  | 'escandalo_directiva'
+  | 'manipulacion_resultados';
+
+export type EventSeverity = 'baja' | 'media' | 'alta';
 
 export type EventStatus =
   | 'pendiente'
@@ -199,6 +207,8 @@ export interface GameEvent {
   teamId: number | null;
   message: string;
   resolvedAction: EventAction | null;
+  severity: EventSeverity;
+  chainedFromId: number | null;
 }
 
 export type AwardType = 'max_goleador' | 'max_asistente' | 'mejor_portero';
@@ -307,6 +317,8 @@ export interface LastEconomy {
   prizes: number;
   talent: number;
   net: number;
+  transferFees: number;
+  transferIncome: number;
   treasuryAfter: number;
 }
 
@@ -322,6 +334,7 @@ export interface TransferEntry {
   toTeamId: number;
   toTeamName: string;
   calidad: number;
+  transferFee: number;
 }
 
 // Mid-season commissioner actions (Proposal 1: Mid-Season Agency).
@@ -375,6 +388,7 @@ export interface GameState {
   sanctions: Sanction[];
   nextNormId: number;
   nextSanctionId: number;
+  violationHistory: Record<number, Record<number, number>>; // teamId -> normId -> count
   // Awards layer (§6): players with per-season stats. Attribution uses its own
   // rng so adding it does not perturb the match-engine stream (golden-safe).
   players: Player[];

@@ -11,6 +11,11 @@ const TIPO_LABEL: Record<EventType, string> = {
   arbitraje_dudoso: 'Polémica arbitral',
   incidente_aficion: 'Incidente de afición',
   declaraciones_polemicas: 'Declaraciones polémicas',
+  doping_positivo: 'Dopaje positivo',
+  conflicto_jugadores: 'Conflicto de jugadores',
+  crisis_economica_club: 'Crisis económica del club',
+  escandalo_directiva: 'Escándalo de directiva',
+  manipulacion_resultados: 'Manipulación de resultados',
 };
 
 const STATUS_LABEL: Record<EventStatus, string> = {

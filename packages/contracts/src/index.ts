@@ -603,8 +603,16 @@ export const EventType = z.enum([
   'arbitraje_dudoso',
   'incidente_aficion',
   'declaraciones_polemicas',
+  'doping_positivo',
+  'conflicto_jugadores',
+  'crisis_economica_club',
+  'escandalo_directiva',
+  'manipulacion_resultados',
 ]);
 export type EventType = z.infer<typeof EventType>;
+
+export const EventSeverity = z.enum(['baja', 'media', 'alta']);
+export type EventSeverity = z.infer<typeof EventSeverity>;
 
 export const EventStatus = z.enum([
   'pendiente',
@@ -627,6 +635,8 @@ export const EventDto = z.object({
   teamName: z.string().nullable(),
   message: z.string(),
   resolvedAction: EventAction.nullable(),
+  severity: EventSeverity,
+  chainedFromId: Id.nullable(),
 });
 export type EventDto = z.infer<typeof EventDto>;
 

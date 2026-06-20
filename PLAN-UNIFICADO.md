@@ -9,7 +9,7 @@
 | Fase | Estado | Notas |
 |------|--------|-------|
 | **1. Quick Wins** | ✅ COMPLETADA | UI Foundation + Match Narrative + Mid-Season Agency |
-| 2. Layout/Core | ⬜ Pendiente | |
+| **2. Layout/Core** | ✅ COMPLETADA | Sidebar nav + Transfer fees + Cup penalties + Events + Norms |
 | 3. High-Impact | ⬜ Pendiente | |
 | 4. Remaining | ⬜ Pendiente | |
 | 5. Polish | ⬜ Pendiente | |
@@ -30,6 +30,23 @@
 - `match.ts` — `simulateMatch()` retorna goleadores con minutos
 - `awards.ts` — `attributeMatchGoals()` retorna goalscorers + card counts
 - `engine.ts` — `advanceMatchday()` construye MatchReports; +3 acciones: `callReview()`, `emergencyMeeting()`, `postponeMatchday()`
+- Tests — 98/98 pasan, golden snapshot actualizado
+
+### Fase 2 — Cambios realizados
+
+**UI Layout:**
+- `GameLayout.tsx` — Sidebar vertical (220px) en desktop, bottom tab bar en mobile. Stat pills con Geist Mono + colores semánticos (gold prestige, purple impulses). Tab groupings: Resumen, Gestión, Operaciones, Competiciones, Archivo. Container size xl.
+- `DashboardPage.tsx` — Preseason hero card con gradient green. Action buttons: primary CTA gradient, outline secondary, red danger. Standings: gold/silver/bronze position indicators, colored goal diff, highlighted points. Fixture cards con mini-card layout.
+
+**Mecánicas Core Depth:**
+- `types.ts` — `transferFee` en TransferEntry, `wageCap` en Team, `EventSeverity` type, `severity`+`chainedFromId` en GameEvent, `violationHistory` en GameState, 5 nuevos EventType
+- `transfers.ts` — Fees calculados (buyer.strength × 50K + target.calidad × 100K), debitados de treasury
+- `economy.ts` — `transferFees`/`transferIncome` en LastEconomy
+- `cups.ts` — `simulatePenalties()` con sudden death, cup upset bonus (±2 prestige)
+- `events.ts` — 8 tipos de eventos, severity-based prestige cost (1/2/4), `manipulacion_resultados` causa relegación, extra penalty por expiración alta severidad
+- `norms.ts` — Escalamiento 3/5/8 puntos, `decayViolationHistory()` para 2 temporadas limpias
+- `contracts` — EventType expandido, EventSeverity, EventDto con severity+chainedFromId
+- `game.service.ts` — Mapping de severity+chainedFromId en eventsResponse
 - Tests — 98/98 pasan, golden snapshot actualizado
 
 ---

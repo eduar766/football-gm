@@ -15,6 +15,7 @@ import {
 } from './economy';
 import {
   applyPointPenalties,
+  decayViolationHistory,
   governancePenalty,
   pointPenaltiesForYear,
 } from './norms';
@@ -99,6 +100,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: t.arraigo ?? DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: t.youthStrength ?? Math.max(20, t.strength - 12),
+        wageCap: 0,
       });
       if (t.squad) {
         for (const p of t.squad) {
@@ -133,6 +135,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: Math.max(20, strength - 12),
+        wageCap: 0,
       });
     }
   }
@@ -157,6 +160,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: rt.arraigo,
         divisionOrden: null,
         youthStrength: Math.max(20, rt.strength - 12),
+        wageCap: 0,
       });
     }
   }
@@ -210,6 +214,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     sanctions: [],
     nextNormId: 1,
     nextSanctionId: 1,
+    violationHistory: {},
     fixtures: [],
     results: [],
     matchReports: [],
@@ -300,6 +305,7 @@ export function createOwnTeam(
     arraigo: CREATED_TEAM_ARRAIGO,
     divisionOrden: lowestOrden,
     youthStrength: Math.max(20, CREATED_TEAM_STRENGTH - 12),
+    wageCap: 0,
   });
   if (squad) {
     for (const p of squad) {
@@ -482,6 +488,9 @@ export function closeSeason(prev: GameState): GameState {
 
   // Unresolved polémicas from the closed year expire and cost prestige (§1).
   expireStaleEvents(s, s.year);
+
+  // Decay violation history for teams not penalized this year.
+  decayViolationHistory(s);
 
   // Teams evolve on their own (commissioner doesn't manage squads). Drift keeps
   // seasons from being identical and makes "advance season" worth watching.

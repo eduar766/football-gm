@@ -1568,6 +1568,8 @@ export class GameService {
       teamName: e.teamId !== null ? (teamName.get(e.teamId) ?? null) : null,
       message: e.message,
       resolvedAction: e.resolvedAction,
+      severity: e.severity,
+      chainedFromId: e.chainedFromId,
     });
     const sorted = [...state.events].sort(
       (a, b) => b.year - a.year || b.matchday - a.matchday || b.id - a.id,

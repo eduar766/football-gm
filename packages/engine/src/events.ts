@@ -6,6 +6,7 @@
 import { rngNext, type RngState } from './rng';
 import type {
   EventAction,
+  EventSeverity,
   EventType,
   GameEvent,
   GameState,
@@ -15,14 +16,29 @@ export const EVENT_SPAWN_PROB = 0.04;
 const INVESTIGATION_COST = 1_000_000;
 const ARRAIGO_ACT_HIT = 3;
 const ARRAIGO_IGNORE_BONUS = 1;
-const PRESTIGE_IGNORE_HIT = 1;
 const PRESTIGE_CADUCO_HIT = 2;
 
 const TYPES: EventType[] = [
   'arbitraje_dudoso',
   'incidente_aficion',
   'declaraciones_polemicas',
+  'doping_positivo',
+  'conflicto_jugadores',
+  'crisis_economica_club',
+  'escandalo_directiva',
+  'manipulacion_resultados',
 ];
+
+const SEVERITY_MAP: Record<EventType, EventSeverity> = {
+  arbitraje_dudoso: 'media',
+  incidente_aficion: 'media',
+  declaraciones_polemicas: 'baja',
+  doping_positivo: 'alta',
+  conflicto_jugadores: 'media',
+  crisis_economica_club: 'alta',
+  escandalo_directiva: 'alta',
+  manipulacion_resultados: 'alta',
+};
 
 function competingPlayerTeamIds(state: GameState): number[] {
   return state.teams
@@ -52,6 +68,16 @@ function buildMessage(tipo: EventType, teamName: string | null): string {
       return `Incidentes de aficionados de ${club}: hay denuncias formales.`;
     case 'declaraciones_polemicas':
       return `${club} hace unas declaraciones polémicas contra la federación.`;
+    case 'doping_positivo':
+      return `Resultado positivo de doping en un jugador de ${club}: escándalo mediático.`;
+    case 'conflicto_jugadores':
+      return `Conflicto interno entre jugadores de ${club}: vestuario desestabilizado.`;
+    case 'crisis_economica_club':
+      return `${club} atraviesa una grave crisis económica: posible insolvencia.`;
+    case 'escandalo_directiva':
+      return `Escándalo en la directiva de ${club}: presuntas irregularidades financieras.`;
+    case 'manipulacion_resultados':
+      return `Investigación por posible manipulación de resultados en ${club}.`;
   }
 }
 
@@ -74,6 +100,8 @@ export function maybeSpawnEvent(s: GameState, matchday: number): void {
     teamId,
     message: buildMessage(tipo, teamName),
     resolvedAction: null,
+    severity: SEVERITY_MAP[tipo],
+    chainedFromId: null,
   });
 }
 
@@ -99,8 +127,14 @@ export function resolveEvent(
     s.treasury -= INVESTIGATION_COST;
     if (team) team.arraigo = Math.max(0, team.arraigo - ARRAIGO_ACT_HIT);
     event.status = 'resuelto_actuar';
+    if (event.tipo === 'manipulacion_resultados' && team) {
+      if (team.divisionOrden !== null) {
+        team.divisionOrden += 1;
+      }
+    }
   } else {
-    s.prestige = Math.max(0, s.prestige - PRESTIGE_IGNORE_HIT);
+    const ignorePrestigeCost = event.severity === 'alta' ? 4 : event.severity === 'media' ? 2 : 1;
+    s.prestige = Math.max(0, s.prestige - ignorePrestigeCost);
     mirrorPlayerPrestige(s);
     if (team) team.arraigo = Math.min(100, team.arraigo + ARRAIGO_IGNORE_BONUS);
     event.status = 'resuelto_ignorar';
@@ -117,6 +151,7 @@ export function expireStaleEvents(s: GameState, closedYear: number): void {
     if (ev.status === 'pendiente' && ev.year <= closedYear) {
       ev.status = 'caducado';
       penalty += PRESTIGE_CADUCO_HIT;
+      if (ev.severity === 'alta') penalty += 2;
     }
   }
   if (penalty > 0) {

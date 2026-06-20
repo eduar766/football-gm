@@ -97,6 +97,10 @@ export function runTransferWindow(s: GameState): void {
     // Acceptance roll. Failed attempts still consume an rng value above.
     if (rngNext(s.transfersRng) >= OFFER_SUCCESS_P) continue;
 
+    const fee = Math.round(buyer.strength * 50_000 + target.calidad * 100_000);
+    if (s.treasury < fee) continue;
+    s.treasury -= fee;
+
     const fromTeamId = target.teamId;
     target.teamId = buyer.id;
     transferredPlayerIds.add(target.id);
@@ -109,6 +113,7 @@ export function runTransferWindow(s: GameState): void {
       toTeamId: buyer.id,
       toTeamName: buyer.name,
       calidad: target.calidad,
+      transferFee: fee,
     } satisfies TransferEntry);
   }
 

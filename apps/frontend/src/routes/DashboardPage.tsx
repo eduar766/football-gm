@@ -2,9 +2,9 @@ import { useState } from 'react';
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Group,
-  List,
   Paper,
   SegmentedControl,
   Skeleton,
@@ -21,12 +21,12 @@ import {
   IconAlertTriangle,
   IconCheck,
   IconCircleCheck,
+  IconClipboardList,
   IconFlag,
   IconPlayerPlay,
   IconPlayerStop,
   IconSparkles,
   IconTrophy,
-  IconClipboardList,
   IconX,
 } from '@tabler/icons-react';
 import { api } from '../api';
@@ -124,122 +124,175 @@ export function DashboardPage() {
 
   return (
     <div className="page-enter">
-      <Paper withBorder p="md" mb="md">
+      <Paper
+        mb="md"
+        p="xl"
+        style={{
+          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
+          border: '1px solid rgba(16,185,129,0.2)',
+        }}
+      >
         {isPreseason ? (
           <Stack>
             <Group justify="space-between" align="flex-start">
               <div>
                 <Group gap="sm">
-                  <IconSparkles size={24} color="var(--mantine-color-yellow-5)" />
+                  <Box
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: 'rgba(245,158,11,0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <IconSparkles size={20} color="#F59E0B" />
+                  </Box>
                   <Text fw={700} size="lg">
                     Pretemporada · Año {summary.data?.year ?? '—'}
                   </Text>
                 </Group>
-                <Text size="sm" c="dimmed" ml={36}>
+                <Text size="sm" c="dimmed" ml={52}>
                   Monta la nueva temporada antes de que ruede el balón (§4.8).
                   Las copas, ligas juveniles y formato deben quedar decididos
                   aquí porque el calendario se construye al comenzar.
                 </Text>
               </div>
               <Button
-                size="md"
+                size="lg"
                 leftSection={<IconPlayerPlay size={18} />}
                 onClick={() => mStart.mutate()}
                 loading={mStart.isPending}
+                style={{
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: 'white',
+                  height: 48,
+                }}
               >
                 Comenzar temporada
               </Button>
             </Group>
-            <List size="sm" spacing="xs" ml={36}>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/cups', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconTrophy size={16} color="var(--mantine-color-orange-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Copas y ligas juveniles —
-                </Text>{' '}
-                créalas en <em>Copas</em>; cualquier participante que añadas
-                quedará incluido en el calendario.
-              </List.Item>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/structure', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconCircleCheck size={16} color="var(--mantine-color-green-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Estructura de la liga —
-                </Text>{' '}
-                formato de liga (ida / ida y vuelta), liga de nivelación si
-                tienes equipos pendientes, y creación de equipos propios.
-              </List.Item>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/economy', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconSparkles size={16} color="var(--mantine-color-yellow-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Economía y contratos —
-                </Text>{' '}
-                firma patrocinios y revisa la inversión en talento.
-              </List.Item>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/prizes', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconTrophy size={16} color="var(--mantine-color-yellow-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Premios por competición —
-                </Text>{' '}
-                define la bolsa y el reparto para la liga y cada copa que
-                organices.
-              </List.Item>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/norms', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconAlertTriangle size={16} color="var(--mantine-color-red-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Normas —
-                </Text>{' '}
-                ajusta topes y mínimos competitivos que regirán la próxima
-                temporada.
-              </List.Item>
-              <List.Item
-                onClick={() => navigate({ to: '/games/$gameId/transfers', params: { gameId } })}
-                style={{ cursor: 'pointer' }}
-                icon={<IconFlag size={16} color="var(--mantine-color-blue-5)" />}
-              >
-                <Text component="span" fw={600}>
-                  Fichajes —
-                </Text>{' '}
-                revisa la ventana de movimientos que han firmado los clubes
-                entre la temporada anterior y la próxima.
-              </List.Item>
-            </List>
+
+            <Stack gap={8} ml={52}>
+              {[
+                {
+                  icon: <IconTrophy size={18} color="#F59E0B" />,
+                  iconBg: 'rgba(245,158,11,0.15)',
+                  title: 'Copas y ligas juveniles —',
+                  desc: 'créalas en Copas; cualquier participante que añadas quedará incluido en el calendario.',
+                  route: '/games/$gameId/cups',
+                },
+                {
+                  icon: <IconCircleCheck size={18} color="#10B981" />,
+                  iconBg: 'rgba(16,185,129,0.15)',
+                  title: 'Estructura de la liga —',
+                  desc: 'formato de liga (ida / ida y vuelta), liga de nivelación si tienes equipos pendientes, y creación de equipos propios.',
+                  route: '/games/$gameId/structure',
+                },
+                {
+                  icon: <IconSparkles size={18} color="#F59E0B" />,
+                  iconBg: 'rgba(245,158,11,0.15)',
+                  title: 'Economía y contratos —',
+                  desc: 'firma patrocinios y revisa la inversión en talento.',
+                  route: '/games/$gameId/economy',
+                },
+                {
+                  icon: <IconTrophy size={18} color="#F59E0B" />,
+                  iconBg: 'rgba(245,158,11,0.15)',
+                  title: 'Premios por competición —',
+                  desc: 'define la bolsa y el reparto para la liga y cada copa que organices.',
+                  route: '/games/$gameId/prizes',
+                },
+                {
+                  icon: <IconAlertTriangle size={18} color="#EF4444" />,
+                  iconBg: 'rgba(239,68,68,0.15)',
+                  title: 'Normas —',
+                  desc: 'ajusta topes y mínimos competitivos que regirán la próxima temporada.',
+                  route: '/games/$gameId/norms',
+                },
+                {
+                  icon: <IconFlag size={18} color="#3B82F6" />,
+                  iconBg: 'rgba(59,130,246,0.15)',
+                  title: 'Fichajes —',
+                  desc: 'revisa la ventana de movimientos que han firmado los clubes entre la temporada anterior y la próxima.',
+                  route: '/games/$gameId/transfers',
+                },
+              ].map((item) => (
+                <Group
+                  key={item.route}
+                  gap="md"
+                  p="sm"
+                  style={{
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                  onClick={() => navigate({ to: item.route, params: { gameId } })}
+                >
+                  <Box
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: item.iconBg,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {item.icon}
+                  </Box>
+                  <div>
+                    <Text size="sm" fw={600}>
+                      {item.title}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {item.desc}
+                    </Text>
+                  </div>
+                </Group>
+              ))}
+            </Stack>
           </Stack>
         ) : (
           <>
             <Group>
               <Button
-                leftSection={<IconPlayerPlay size={16} />}
+                size="lg"
+                leftSection={<IconPlayerPlay size={18} />}
                 onClick={() => mAdvanceMd.mutate()}
                 disabled={over || busy || blocked}
                 loading={mAdvanceMd.isPending}
+                style={{
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: 'white',
+                  height: 48,
+                }}
               >
                 Avanzar jornada
               </Button>
               <Button
-                variant="light"
+                variant="outline"
                 leftSection={<IconSparkles size={16} />}
                 onClick={() => mAdvanceSeason.mutate()}
                 disabled={over || busy || blocked}
                 loading={mAdvanceSeason.isPending}
+                style={{ borderColor: '#10B981', color: '#10B981' }}
               >
                 Avanzar temporada
               </Button>
               <Button
-                color="yellow"
+                color="red"
+                variant="light"
                 leftSection={<IconPlayerStop size={16} />}
                 onClick={() =>
                   modals.openConfirmModal({
@@ -251,7 +304,7 @@ export function DashboardPage() {
                       </Text>
                     ),
                     labels: { confirm: 'Cerrar temporada', cancel: 'Cancelar' },
-                    confirmProps: { color: 'yellow' },
+                    confirmProps: { color: 'red' },
                     onConfirm: () => mClose.mutate(),
                   })
                 }
@@ -293,64 +346,80 @@ export function DashboardPage() {
             El "dedo en la balanza" del comisionado: beneficia a un equipo en un
             partido concreto (§4.6).
           </Text>
-          <Table>
-            <Table.Tbody>
-              {nextFixtures.data.fixtures.map((f) => {
-                const noImpulses = nextFixtures.data!.impulsesRemaining <= 0 && f.favoredTeamId == null;
-                return (
-                  <Table.Tr key={`${f.homeTeamId}-${f.awayTeamId}`}>
-                    <Table.Td>
-                      {f.homeTeamName}{' '}
-                      <Text span c="dimmed" size="xs">
+
+          <Stack gap={6}>
+            {nextFixtures.data.fixtures.map((f) => {
+              const noImpulses = nextFixtures.data!.impulsesRemaining <= 0 && f.favoredTeamId == null;
+              return (
+                <Paper
+                  key={`${f.homeTeamId}-${f.awayTeamId}`}
+                  withBorder
+                  p="sm"
+                  radius="sm"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                  }}
+                >
+                  <Group justify="space-between" align="center">
+                    <Group gap="md" style={{ flex: 1 }}>
+                      <Text fw={600} size="sm" style={{ minWidth: 120, textAlign: 'right' }}>
+                        {f.homeTeamName}
+                      </Text>
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        style={{ fontFamily: '"Geist Mono", monospace' }}
+                      >
                         vs
-                      </Text>{' '}
-                      {f.awayTeamName}
-                    </Table.Td>
-                    <Table.Td ta="right">
-                      <Group gap="xs" justify="flex-end">
-                        <Tooltip label={`Impulsar a ${f.homeTeamName}`}>
-                          <Button
-                            size="compact-xs"
-                            variant={f.favoredTeamId === f.homeTeamId ? 'filled' : 'light'}
-                            color="grape"
-                            leftSection={<IconFlag size={12} />}
-                            disabled={busy || noImpulses || f.favoredTeamId != null}
-                            onClick={() =>
-                              mImpulse.mutate({
-                                home: f.homeTeamId,
-                                away: f.awayTeamId,
-                                fav: f.homeTeamId,
-                              })
-                            }
-                          >
-                            {f.homeTeamName}
-                          </Button>
-                        </Tooltip>
-                        <Tooltip label={`Impulsar a ${f.awayTeamName}`}>
-                          <Button
-                            size="compact-xs"
-                            variant={f.favoredTeamId === f.awayTeamId ? 'filled' : 'light'}
-                            color="grape"
-                            leftSection={<IconFlag size={12} />}
-                            disabled={busy || noImpulses || f.favoredTeamId != null}
-                            onClick={() =>
-                              mImpulse.mutate({
-                                home: f.homeTeamId,
-                                away: f.awayTeamId,
-                                fav: f.awayTeamId,
-                              })
-                            }
-                          >
-                            {f.awayTeamName}
-                          </Button>
-                        </Tooltip>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
+                      </Text>
+                      <Text fw={600} size="sm" style={{ minWidth: 120 }}>
+                        {f.awayTeamName}
+                      </Text>
+                    </Group>
+                    <Group gap="xs">
+                      <Tooltip label={`Impulsar a ${f.homeTeamName}`}>
+                        <Button
+                          size="compact-xs"
+                          variant={f.favoredTeamId === f.homeTeamId ? 'filled' : 'light'}
+                          color="grape"
+                          leftSection={<IconFlag size={12} />}
+                          disabled={busy || noImpulses || f.favoredTeamId != null}
+                          onClick={() =>
+                            mImpulse.mutate({
+                              home: f.homeTeamId,
+                              away: f.awayTeamId,
+                              fav: f.homeTeamId,
+                            })
+                          }
+                        >
+                          {f.homeTeamName}
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label={`Impulsar a ${f.awayTeamName}`}>
+                        <Button
+                          size="compact-xs"
+                          variant={f.favoredTeamId === f.awayTeamId ? 'filled' : 'light'}
+                          color="grape"
+                          leftSection={<IconFlag size={12} />}
+                          disabled={busy || noImpulses || f.favoredTeamId != null}
+                          onClick={() =>
+                            mImpulse.mutate({
+                              home: f.homeTeamId,
+                              away: f.awayTeamId,
+                              fav: f.awayTeamId,
+                            })
+                          }
+                        >
+                          {f.awayTeamName}
+                        </Button>
+                      </Tooltip>
+                    </Group>
+                  </Group>
+                </Paper>
+              );
+            })}
+          </Stack>
+
           {nextFixtures.data.cupRounds.length > 0 && (
             <Stack gap="xs" mt="md">
               <Text fw={600} size="sm" c="dimmed">
@@ -431,7 +500,7 @@ export function DashboardPage() {
               ))}
             </Stack>
           ) : (
-            <Table striped highlightOnHover>
+            <Table>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>#</Table.Th>
@@ -463,31 +532,95 @@ export function DashboardPage() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {standings.data?.rows.map((r, i) => (
-                  <Table.Tr key={r.teamId}>
-                    <Table.Td>{i + 1}</Table.Td>
-                    <Table.Td>
-                      <Link
-                        to="/games/$gameId/teams/$teamId"
-                        params={{ gameId, teamId: String(r.teamId) }}
+                {standings.data?.rows.map((r, i) => {
+                  const pos = i + 1;
+                  const isTop3 = pos <= 3;
+                  const posColors: Record<number, { bg: string; text: string }> = {
+                    1: { bg: '#F59E0B', text: '#fff' },
+                    2: { bg: '#9CA3AF', text: '#fff' },
+                    3: { bg: '#D97706', text: '#fff' },
+                  };
+                  return (
+                    <Table.Tr
+                      key={r.teamId}
+                      style={{
+                        borderLeft: isTop3 ? '3px solid #10B981' : '3px solid transparent',
+                        transition: 'border-color 0.15s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderLeftColor = '#10B981';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderLeftColor = isTop3
+                          ? '#10B981'
+                          : 'transparent';
+                      }}
+                    >
+                      <Table.Td>
+                        {isTop3 ? (
+                          <Box
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: '50%',
+                              background: posColors[pos].bg,
+                              color: posColors[pos].text,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {pos}
+                          </Box>
+                        ) : (
+                          pos
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Link
+                          to="/games/$gameId/teams/$teamId"
+                          params={{ gameId, teamId: String(r.teamId) }}
+                        >
+                          <Text fw={isTop3 ? 600 : 400}>{r.name}</Text>
+                        </Link>
+                      </Table.Td>
+                      <Table.Td ta="right">{r.played}</Table.Td>
+                      <Table.Td ta="right">{r.won}</Table.Td>
+                      <Table.Td ta="right">{r.drawn}</Table.Td>
+                      <Table.Td ta="right">{r.lost}</Table.Td>
+                      <Table.Td ta="right">{r.goalsFor}</Table.Td>
+                      <Table.Td ta="right">{r.goalsAgainst}</Table.Td>
+                      <Table.Td
+                        ta="right"
+                        style={{
+                          color:
+                            r.goalDiff > 0
+                              ? '#10B981'
+                              : r.goalDiff < 0
+                                ? '#EF4444'
+                                : undefined,
+                        }}
                       >
-                        {r.name}
-                      </Link>
-                    </Table.Td>
-                    <Table.Td ta="right">{r.played}</Table.Td>
-                    <Table.Td ta="right">{r.won}</Table.Td>
-                    <Table.Td ta="right">{r.drawn}</Table.Td>
-                    <Table.Td ta="right">{r.lost}</Table.Td>
-                    <Table.Td ta="right">{r.goalsFor}</Table.Td>
-                    <Table.Td ta="right">{r.goalsAgainst}</Table.Td>
-                    <Table.Td ta="right">
-                      {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-                    </Table.Td>
-                    <Table.Td ta="right" fw={700}>
-                      {r.points}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
+                        {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                      </Table.Td>
+                      <Table.Td
+                        ta="right"
+                        style={{
+                          fontWeight: 800,
+                          fontSize: '1.05em',
+                          borderLeft: isTop3
+                            ? '3px solid rgba(16,185,129,0.3)'
+                            : '3px solid transparent',
+                          paddingLeft: isTop3 ? 10 : 13,
+                        }}
+                      >
+                        {r.points}
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
               </Table.Tbody>
             </Table>
           )}

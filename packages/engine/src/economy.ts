@@ -113,6 +113,11 @@ export function processEconomy(s: GameState): {
   const net = income - cost - talent;
   s.treasury += net;
 
+  const transferFees = s.transfers
+    .filter((t) => t.year === s.year)
+    .reduce((a, t) => a + t.transferFee, 0);
+  const transferIncome = 0; // sell-on clause is future work
+
   let econDelta = 0;
   if (prizes > 0) econDelta += Math.min(3, Math.floor(prizes / 6_000_000));
   if (s.treasury < 0) {
@@ -132,6 +137,8 @@ export function processEconomy(s: GameState): {
     // Reported net includes prizes (already debited) so the UI reads the full
     // P&L for the season, not just the bit processEconomy itself moved.
     net: net - prizes,
+    transferFees,
+    transferIncome,
     treasuryAfter: s.treasury,
   };
 

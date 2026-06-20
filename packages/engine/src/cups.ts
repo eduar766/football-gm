@@ -25,6 +25,21 @@ import type {
 const BYE = -1;
 const MAX_PARTICIPANTS = 32;
 
+function simulatePenalties(rng: RngState, home: Team, away: Team): { homePenalties: number; awayPenalties: number } {
+  let homeP = 0;
+  let awayP = 0;
+  const homeAdv = home.strength / (home.strength + away.strength);
+  for (let i = 0; i < 5; i++) {
+    if (rngNext(rng) < 0.4 + homeAdv * 0.3) homeP++;
+    if (rngNext(rng) < 0.4 + (1 - homeAdv) * 0.3) awayP++;
+  }
+  while (homeP === awayP) {
+    if (rngNext(rng) < 0.4 + homeAdv * 0.3) homeP++;
+    if (rngNext(rng) < 0.4 + (1 - homeAdv) * 0.3) awayP++;
+  }
+  return { homePenalties: homeP, awayPenalties: awayP };
+}
+
 function nextPowerOf2(n: number): number {
   let p = 1;
   while (p < n) p *= 2;
@@ -136,7 +151,10 @@ function playPendingInRound(
     m.awayGoals = awayGoals;
     if (homeGoals > awayGoals) m.winnerTeamId = home.id;
     else if (awayGoals > homeGoals) m.winnerTeamId = away.id;
-    else if (knockout) m.winnerTeamId = rngNext(s.cupsRng) < 0.5 ? home.id : away.id;
+    else if (knockout) {
+      const penalties = simulatePenalties(s.cupsRng, home, away);
+      m.winnerTeamId = penalties.homePenalties > penalties.awayPenalties ? home.id : away.id;
+    }
     else m.winnerTeamId = null; // league draws have no winner
     m.played = true;
   }
@@ -195,6 +213,20 @@ export function playCupRound(s: GameState, cupId: number, roundNumero: number): 
     if (!round) return;
     playPendingInRound(s, round, cup.categoria, false);
     crownLeagueCup(s, cup);
+    if (cup.championTeamId) {
+      const champion = s.teams.find(t => t.id === cup.championTeamId);
+      if (champion) {
+        const participants = cup.participantTeamIds
+          .map(id => s.teams.find(t => t.id === id))
+          .filter((t): t is Team => !!t && t.id !== cup.championTeamId);
+        const avgStrength = participants.reduce((a, t) => a + t.strength, 0) / participants.length;
+        if (champion.strength + 15 < avgStrength) {
+          const fed = s.federations.find(f => f.id === champion.federationId);
+          if (fed) fed.prestige += 2;
+          if (champion.federationId === s.playerFederationId) s.prestige += 2;
+        }
+      }
+    }
     payCupPrize(s, cup); // Fase 6.5
     return;
   }
@@ -212,6 +244,20 @@ export function playCupRound(s: GameState, cupId: number, roundNumero: number): 
   if (winners.length <= 1) {
     cup.championTeamId = winners[0] ?? null;
     cup.status = 'finalizada';
+    if (cup.championTeamId) {
+      const champion = s.teams.find(t => t.id === cup.championTeamId);
+      if (champion) {
+        const participants = cup.participantTeamIds
+          .map(id => s.teams.find(t => t.id === id))
+          .filter((t): t is Team => !!t && t.id !== cup.championTeamId);
+        const avgStrength = participants.reduce((a, t) => a + t.strength, 0) / participants.length;
+        if (champion.strength + 15 < avgStrength) {
+          const fed = s.federations.find(f => f.id === champion.federationId);
+          if (fed) fed.prestige += 2;
+          if (champion.federationId === s.playerFederationId) s.prestige += 2;
+        }
+      }
+    }
     payCupPrize(s, cup); // Fase 6.5
   }
 }
