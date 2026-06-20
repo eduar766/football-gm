@@ -52,7 +52,7 @@ export function GamesPage() {
   });
 
   return (
-    <Container size="md" py="xl">
+    <Container size="md" py="xl" className="page-enter">
       <Stack gap="lg">
         <div>
           <Title order={2}>Football GM</Title>

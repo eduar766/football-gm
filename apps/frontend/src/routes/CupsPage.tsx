@@ -112,7 +112,7 @@ export function CupsPage() {
   const list = cups.data?.cups ?? [];
 
   return (
-    <>
+    <div className="page-enter">
       {!isPreseason && summary.data && (
         <Alert color="gray" mb="md" title="Pretemporada solo">
           Las copas y ligas juveniles deben crearse en pretemporada para que el
@@ -256,6 +256,6 @@ export function CupsPage() {
           </Paper>
         ))
       )}
-    </>
+    </div>
   );
 }

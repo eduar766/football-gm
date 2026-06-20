@@ -1,0 +1,86 @@
+:root {
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 400ms ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes growUp {
+  from {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+.page-enter {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.hover-lift {
+  transition: all 250ms ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.stagger-item {
+  animation: fadeInUp 0.4s ease-out both;
+}
+.stagger-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-item:nth-child(2) {
+  animation-delay: 60ms;
+}
+.stagger-item:nth-child(3) {
+  animation-delay: 120ms;
+}
+.stagger-item:nth-child(4) {
+  animation-delay: 180ms;
+}
+.stagger-item:nth-child(5) {
+  animation-delay: 240ms;
+}
+.stagger-item:nth-child(6) {
+  animation-delay: 300ms;
+}
+.stagger-item:nth-child(7) {
+  animation-delay: 360ms;
+}
+.stagger-item:nth-child(8) {
+  animation-delay: 420ms;
+}

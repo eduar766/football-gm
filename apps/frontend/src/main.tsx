@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import './styles/global.css';
 import { router } from './router';
 import { theme } from './theme';
 import { ErrorBoundary } from './ErrorBoundary';

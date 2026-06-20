@@ -150,7 +150,7 @@ export function StructurePage() {
   const isPreseason = summary.data?.phase === 'pretemporada';
 
   return (
-    <>
+    <div className="page-enter">
       {!isPreseason && summary.data && (
         <Alert color="gray" mb="md" title="Cambios estructurales bloqueados">
           La temporada está en curso. Los cambios de estructura, formato, copas
@@ -274,6 +274,6 @@ export function StructurePage() {
           </Grid.Col>
         )}
       </Grid>
-    </>
+    </div>
   );
 }

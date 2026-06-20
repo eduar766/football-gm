@@ -24,7 +24,7 @@ export function FederationPage() {
   const f = fed.data;
 
   return (
-    <>
+    <div className="page-enter">
       <Card withBorder mb="md">
         <Group justify="space-between">
           <div>
@@ -75,6 +75,6 @@ export function FederationPage() {
           </Table.Tbody>
         </Table>
       </Paper>
-    </>
+    </div>
   );
 }

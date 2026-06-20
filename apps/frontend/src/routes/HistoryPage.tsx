@@ -46,7 +46,7 @@ export function HistoryPage() {
   const topScorers = hist.data?.topScorers ?? [];
 
   return (
-    <>
+    <div className="page-enter">
       <Grid>
         <Grid.Col span={{ base: 12, md: 7 }}>
           <Paper withBorder p="md">
@@ -210,6 +210,6 @@ export function HistoryPage() {
           </Paper>
         </Grid.Col>
       </Grid>
-    </>
+    </div>
   );
 }

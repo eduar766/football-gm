@@ -56,6 +56,25 @@ export interface MatchResult extends Fixture {
   awayGoals: number;
 }
 
+export interface Goalscorer {
+  playerId: number;
+  minute: number;
+}
+
+export interface MatchReport {
+  matchday: number;
+  divisionOrden: number;
+  homeId: number;
+  awayId: number;
+  homeGoals: number;
+  awayGoals: number;
+  goalscorers: Goalscorer[];
+  homeYellowCards: number;
+  awayYellowCards: number;
+  homeRedCards: number;
+  awayRedCards: number;
+}
+
 export interface PendingImpulse {
   matchday: number;
   homeId: number;
@@ -305,6 +324,19 @@ export interface TransferEntry {
   calidad: number;
 }
 
+// Mid-season commissioner actions (Proposal 1: Mid-Season Agency).
+export type CommissionerAction = 'call_review' | 'emergency_meeting' | 'postpone_matchday';
+
+export interface ActionRecord {
+  id: number;
+  year: number;
+  matchday: number;
+  type: CommissionerAction;
+  cost: number;
+  targetTeamId: number | null;
+  result: string;
+}
+
 export interface SeasonRecord {
   year: number;
   divisionOrden: number;
@@ -369,11 +401,14 @@ export interface GameState {
   prizePayments: PrizePayment[];
   fixtures: Fixture[];
   results: MatchResult[];
+  matchReports: MatchReport[];
   currentMatchday: number;
   totalMatchdays: number;
   impulsesPerSeason: number;
   impulsesRemaining: number;
   pendingImpulses: PendingImpulse[];
+  actionHistory: ActionRecord[];
+  nextActionId: number;
   history: SeasonRecord[];
   seasonOver: boolean;
 }

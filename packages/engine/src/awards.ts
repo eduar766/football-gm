@@ -4,7 +4,7 @@
 // players => zero attributionRng usage => snapshot identical.
 
 import { poisson, randInt, rngNext } from './rng';
-import type { Award, GameState, Player, PlayerPosition } from './types';
+import type { Award, GameState, Goalscorer, Player, PlayerPosition } from './types';
 
 const GOAL_WEIGHT: Record<PlayerPosition, number> = {
   POR: 0,
@@ -64,7 +64,9 @@ function attributeForTeam(
   state: GameState,
   available: Player[],
   goals: number,
-): void {
+  goalMinutes: number[],
+): Goalscorer[] {
+  const scored: Goalscorer[] = [];
   for (let i = 0; i < goals; i++) {
     const scorer = pickWeighted(
       state,
@@ -73,6 +75,7 @@ function attributeForTeam(
     );
     if (!scorer) continue;
     scorer.season.goals += 1;
+    scored.push({ playerId: scorer.id, minute: goalMinutes[i] ?? 0 });
     const assister = pickWeighted(
       state,
       available,
@@ -81,6 +84,7 @@ function attributeForTeam(
     );
     if (assister) assister.season.assists += 1;
   }
+  return scored;
 }
 
 function startingKeeper(available: Player[]): Player | undefined {
@@ -92,13 +96,19 @@ function startingKeeper(available: Player[]): Player | undefined {
   return best;
 }
 
-function distributeCardsForTeam(state: GameState, available: Player[]): void {
-  if (available.length === 0) return;
+function distributeCardsForTeam(
+  state: GameState,
+  available: Player[],
+): { yellowCards: number; redCards: number } {
+  let yellowCards = 0;
+  let redCards = 0;
+  if (available.length === 0) return { yellowCards, redCards };
   const yellows = poisson(state.attributionRng, YELLOW_LAMBDA);
   for (let i = 0; i < yellows; i++) {
     const p = pickWeighted(state, available, (x) => CARD_WEIGHT[x.posicion]);
     if (!p) break;
     p.season.yellowCards += 1;
+    yellowCards += 1;
     if (p.season.yellowCards >= YELLOWS_FOR_SUSPENSION) {
       p.matchesSuspendedLeft += 1;
       p.season.yellowCards = 0;
@@ -108,9 +118,11 @@ function distributeCardsForTeam(state: GameState, available: Player[]): void {
     const p = pickWeighted(state, available, (x) => CARD_WEIGHT[x.posicion]);
     if (p) {
       p.season.redCards += 1;
+      redCards += 1;
       p.matchesSuspendedLeft += 1;
     }
   }
+  return { yellowCards, redCards };
 }
 
 function maybeInjureTeam(state: GameState, available: Player[]): void {
@@ -131,15 +143,21 @@ export function attributeMatchGoals(
   awayTeamId: number,
   homeGoals: number,
   awayGoals: number,
-): void {
-  if (state.players.length === 0) return;
+  goalMinutes: number[],
+): { goalscorers: Goalscorer[]; homeYellowCards: number; awayYellowCards: number; homeRedCards: number; awayRedCards: number } {
+  if (state.players.length === 0) {
+    return { goalscorers: [], homeYellowCards: 0, awayYellowCards: 0, homeRedCards: 0, awayRedCards: 0 };
+  }
   const homeSquad = state.players.filter((p) => p.teamId === homeTeamId);
   const awaySquad = state.players.filter((p) => p.teamId === awayTeamId);
   const homeAvailable = homeSquad.filter(isAvailable);
   const awayAvailable = awaySquad.filter(isAvailable);
 
-  attributeForTeam(state, homeAvailable, homeGoals);
-  attributeForTeam(state, awayAvailable, awayGoals);
+  const homeMinutes = goalMinutes.slice(0, homeGoals);
+  const awayMinutes = goalMinutes.slice(homeGoals, homeGoals + awayGoals);
+
+  const homeScorers = attributeForTeam(state, homeAvailable, homeGoals, homeMinutes);
+  const awayScorers = attributeForTeam(state, awayAvailable, awayGoals, awayMinutes);
 
   if (homeGoals === 0) {
     const gk = startingKeeper(awayAvailable);
@@ -151,10 +169,18 @@ export function attributeMatchGoals(
   }
 
   // §7: cards + injuries from the same independent rng.
-  distributeCardsForTeam(state, homeAvailable);
-  distributeCardsForTeam(state, awayAvailable);
+  const homeCards = distributeCardsForTeam(state, homeAvailable);
+  const awayCards = distributeCardsForTeam(state, awayAvailable);
   maybeInjureTeam(state, homeAvailable);
   maybeInjureTeam(state, awayAvailable);
+
+  return {
+    goalscorers: [...homeScorers, ...awayScorers],
+    homeYellowCards: homeCards.yellowCards,
+    awayYellowCards: awayCards.yellowCards,
+    homeRedCards: homeCards.redCards,
+    awayRedCards: awayCards.redCards,
+  };
 }
 
 // Decrement availability counters one tick (called at the START of each

@@ -123,7 +123,7 @@ export function DashboardPage() {
   const busy = mAdvanceMd.isPending || mAdvanceSeason.isPending || mClose.isPending;
 
   return (
-    <>
+    <div className="page-enter">
       <Paper withBorder p="md" mb="md">
         {isPreseason ? (
           <Stack>
@@ -493,6 +493,6 @@ export function DashboardPage() {
           )}
         </Paper>
       )}
-    </>
+    </div>
   );
 }

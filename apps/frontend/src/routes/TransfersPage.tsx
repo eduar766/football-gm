@@ -61,7 +61,7 @@ export function TransfersPage() {
   }
 
   return (
-    <Stack>
+    <Stack className="page-enter">
       <Paper withBorder p="md">
         <Group justify="space-between" mb="sm">
           <div>

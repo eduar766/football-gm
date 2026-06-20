@@ -141,7 +141,7 @@ export function EconomyPage() {
   const h = HEALTH[e.financialHealth];
 
   return (
-    <Stack>
+    <Stack className="page-enter">
     <Grid>
       <Grid.Col span={{ base: 12, md: 5 }}>
         <Card withBorder mb="md">

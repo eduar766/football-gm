@@ -1,5 +1,5 @@
-import { poisson, type RngState } from './rng';
-import type { Team } from './types';
+import { poisson, randInt, type RngState } from './rng';
+import type { Goalscorer, Team } from './types';
 
 const HOME_ADVANTAGE = 6;
 const IMPULSE_BOOST = 12; // the commissioner's "thumb on the scale" for one match
@@ -11,7 +11,11 @@ export function simulateMatch(
   away: Team,
   rng: RngState,
   favoredTeamId?: number,
-): { homeGoals: number; awayGoals: number } {
+): {
+  homeGoals: number;
+  awayGoals: number;
+  goalscorers: Goalscorer[];
+} {
   let homeRating = home.strength + HOME_ADVANTAGE;
   let awayRating = away.strength;
   if (favoredTeamId === home.id) homeRating += IMPULSE_BOOST;
@@ -21,8 +25,16 @@ export function simulateMatch(
   const homeXg = 0.35 + 2.9 * (homeRating / total);
   const awayXg = 0.35 + 2.9 * (awayRating / total);
 
-  return {
-    homeGoals: poisson(rng, homeXg),
-    awayGoals: poisson(rng, awayXg),
-  };
+  const homeGoals = poisson(rng, homeXg);
+  const awayGoals = poisson(rng, awayXg);
+
+  const goalscorers: Goalscorer[] = [];
+  for (let i = 0; i < homeGoals; i++) {
+    goalscorers.push({ playerId: -1, minute: randInt(rng, 1, 90) });
+  }
+  for (let i = 0; i < awayGoals; i++) {
+    goalscorers.push({ playerId: -1, minute: randInt(rng, 1, 90) });
+  }
+
+  return { homeGoals, awayGoals, goalscorers };
 }

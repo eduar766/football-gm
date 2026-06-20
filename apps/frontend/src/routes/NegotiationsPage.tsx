@@ -34,7 +34,7 @@ export function NegotiationsPage() {
   }
 
   return (
-    <Paper withBorder p="md">
+    <Paper withBorder p="md" className="page-enter">
       <Group gap="sm" mb="sm">
         <IconArrowsExchange size={20} />
         <Text fw={700}>Negociaciones</Text>

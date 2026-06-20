@@ -2,7 +2,7 @@
 // No I/O, no React, no DB. structuredClone keeps it pure at the boundary while
 // staying readable inside. The imperative shell (backend) owns persistence.
 
-import { makeRng, randInt } from './rng';
+import { makeRng, randInt, rngNext } from './rng';
 import { buildDivisionFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import { computeStandings, type StandingRow } from './standings';
@@ -212,11 +212,14 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextSanctionId: 1,
     fixtures: [],
     results: [],
+    matchReports: [],
     currentMatchday: 0,
     totalMatchdays: 0,
     impulsesPerSeason,
     impulsesRemaining: impulsesPerSeason,
     pendingImpulses: [],
+    actionHistory: [],
+    nextActionId: 1,
     history: [],
     seasonOver: false,
   };
@@ -239,6 +242,7 @@ export function startSeason(prev: GameState): GameState {
   s.totalMatchdays = total;
   s.currentMatchday = total > 0 ? 1 : 0;
   s.results = [];
+  s.matchReports = [];
   s.pendingImpulses = [];
   s.cupSchedule = scheduleCups(s, total);
   s.seasonOver = total === 0; // no fixtures => trivially "over"
@@ -346,9 +350,23 @@ export function advanceMatchday(prev: GameState): GameState {
     const imp = s.pendingImpulses.find(
       (p) => p.matchday === md && p.homeId === fx.homeId && p.awayId === fx.awayId,
     );
-    const { homeGoals, awayGoals } = simulateMatch(home, away, s.rng, imp?.favoredTeamId);
+    const { homeGoals, awayGoals, goalscorers } = simulateMatch(home, away, s.rng, imp?.favoredTeamId);
+    const goalMinutes = goalscorers.map((g) => g.minute);
+    const attribution = attributeMatchGoals(s, fx.homeId, fx.awayId, homeGoals, awayGoals, goalMinutes);
     s.results.push({ ...fx, homeGoals, awayGoals });
-    attributeMatchGoals(s, fx.homeId, fx.awayId, homeGoals, awayGoals);
+    s.matchReports.push({
+      matchday: md,
+      divisionOrden: fx.divisionOrden,
+      homeId: fx.homeId,
+      awayId: fx.awayId,
+      homeGoals,
+      awayGoals,
+      goalscorers: attribution.goalscorers,
+      homeYellowCards: attribution.homeYellowCards,
+      awayYellowCards: attribution.awayYellowCards,
+      homeRedCards: attribution.homeRedCards,
+      awayRedCards: attribution.awayRedCards,
+    });
   }
 
   s.pendingImpulses = s.pendingImpulses.filter((p) => p.matchday !== md);
@@ -513,11 +531,190 @@ export function closeSeason(prev: GameState): GameState {
   s.fixtures = [];
   s.totalMatchdays = 0;
   s.results = [];
+  s.matchReports = [];
   s.currentMatchday = 0;
   s.cupSchedule = [];
   s.impulsesRemaining = s.impulsesPerSeason;
   s.pendingImpulses = [];
   s.seasonOver = false;
   s.phase = 'pretemporada';
+  return s;
+}
+
+// ─── Mid-season commissioner actions (Proposal 1: Mid-Season Agency) ────────
+
+const REVIEW_COST = 500_000;
+const EMERGENCY_MEETING_COST = 200_000;
+const REVIEW_SUCCESS_PROB = 0.7;
+
+// Challenge a specific match result (referee mistake). 70% chance to replay.
+export function callReview(
+  prev: GameState,
+  matchday: number,
+  homeId: number,
+  awayId: number,
+): GameState {
+  if (prev.phase !== 'temporada') return prev;
+  if (prev.treasury < REVIEW_COST) return prev;
+  const alreadyUsed = prev.actionHistory.some(
+    (a) =>
+      a.year === prev.year &&
+      a.type === 'call_review' &&
+      a.matchday === matchday &&
+      a.targetTeamId === homeId,
+  );
+  if (alreadyUsed) return prev;
+
+  const s = structuredClone(prev);
+  s.treasury -= REVIEW_COST;
+
+  const success = rngNext(s.rng) < REVIEW_SUCCESS_PROB;
+  const result = success ? 'replay_approved' : 'replay_denied';
+
+  if (success) {
+    // Remove the old result and re-simulate
+    const oldResultIdx = s.results.findIndex(
+      (r) => r.matchday === matchday && r.homeId === homeId && r.awayId === awayId,
+    );
+    if (oldResultIdx >= 0) {
+      const oldResult = s.results[oldResultIdx];
+      s.results.splice(oldResultIdx, 1);
+
+      // Remove old match report
+      const oldReportIdx = s.matchReports.findIndex(
+        (r) => r.matchday === matchday && r.homeId === homeId && r.awayId === awayId,
+      );
+      if (oldReportIdx >= 0) s.matchReports.splice(oldReportIdx, 1);
+
+      const byId = new Map(s.teams.map((t) => [t.id, t]));
+      const home = byId.get(homeId);
+      const away = byId.get(awayId);
+      if (home && away) {
+        const { homeGoals, awayGoals, goalscorers: newGoalscorers } = simulateMatch(
+          home,
+          away,
+          s.rng,
+        );
+        const goalMinutes = newGoalscorers.map((g) => g.minute);
+        const attribution = attributeMatchGoals(
+          s,
+          homeId,
+          awayId,
+          homeGoals,
+          awayGoals,
+          goalMinutes,
+        );
+        s.results.push({
+          matchday,
+          divisionOrden: oldResult.divisionOrden,
+          homeId,
+          awayId,
+          homeGoals,
+          awayGoals,
+        });
+        s.matchReports.push({
+          matchday,
+          divisionOrden: oldResult.divisionOrden,
+          homeId,
+          awayId,
+          homeGoals,
+          awayGoals,
+          goalscorers: attribution.goalscorers,
+          homeYellowCards: attribution.homeYellowCards,
+          awayYellowCards: attribution.awayYellowCards,
+          homeRedCards: attribution.homeRedCards,
+          awayRedCards: attribution.awayRedCards,
+        });
+      }
+    }
+  }
+
+  s.actionHistory.push({
+    id: s.nextActionId++,
+    year: s.year,
+    matchday,
+    type: 'call_review',
+    cost: REVIEW_COST,
+    targetTeamId: homeId,
+    result,
+  });
+
+  return s;
+}
+
+// Emergency board meeting: force a team to change coach (random ±5 shift).
+// Once per team per season.
+export function emergencyMeeting(
+  prev: GameState,
+  teamId: number,
+): GameState {
+  if (prev.phase !== 'temporada') return prev;
+  if (prev.treasury < EMERGENCY_MEETING_COST) return prev;
+
+  const alreadyUsed = prev.actionHistory.some(
+    (a) =>
+      a.year === prev.year &&
+      a.type === 'emergency_meeting' &&
+      a.targetTeamId === teamId,
+  );
+  if (alreadyUsed) return prev;
+
+  const s = structuredClone(prev);
+  s.treasury -= EMERGENCY_MEETING_COST;
+
+  const team = s.teams.find((t) => t.id === teamId);
+  if (team) {
+    const shift = randInt(s.rng, -5, 5);
+    team.strength = Math.min(85, Math.max(35, team.strength + shift));
+    s.actionHistory.push({
+      id: s.nextActionId++,
+      year: s.year,
+      matchday: s.currentMatchday,
+      type: 'emergency_meeting',
+      cost: EMERGENCY_MEETING_COST,
+      targetTeamId: teamId,
+      result: `coach_change_strength_${shift >= 0 ? '+' : ''}${shift}`,
+    });
+  }
+
+  return s;
+}
+
+// Postpone a matchday: skip it, allow injured players to recover, prestige -1.
+export function postponeMatchday(prev: GameState): GameState {
+  if (prev.phase !== 'temporada') return prev;
+  if (prev.seasonOver) return prev;
+
+  const s = structuredClone(prev);
+  s.prestige = Math.max(0, s.prestige - 1);
+
+  // Recover injured players for teams that would have played
+  const md = s.currentMatchday;
+  const playingTeams = new Set<number>();
+  for (const fx of s.fixtures) {
+    if (fx.matchday === md) {
+      playingTeams.add(fx.homeId);
+      playingTeams.add(fx.awayId);
+    }
+  }
+  for (const p of s.players) {
+    if (playingTeams.has(p.teamId) && p.injuredMatchesLeft > 0) {
+      p.injuredMatchesLeft = Math.max(0, p.injuredMatchesLeft - 1);
+    }
+  }
+
+  s.currentMatchday = md + 1;
+  if (s.currentMatchday > s.totalMatchdays) s.seasonOver = true;
+
+  s.actionHistory.push({
+    id: s.nextActionId++,
+    year: s.year,
+    matchday: md,
+    type: 'postpone_matchday',
+    cost: 0,
+    targetTeamId: null,
+    result: 'matchday_postponed',
+  });
+
   return s;
 }

@@ -134,7 +134,7 @@ export function NormsPage() {
   const d = norms.data;
 
   return (
-    <Grid>
+    <Grid className="page-enter">
       <Grid.Col span={{ base: 12, md: 5 }}>
         <Card withBorder mb="md">
           <Text fw={700} mb="sm">

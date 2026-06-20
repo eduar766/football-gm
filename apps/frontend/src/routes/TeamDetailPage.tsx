@@ -57,7 +57,7 @@ export function TeamDetailPage() {
   const t = team.data;
 
   return (
-    <Grid>
+    <Grid className="page-enter">
       <Grid.Col span={{ base: 12, md: 5 }}>
         <Card withBorder>
           <Group gap="sm">

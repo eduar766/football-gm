@@ -41,7 +41,7 @@ export function MarketPage() {
   }
 
   return (
-    <Paper withBorder p="md">
+    <Paper withBorder p="md" className="page-enter">
       <Group justify="space-between" mb="sm">
         <Text fw={700}>Mercado de adhesiones</Text>
         <Badge variant="light" color="yellow">

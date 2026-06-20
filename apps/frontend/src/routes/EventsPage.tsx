@@ -75,7 +75,7 @@ export function EventsPage() {
   const recent = evs.data?.recent ?? [];
 
   return (
-    <>
+    <div className="page-enter">
       <Paper withBorder p="md" mb="md">
         <Text fw={700}>Eventos y polémicas (§1, §2)</Text>
         <Text size="xs" c="dimmed">
@@ -218,6 +218,6 @@ export function EventsPage() {
           </Table>
         )}
       </Paper>
-    </>
+    </div>
   );
 }

@@ -164,7 +164,7 @@ export function PrizesPage() {
   }));
 
   return (
-    <Stack>
+    <Stack className="page-enter">
       {!isPreseason && (
         <Alert color="yellow" variant="light">
           Los premios solo se editan en pretemporada. Vuelve al{' '}
