@@ -46,7 +46,8 @@ describe('economy basics', () => {
     expect(withDeal.commercialContracts).toHaveLength(1);
     withDeal = close(withDeal, 1);
     expect(withDeal.treasury).toBeGreaterThan(noDeal.treasury);
-    expect(withDeal.lastEconomy?.income).toBe(offer.valorAnual);
+    // Income includes contract + matchday + merchandise revenue
+    expect(withDeal.lastEconomy?.income).toBeGreaterThanOrEqual(offer.valorAnual);
   });
 
   it('cancelling removes the contract', () => {
@@ -70,8 +71,10 @@ describe('financial tension (§5)', () => {
   it('a negative treasury penalises prestige vs a solvent control', () => {
     // Same seed/teams/league prize: only the treasury differs, isolating the
     // brake. Fase 6.5: prizes are defined per competition now.
+    // Prize is large enough to push the broke player's treasury negative even
+    // with matchday + merchandise revenue.
     const withPrize = (s: GameState) =>
-      setLeaguePrize(s, 12_000_000, [50, 30, 20]);
+      setLeaguePrize(s, 40_000_000, [50, 30, 20]);
     const broke = close(
       withPrize(createGame(5, { teams: players(10), startingTreasury: 1_000_000 })),
       1,

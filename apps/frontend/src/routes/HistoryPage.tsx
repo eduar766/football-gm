@@ -1,4 +1,4 @@
-import { Badge, Grid, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
+import { Box, Grid, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { IconHistory } from '@tabler/icons-react';
@@ -12,6 +12,14 @@ const AWARD_LABEL: Record<AwardType, string> = {
   mejor_portero: 'Mejor portero',
 };
 
+const AWARD_ICON: Record<AwardType, string> = {
+  max_goleador: '⚽',
+  max_asistente: '🅰️',
+  mejor_portero: '🧤',
+};
+
+const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#D97706'];
+
 export function HistoryPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
@@ -19,24 +27,16 @@ export function HistoryPage() {
 
   if (hist.isLoading) {
     return (
-      <>
+      <div className="page-enter">
         <Grid>
-          <Grid.Col span={{ base: 12, md: 7 }}>
-            <Skeleton height={250} radius="md" />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 5 }}>
-            <Skeleton height={250} radius="md" />
-          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}><Skeleton height={250} radius="md" /></Grid.Col>
+          <Grid.Col span={{ base: 12, md: 5 }}><Skeleton height={250} radius="md" /></Grid.Col>
         </Grid>
         <Grid mt="md">
-          <Grid.Col span={{ base: 12, md: 7 }}>
-            <Skeleton height={250} radius="md" />
-          </Grid.Col>
-          <Grid.Col span={{ base: 12, md: 5 }}>
-            <Skeleton height={250} radius="md" />
-          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 7 }}><Skeleton height={250} radius="md" /></Grid.Col>
+          <Grid.Col span={{ base: 12, md: 5 }}><Skeleton height={250} radius="md" /></Grid.Col>
         </Grid>
-      </>
+      </div>
     );
   }
 
@@ -47,39 +47,86 @@ export function HistoryPage() {
 
   return (
     <div className="page-enter">
+      <Paper
+        p="xl"
+        mb="md"
+        style={{
+          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
+          border: '1px solid rgba(16,185,129,0.2)',
+        }}
+      >
+        <Group gap="sm">
+          <IconHistory size={22} color="#10B981" />
+          <Text
+            fw={800}
+            style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontSize: '28px',
+              color: '#F9FAFB',
+            }}
+          >
+            Historial
+          </Text>
+        </Group>
+      </Paper>
+
       <Grid>
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <Paper withBorder p="md">
-            <Group gap="sm" mb="sm">
-              <IconHistory size={20} />
-              <Text fw={700}>Actas de temporada</Text>
-            </Group>
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+            <Text fw={700} mb="sm">Actas de temporada</Text>
             {records.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Aún no se ha cerrado ninguna temporada.
-              </Text>
+              <Text c="dimmed" size="sm">Aún no se ha cerrado ninguna temporada.</Text>
             ) : (
-              <Table striped>
+              <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Año</Table.Th>
-                    <Table.Th>Campeón</Table.Th>
-                    <Table.Th>División</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campeón</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>División</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {records.map((r) => (
-                    <Table.Tr key={`${r.anio}-${r.championTeamId}`}>
-                      <Table.Td>{r.anio}</Table.Td>
+                  {records.map((r, i) => (
+                    <Table.Tr
+                      key={`${r.anio}-${r.championTeamId}`}
+                      className="stagger-item"
+                      style={{
+                        borderLeft: `3px solid ${i < 3 ? MEDAL_COLORS[i] : 'transparent'}`,
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        animationDelay: `${i * 50}ms`,
+                      }}
+                    >
+                      <Table.Td>
+                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace' }}>{r.anio}</Text>
+                      </Table.Td>
                       <Table.Td>
                         <Link
                           to="/games/$gameId/teams/$teamId"
                           params={{ gameId, teamId: String(r.championTeamId) }}
                         >
-                          {r.championName}
+                          <Group gap="xs">
+                            {i < 3 && (
+                              <Box
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: '50%',
+                                  background: MEDAL_COLORS[i],
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <Text style={{ fontSize: '10px', fontWeight: 800, color: '#000' }}>
+                                  {i + 1}
+                                </Text>
+                              </Box>
+                            )}
+                            <Text fw={600}>{r.championName}</Text>
+                          </Group>
                         </Link>
                       </Table.Td>
-                      <Table.Td>{r.divisionName ?? '—'}</Table.Td>
+                      <Table.Td c="dimmed">{r.divisionName ?? '—'}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>
@@ -89,31 +136,57 @@ export function HistoryPage() {
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <Paper withBorder p="md">
-            <Text fw={700} mb="sm">
-              Palmarés
-            </Text>
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+            <Text fw={700} mb="sm">Palmarés</Text>
             <Text size="xs" c="dimmed" mb="sm">
               Vista derivada de las actas (no se almacena).
             </Text>
             {palmares.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Sin títulos todavía.
-              </Text>
+              <Text c="dimmed" size="sm">Sin títulos todavía.</Text>
             ) : (
-              <Table striped>
+              <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Equipo</Table.Th>
-                    <Table.Th ta="right">Títulos</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Títulos</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {palmares.map((p) => (
-                    <Table.Tr key={p.teamId}>
-                      <Table.Td>{p.teamName}</Table.Td>
-                      <Table.Td ta="right" fw={700}>
-                        {p.titles}
+                  {palmares.map((p, i) => (
+                    <Table.Tr
+                      key={p.teamId}
+                      className="stagger-item"
+                      style={{
+                        borderLeft: `3px solid ${i < 3 ? MEDAL_COLORS[i] : 'transparent'}`,
+                        animationDelay: `${i * 50}ms`,
+                      }}
+                    >
+                      <Table.Td>
+                        <Group gap="xs">
+                          {i < 3 && (
+                            <Box
+                              style={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: '50%',
+                                background: MEDAL_COLORS[i],
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <Text style={{ fontSize: '9px', fontWeight: 800, color: '#000' }}>
+                                {i + 1}
+                              </Text>
+                            </Box>
+                          )}
+                          <Text fw={i < 3 ? 600 : 400}>{p.teamName}</Text>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                          {p.titles}
+                        </Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}
@@ -124,44 +197,67 @@ export function HistoryPage() {
         </Grid.Col>
       </Grid>
 
-      {palmares.length > 0 && (
-        <PalmaresChart data={palmares} />
-      )}
+      {palmares.length > 0 && <PalmaresChart data={palmares} />}
 
       <Grid mt="md">
         <Grid.Col span={{ base: 12, md: 7 }}>
-          <Paper withBorder p="md">
-            <Text fw={700} mb="sm">
-              Galardones por temporada (§6)
-            </Text>
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+            <Text fw={700} mb="sm">Galardones por temporada (§6)</Text>
             {awards.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Aún no se han otorgado galardones.
-              </Text>
+              <Text c="dimmed" size="sm">Aún no se han otorgado galardones.</Text>
             ) : (
-              <Table striped>
+              <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Año</Table.Th>
-                    <Table.Th>Premio</Table.Th>
-                    <Table.Th>Jugador</Table.Th>
-                    <Table.Th>Equipo</Table.Th>
-                    <Table.Th ta="right">Valor</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Premio</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Jugador</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Valor</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {awards.map((a, i) => (
-                    <Table.Tr key={`${a.year}-${a.tipo}-${i}`}>
-                      <Table.Td>{a.year}</Table.Td>
+                    <Table.Tr
+                      key={`${a.year}-${a.tipo}-${i}`}
+                      className="stagger-item"
+                      style={{
+                        borderLeft: '3px solid transparent',
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        animationDelay: `${i * 50}ms`,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderLeftColor = '#F59E0B';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderLeftColor = 'transparent';
+                      }}
+                    >
                       <Table.Td>
-                        <Badge size="sm" variant="light" color="yellow">
-                          {AWARD_LABEL[a.tipo]}
-                        </Badge>
+                        <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{a.year}</Text>
                       </Table.Td>
-                      <Table.Td>{a.playerName}</Table.Td>
-                      <Table.Td>{a.teamName}</Table.Td>
-                      <Table.Td ta="right" fw={700}>
-                        {a.valor}
+                      <Table.Td>
+                        <Box
+                          style={{
+                            display: 'inline-flex',
+                            padding: '2px 10px',
+                            borderRadius: 12,
+                            background: 'rgba(245,158,11,0.15)',
+                            color: '#F59E0B',
+                            fontWeight: 600,
+                            fontSize: '12px',
+                            gap: 4,
+                          }}
+                        >
+                          {AWARD_ICON[a.tipo]} {AWARD_LABEL[a.tipo]}
+                        </Box>
+                      </Table.Td>
+                      <Table.Td fw={500}>{a.playerName}</Table.Td>
+                      <Table.Td c="dimmed">{a.teamName}</Table.Td>
+                      <Table.Td ta="right">
+                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                          {a.valor}
+                        </Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}
@@ -172,35 +268,43 @@ export function HistoryPage() {
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 5 }}>
-          <Paper withBorder p="md">
-            <Text fw={700} mb="sm">
-              Ranking histórico de goleadores
-            </Text>
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+            <Text fw={700} mb="sm">Ranking histórico de goleadores</Text>
             <Text size="xs" c="dimmed" mb="sm">
               Vista derivada de los galardones (no se almacena).
             </Text>
             {topScorers.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Sin ranking todavía.
-              </Text>
+              <Text c="dimmed" size="sm">Sin ranking todavía.</Text>
             ) : (
-              <Table striped>
+              <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Jugador</Table.Th>
-                    <Table.Th>Equipo</Table.Th>
-                    <Table.Th ta="right">Pichichis</Table.Th>
-                    <Table.Th ta="right">Goles tot.</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Jugador</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Pichichis</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Goles tot.</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {topScorers.map((r) => (
-                    <Table.Tr key={r.playerId}>
-                      <Table.Td>{r.playerName}</Table.Td>
-                      <Table.Td>{r.teamName}</Table.Td>
-                      <Table.Td ta="right">{r.seasonsWon}</Table.Td>
-                      <Table.Td ta="right" fw={700}>
-                        {r.totalGoles}
+                  {topScorers.map((r, i) => (
+                    <Table.Tr
+                      key={r.playerId}
+                      className="stagger-item"
+                      style={{
+                        borderLeft: `3px solid ${i < 3 ? MEDAL_COLORS[i] : 'transparent'}`,
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        animationDelay: `${i * 50}ms`,
+                      }}
+                    >
+                      <Table.Td fw={600}>{r.playerName}</Table.Td>
+                      <Table.Td c="dimmed">{r.teamName}</Table.Td>
+                      <Table.Td ta="right">
+                        <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{r.seasonsWon}</Text>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                          {r.totalGoles}
+                        </Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}

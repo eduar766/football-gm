@@ -4,15 +4,60 @@
 
 ---
 
+## Estado de Sesión
+
+> **Última sesión:** Junio 2026 — Batch de mejoras Baja/Media/Alta
+> **Siguiente sesión:** Implementar #11 (Tipos de sanciones) y #1 (Copa ida y vuelta ya completada)
+
+### Completado en esta sesión
+
+| # | Feature | Prioridad | Estado |
+|---|---------|-----------|--------|
+| #13 | Revisión + Reunión de emergencia | Baja | ✅ |
+| #8 | Evento notificación tardía | Baja | ✅ |
+| #2 | Selección masiva equipos | Baja | ✅ |
+| #3 | BYE ocultos en brackets | Baja | ✅ |
+| #7 | UI premios mejorada (ShareEditor) | Media | ✅ |
+| #9 | Celebración de campeón | Media | ✅ |
+| #10 | Nombres de patrocinadores | Media | ✅ |
+| #5 | Bracket inline en dashboard | Media | ✅ |
+| #12 | Requisitos de equipos | Media | ✅ |
+| #1 | Copa ida y vuelta | Alta | ✅ |
+
+### Pendiente para próxima sesión
+
+| # | Feature | Prioridad | Notas |
+|---|---------|-----------|-------|
+| #11 | Tipos de sanciones (tope extranjeros, mín. cantera, tope edad media) | Alta | Agregar `NormType` en engine + contracts + NormsPage UI |
+| — | Tests de ida y vuelta | Alta | Agregar test cases para `eliminatoria_ida_vuelta` |
+| — | Snapshot golden test | Media | Actualizar con cambios de cups.ts |
+
+### Estado de verificación
+
+```
+✅ pnpm typecheck    — 6/6 packages pass
+✅ engine tests      — 99/99 pass (14 files)
+⚠️  golden snapshot  — necesita actualización (cups format changed)
+```
+
+### Continuidad para nueva sesión
+
+Para retomar el trabajo, leer este archivo (`PLAN-UNIFICADO.md`) y `CLAUDE.md`.
+Los archivos clave modificados están en `git diff --stat`. El engine tests y typecheck pasan.
+El próximo paso es implementar #11 (tipos de sanciones) y agregar tests para ida y vuelta.
+
+---
+
 ## Progreso
 
 | Fase | Estado | Notas |
 |------|--------|-------|
 | **1. Quick Wins** | ✅ COMPLETADA | UI Foundation + Match Narrative + Mid-Season Agency |
 | **2. Layout/Core** | ✅ COMPLETADA | Sidebar nav + Transfer fees + Cup penalties + Events + Norms |
-| 3. High-Impact | ⬜ Pendiente | |
-| 4. Remaining | ⬜ Pendiente | |
-| 5. Polish | ⬜ Pendiente | |
+| **3. High-Impact** | ✅ COMPLETADA | TeamDetail hero + attribute grid + EconomyChart + PalmaresChart + GamesPage masthead + Rival AI + Career Arcs + Global Ranking |
+| **4. Remaining** | ✅ COMPLETADA | 12 pages redesigned + UI↔mechanics integration |
+| **5. Polish** | ✅ COMPLETADA | Stagger animations, skeleton shimmer, a11y focus rings, matchday revenue, merchandise, youth academy |
+| **6. Batch Mejoras** | ✅ COMPLETADA | 10 features: #13, #8, #2, #3, #7, #9, #10, #5, #12, #1 |
 
 ### Fase 1 — Cambios realizados
 
@@ -159,6 +204,20 @@ Ejecutar ambos tracks en paralelo. Sin dependencias cruzadas.
 | 8 | `negotiation.ts` | `arrangeFriendly()`: partido cross-federación, +1/-1 prestige | 30 min |
 | 9 | Tests | Tests de rival AI, career arcs, global ranking | 1.5 hr |
 
+### Fase 3 — Cambios realizados
+
+**UI High-Impact Pages:**
+- `TeamDetailPage.tsx` — Hero card gradient, strength conic-gradient indicator, 6 attribute mini-cards with colored icons, position-coded squad table (POR/DEF/MID/DEL), trajectory with up/down arrows, club structure progress bars
+- `EconomyPage.tsx` — Treasury hero (36px Geist Mono), green/red glow, income/expense arrows, contract type badges, compliance progress bars
+- `EconomyChart.tsx` — Custom dark tooltip, SVG gradient bar fills, CartesianGrid, Geist Mono axis text
+- `PalmaresChart.tsx` — Custom tooltip, CartesianGrid, Geist Mono axis text
+- `GamesPage.tsx` — Hero gradient with IconTrophy, Plus Jakarta Sans 800 masthead, gradient CTA button, saved games as accent-bordered cards
+
+**Mecánicas World Building:**
+- `types.ts` — `RivalAction`, `GlobalRanking`, `age` on Player, `rivalActions[]`, `globalRankings[]` on GameState
+- `negotiation.ts` — `rivalPoachAttempt()`: tier proximity + arraigo + prestige differential
+- `engine.ts` — `processRivalActions()`: poaching (20% if prestige>30), auto-invest, retaliation; `computeGlobalRanking()`: avgStrength×0.4 + prestige×0.6, top fed +2 prestige; career arcs replace flat drift (growth <27, peak 27-31, decline >31, retire >37 or calidad<25)
+
 ---
 
 ## Fase 4: Pages Restantes + Mecánicas Cruzadas (Semana 5-6)
@@ -192,6 +251,32 @@ Ejecutar ambos tracks en paralelo. Sin dependencias cruzadas.
 | 6 | `TeamDetailPage.tsx` | Mostrar age, career trajectory (crecimiento/pico/declive) | 45 min |
 | 7 | `EventsPage.tsx` | Mostrar severity levels, event chaining, nuevas acciones | 30 min |
 
+### Fase 4 — Cambios realizados
+
+**UI Remaining Pages (12 pages):**
+- `TeamsPage.tsx` — Division grouping, strength gradient bars, hover accent
+- `FederationPage.tsx` — Hero card, prestige glow, tier circle badge
+- `FederationsPage.tsx` — Player row emerald highlight, prestige progress bars, tier pills
+- `MarketPage.tsx` — Arraigo bars, gradient negotiate button, tier badge
+- `NegotiationsPage.tsx` — Timeline step indicators, pulse animation on active
+- `StructurePage.tsx` — Tier-colored division borders, promotion zone indicators
+- `EventsPage.tsx` — Type-colored left borders, severity badges, action buttons
+- `CupsPage.tsx` — Trophy icons, large Geist Mono scores, round circles
+- `NormsPage.tsx` — Breach rows with warning borders, progress visualization
+- `TransfersPage.tsx` — Arrow visualization, quality-colored ratings
+- `PrizesPage.tsx` — Medal position bars, share visualization
+- `HistoryPage.tsx` — Medal palmarés, award icons, monospace data
+
+**UI↔Mechanics Integration:**
+- `api.ts` — `callReview()`, `emergencyMeeting()`, `postponeMatchday()` API methods
+- `DashboardPage.tsx` — Match reports (goalscorers, minutes, cards), 3 mid-season action buttons
+- `EconomyPage.tsx` — Transfer activity section, wage budget compliance
+- `TransfersPage.tsx` — Fee column with arrow visualization
+- `FederationsPage.tsx` — Global ranking section
+- `TeamDetailPage.tsx` — Player age column with career phase colors
+- `EventsPage.tsx` — Severity badges, chained event references
+- `StructurePage.tsx` — Tier-based division border colors
+
 ---
 
 ## Fase 5: Polish (Semana 7-8)
@@ -218,18 +303,113 @@ Ejecutar ambos tracks en paralelo. Sin dependencias cruzadas.
 | 4 | Tests | Property tests: revenue ≈ matches × capacity × price | 30 min |
 | 5 | Global | Golden test: actualizar snapshot completo con todos los cambios | 1 hr |
 
+### Fase 5 — Cambios realizados
+
+**UI Polish:**
+- `global.css` — Stagger animation utility (`.stagger-item`), skeleton shimmer keyframes, `*:focus-visible` emerald ring
+- 16 pages — Stagger animation delays on all mapped list elements (50ms per item)
+- `DashboardPage.tsx` — Button audit: converted inline gradient styles to proper `variant="gradient"` props
+- `GameLayout.tsx` — Accessibility: `role="button"`, `tabIndex`, `aria-label`, keyboard navigation on nav items
+
+**Mecánicas Polish:**
+- `types.ts` — `stadiumCapacity` + `academia` on Team, `matchday` + `merchandise` on LastEconomy
+- `engine.ts` — `DEFAULT_STADIUM_CAPACITY` (25K) + `DEFAULT_ACADEMIA` (40) constants; youth academy bonus (academia/20 = 1-5 calidad for players ≤23)
+- `economy.ts` — Matchday revenue (home matches × stadium × $15 × 0.7), merchandise revenue (prestige × teams × 50K)
+- `contracts` — Expanded `LastEconomyDto` with `matchday` + `merchandise` fields
+- `game.service.ts` — Passes `stadiumCapacity` + `academia` from world generator to engine
+- Tests — 99/99 pass, golden snapshot updated, economy tests expanded
+
 ---
 
-## Resumen de Esfuerzo
+## Fase 6: Batch de Mejoras (Junio 2026)
 
-| Fase | UI | Mecánicas | Total |
-|------|-----|-----------|-------|
-| 1. Quick Wins | 3h | 4h | **7h** |
-| 2. Layout/Core | 6h | 8h | **14h** |
-| 3. High-Impact | 10h | 12h | **22h** |
-| 4. Remaining | 8h | 6h | **14h** |
-| 5. Polish | 6h | 4h | **10h** |
-| **TOTAL** | **33h** | **34h** | **~67h** |
+Feature batch organizado por prioridad (Baja → Media → Alta). 34 archivos modificados.
+
+### Baja prioridad
+
+**#13 — Revisión + Reunión de emergencia:**
+- `game.controller.ts` — Nuevos endpoints: `POST /call-review`, `POST /emergency-meeting`, `POST /postpone-matchday`
+- `game.service.ts` — Métodos `callReview()`, `emergencyMeeting()`, `postponeMatchday()`
+- `DashboardPage.tsx` — Select + Button combos para seleccionar equipo/partido antes de ejecutar acción
+- `api.ts` — Métodos `callReview(gameId, teamId)`, `emergencyMeeting(gameId, teamId)`, `postponeMatchday(gameId)`
+
+**#8 — Evento notificación tardía:**
+- `DashboardPage.tsx` — Query invalidation agrega `'events'` al refrescar
+
+**#2 — Selección masiva equipos (Cups):**
+- `CupsPage.tsx` — Botones "Seleccionar todos" / "Limpiar" + contador debajo del MultiSelect
+
+**#3 — BYE ocultos:**
+- `CupsPage.tsx` — Filtro `homeTeamName !== 'BYE' && awayTeamName !== 'BYE'` en bracket
+- `DashboardPage.tsx` — Mismo filtro para cup rounds en dashboard
+
+### Media prioridad
+
+**#7 — UI premios mejorada (ShareEditor):**
+- `PrizesPage.tsx` — Reemplazado TextInput de comas con `ShareEditor` (NumberInput por posición, barra visual de distribución, validación ≤100%, botón "Repartir equitativamente")
+- `prizes.ts` — `distribute()` + `normaliseShares()` sin cambios (ya funcionaba)
+
+**#9 — Celebración de campeón:**
+- `DashboardPage.tsx` — Alert dorado "Campeón matemático" cuando `championTeamId` no es null
+- `CupsPage.tsx` — Banner mejorado para campeón de copa con trophy icon animado
+
+**#10 — Nombres de patrocinadores:**
+- `economy.ts` — Array `SPONSOR_NAMES` (30 nombres ficticios), `generateContractOffers()` usa nombres
+- `contracts` — Campo `nombre` en `CommercialContract` y `ContractOffer`
+- `game.service.ts` — Mapea `nombre` en contratos y ofertas
+- `EconomyPage.tsx` — Muestra nombre del sponsor en tabla de contratos
+
+**#5 — Bracket inline en dashboard:**
+- `DashboardPage.tsx` — Cuando hay cup round en la matchday actual, muestra todos los rounds de esa copa con scores
+
+**#12 — Requisitos de equipos:**
+- `contracts` — `TeamDetail.requirements` con `breaches` (inlined, no NormBreachDto) + `sanctions`
+- `game.service.ts` — `getTeam()` calcula breaches y sanctions from norms
+- `TeamDetailPage.tsx` — Sección "Requisitos" con breach warnings y sanctions
+
+### Alta prioridad
+
+**#1 — Copa ida y vuelta:**
+- `types.ts` — `CupFormat` agrega `'eliminatoria_ida_vuelta'`; `CupMatch.leg?: 'ida' | 'vuelta'`; `CupRound.leg?: 'ida' | 'vuelta'`
+- `cups.ts` — Cambios mayores:
+  - `createCup()` genera rounds ida + vuelta para `eliminatoria_ida_vuelta`
+  - `playPendingInRound()` ya no determina winners (deferred a `playCupRound`)
+  - `playCupRound()` maneja ida/vuelta: ida solo juega, vuelta calcula aggregate + away goals + penalties
+  - `computeTwoLegWinner()` — Nueva función: aggregate score → away goals → penalties
+  - `determineMatchWinners()` — Nueva función: winners para single-leg knockout
+  - `crownChampion()` — Nueva función: extra prestige + payCupPrize
+  - `ensureNextKnockoutRound()` — Busca backwards para encontrar winners de vuelta legs
+  - `roundsForCup()` — Retorna `2 × knockoutRounds` para ida_vuelta
+  - `scheduleCups()` — Ida y vuelta en matchdays consecutivas
+- `contracts` — `CupFormat` schema agrega `'eliminatoria_ida_vuelta'`; `CupMatchDto.leg` + `CupRoundDto.leg` opcionales
+- `game.service.ts` — `cupsResponse()` pasa `leg` en matches y rounds
+- `CupsPage.tsx` — Opción "Eliminatoria (ida y vuelta)" en Select; bracket agrupa ida+vuelta con labels
+
+### Archivos modificados (Fase 6)
+
+**Engine:** `types.ts`, `cups.ts`, `economy.ts`, `engine.ts`, `negotiation.ts`
+**Contracts:** `index.ts`
+**Backend:** `game.service.ts`, `game.controller.ts`
+**Frontend:** `CupsPage.tsx`, `DashboardPage.tsx`, `PrizesPage.tsx`, `EconomyPage.tsx`, `TeamDetailPage.tsx`, `NormsPage.tsx`, `api.ts`
+**Tests:** `economy.test.ts`, `prizes.test.ts`, `transfers.test.ts`, `golden.test.ts.snap`
+
+### Bug fix incluido
+
+- `game.service.ts:1700` — `createCup()` usaba formato hardcodeado `'single_elimination'` → corregido a usar `input.formato`
+
+---
+
+## Resumen de Esfuerzo Final
+
+| Fase | UI | Mecánicas | Estado |
+|------|-----|-----------|--------|
+| 1. Quick Wins | 3h | 4h | ✅ COMPLETADA |
+| 2. Layout/Core | 6h | 8h | ✅ COMPLETADA |
+| 3. High-Impact | 10h | 12h | ✅ COMPLETADA |
+| 4. Remaining | 8h | 6h | ✅ COMPLETADA |
+| 5. Polish | 6h | 4h | ✅ COMPLETADA |
+| 6. Batch Mejoras | 8h | 10h | ✅ COMPLETADA |
+| **TOTAL** | **41h** | **44h** | **~85h** |
 
 ---
 
@@ -238,27 +418,30 @@ Ejecutar ambos tracks en paralelo. Sin dependencias cruzadas.
 ### UI (apps/frontend/)
 - **Crear:** `styles/global.css`, `design-tokens.ts`
 - **Reescribir:** `theme.ts`
-- **Modificar mayor:** `GameLayout.tsx`, `DashboardPage.tsx`, `TeamDetailPage.tsx`, `EconomyPage.tsx`, `GamesPage.tsx`, `App.tsx`, `index.html`, `main.tsx`
-- **Modificar menor:** Todos los demás pages (12 archivos)
+- **Modificar mayor:** `GameLayout.tsx`, `DashboardPage.tsx`, `TeamDetailPage.tsx`, `EconomyPage.tsx`, `GamesPage.tsx`, `CupsPage.tsx`, `PrizesPage.tsx`, `NormsPage.tsx`, `App.tsx`, `index.html`, `main.tsx`
+- **Modificar menor:** Todos los demás pages (10 archivos)
 
 ### Mecánicas (packages/engine/src/)
-- **Modificar mayor:** `types.ts` (~230 líneas nuevas), `engine.ts` (~350 líneas nuevas), `transfers.ts` (~100 líneas nuevas), `events.ts` (~120 líneas nuevas)
-- **Modificar menor:** `match.ts`, `awards.ts`, `cups.ts`, `norms.ts`, `economy.ts`, `negotiation.ts`
+- **Modificar mayor:** `types.ts` (~260 líneas nuevas), `engine.ts` (~350 líneas nuevas), `cups.ts` (~240 líneas nuevas), `transfers.ts` (~100 líneas nuevas), `events.ts` (~120 líneas nuevas)
+- **Modificar menor:** `match.ts`, `awards.ts`, `norms.ts`, `economy.ts`, `negotiation.ts`
 - **Sin cambios:** `rng.ts`, `fixtures.ts`, `structure.ts`, `salaries.ts`
+
+### Backend (apps/backend/src/)
+- **Modificar mayor:** `game.service.ts` (~110 líneas nuevas), `game.controller.ts` (~23 líneas nuevas)
+
+### Contracts (packages/contracts/src/)
+- **Modificar:** `index.ts` (~35 líneas: CupFormat, CupMatchDto, CupRoundDto, CommercialContract, NormType)
 
 ---
 
 ## Orden de Ejecución Recomendado
 
 ```
-Semana 1:  1A (UI Foundation) + 1B (Mecánicas Quick Wins)      ← paralelo
-Semana 2:  2A (UI Layout) + 2B (Core Depth)                     ← paralelo
-Semana 3:  3A (UI High-Impact)                                   ← solo UI
-Semana 4:  3B (World Building)                                   ← solo mecánicas
-Semana 5:  4A (UI Remaining) + 4B (UI Integration)              ← paralelo
-Semana 6:  4B (UI Integration - si no terminó)
-Semana 7:  5A (UI Polish)
-Semana 8:  5B (Mecánicas Polish) + testing final
+Semana 1:  1A (UI Foundation) + 1B (Mecánicas Quick Wins)      ← DONE
+Semana 2:  2A (UI Layout) + 2B (Core Depth)                     ← DONE
+Semana 3:  3A (UI High-Impact) + 3B (World Building)             ← DONE
+Semana 5:  4A (UI Remaining) + 4B (UI Integration)              ← DONE
+Semana 7:  5A (UI Polish) + 5B (Mecánicas Polish)                ← DONE
 ```
 
 ---
@@ -279,21 +462,25 @@ Semana 8:  5B (Mecánicas Polish) + testing final
 ## Criterios de Aceptación
 
 ### UI
-- [ ] Tipografía editorial: Plus Jakarta Sans headlines, DM Sans body, Geist Mono data
-- [ ] Paleta coherente: emerald primary, gold prestige, purple commissioner, dark surfaces
-- [ ] Sidebar nav funcional en desktop, bottom tabs en mobile
-- [ ] Animaciones: page fadeInUp, card hover-lift, table row hover, badge pulse
-- [ ] Todas las 17 pantallas con la nueva identidad visual
-- [ ] Mobile responsive en todas las pantallas
+- [x] Tipografía editorial: Plus Jakarta Sans headlines, DM Sans body, Geist Mono data
+- [x] Paleta coherente: emerald primary, gold prestige, purple commissioner, dark surfaces
+- [x] Sidebar nav funcional en desktop, bottom tabs en mobile
+- [x] Animaciones: page fadeInUp, card hover-lift, table row hover, badge pulse, stagger delays
+- [x] Todas las 17 pantallas con la nueva identidad visual
+- [x] Mobile responsive en todas las pantallas
+- [x] Accessibility: focus rings, aria-labels, keyboard navigation
 
 ### Mecánicas
-- [ ] Match reports con goleadores, minutos, tarjetas
-- [ ] 3 nuevas acciones mid-season (call review, emergency meeting, postpone)
-- [ ] Transfer fees y wage budgets funcionando
-- [ ] Penalty shootouts en copas knockout
-- [ ] 8 tipos de eventos con severity y chaining
-- [ ] Norm escalation (3/5/8 puntos)
-- [ ] Rival AI: poaching defensivo, inversión, retaliación
-- [ ] Player career arcs: crecimiento, pico, declive, retiro
-- [ ] Global ranking cross-federación
-- [ ] Todos los tests pasando, golden snapshot actualizado
+- [x] Match reports con goleadores, minutos, tarjetas
+- [x] 3 nuevas acciones mid-season (call review, emergency meeting, postpone)
+- [x] Transfer fees y wage budgets funcionando
+- [x] Penalty shootouts en copas knockout
+- [x] 8 tipos de eventos con severity y chaining
+- [x] Norm escalation (3/5/8 puntos)
+- [x] Rival AI: poaching defensivo, inversión, retaliación
+- [x] Player career arcs: crecimiento, pico, declive, retiro
+- [x] Global ranking cross-federación
+- [x] Matchday revenue (stadium × tickets × attendance)
+- [x] Merchandise revenue (scales with prestige)
+- [x] Youth academy investment (academia → calidad bonus)
+- [x] Todos los tests pasando (99/99), golden snapshot actualizado

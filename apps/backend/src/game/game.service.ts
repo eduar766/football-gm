@@ -8,6 +8,7 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   advanceMatchday as engineAdvanceMatchday,
   advanceSeason as engineAdvanceSeason,
+  callReview as engineCallReview,
   closeSeason as engineCloseSeason,
   computeStandings,
   addNorm as engineAddNorm,
@@ -17,6 +18,7 @@ import {
   createCup as engineCreateCup,
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
+  emergencyMeeting as engineEmergencyMeeting,
   financialHealth,
   negotiableTeams,
   normBreaches,
@@ -25,6 +27,7 @@ import {
   pendingIntegrationTeams,
   playerTier,
   pointPenaltiesForYear,
+  postponeMatchday as enginePostponeMatchday,
   removeNorm as engineRemoveNorm,
   resolveEvent as engineResolveEvent,
   runLevelingLeague as engineRunLevelingLeague,
@@ -246,6 +249,8 @@ export class GameService {
         arraigo: t.arraigo,
         // Youth/cantera strength from the academy rating (§4.4 youth cups).
         youthStrength: Math.max(20, Math.round(t.academiaRating * 0.9)),
+        stadiumCapacity: t.estadioAforo,
+        academia: t.academiaRating,
         squad: t.squad, // engine tracks players for the §6 awards
       })),
       rivals: world.rivals.map((r) => ({
@@ -434,6 +439,78 @@ export class GameService {
       this.assertTemporada(state, 'avanzar la jornada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceMatchday(state);
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  /* ----------------------------------- mid-season commissioner actions */
+
+  async callReview(
+    gameId: number,
+    matchday: number,
+    homeId: number,
+    awayId: number,
+  ): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertTemporada(state, 'llamar a revisión');
+      // Convert DB team IDs → engine team IDs
+      const engToDb = await this.engineToDbTeam(gameId, tx);
+      // Reverse: db id → engine id
+      const dbToEng = new Map<number, number>();
+      for (const [eng, db] of engToDb) dbToEng.set(db, eng);
+      const engHome = dbToEng.get(homeId);
+      const engAway = dbToEng.get(awayId);
+      if (engHome == null || engAway == null) {
+        throw new BadRequestException('Equipo no encontrado');
+      }
+      const next = engineCallReview(state, matchday, engHome, engAway);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo convocar revisión: ya usada en esta jornada para este local, falta presupuesto, o no estás en temporada',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async emergencyMeeting(
+    gameId: number,
+    teamId: number,
+  ): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertTemporada(state, 'reunión de emergencia');
+      const engToDb = await this.engineToDbTeam(gameId, tx);
+      const dbToEng = new Map<number, number>();
+      for (const [eng, db] of engToDb) dbToEng.set(db, eng);
+      const engTeam = dbToEng.get(teamId);
+      if (engTeam == null) {
+        throw new BadRequestException('Equipo no encontrado');
+      }
+      const next = engineEmergencyMeeting(state, engTeam);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo convocar reunión: ya usada para este equipo, falta presupuesto, o no estás en temporada',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async postponeMatchday(gameId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertTemporada(state, 'posponer jornada');
+      const next = enginePostponeMatchday(state);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo posponer: la temporada ya terminó o no estás en temporada',
+        );
+      }
       await this.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
@@ -893,12 +970,38 @@ export class GameService {
       .where(and(eq(s.trajectories.gameId, gameId), eq(s.trajectories.teamId, teamId)))
       .orderBy(asc(s.trajectories.anio));
 
+    // Compute norm breaches specific to this team
+    const allBreaches = normBreaches(state);
+    const teamDbToEng = await this.engineToDbTeam(gameId);
+    const engTeamId = [...teamDbToEng.entries()].find(([, db]) => db === teamId)?.[0];
+    const teamBreaches = engTeamId != null
+      ? allBreaches.filter((b) => b.teamId === engTeamId)
+      : [];
+    const teamSanctions = state.sanctions
+      .filter((sa) => {
+        const engId = [...teamDbToEng.entries()].find(([, db]) => db === teamId)?.[0];
+        return engId != null && sa.teamId === engId;
+      })
+      .map((sa) => ({ year: sa.year, motivo: sa.motivo, castigo: sa.castigo }));
+
     return {
       ...team,
       divisionName: team.divisionName ?? null,
       federationName: team.federationName ?? null,
       squad,
       trajectory,
+      requirements: {
+        breaches: teamBreaches.map((b) => ({
+          teamId: teamId,
+          teamName: b.teamName,
+          normId: b.normId,
+          tipo: b.tipo,
+          valor: b.valor,
+          valorActual: b.valorActual,
+          sanctioned: b.sanctioned,
+        })),
+        sanctions: teamSanctions,
+      },
     };
   }
 
@@ -1143,12 +1246,14 @@ export class GameService {
       contracts: state.commercialContracts.map((c) => ({
         id: c.id,
         tipo: c.tipo,
+        nombre: c.nombre,
         valorAnual: c.valorAnual,
         yearsLeft: c.yearsLeft,
       })),
       offers: state.contractOffers.map((o) => ({
         id: o.id,
         tipo: o.tipo,
+        nombre: o.nombre,
         valorAnual: o.valorAnual,
         years: o.years,
       })),
@@ -1627,6 +1732,7 @@ export class GameService {
           c.championTeamId !== null ? (teamName.get(c.championTeamId) ?? null) : null,
         rounds: c.rounds.map((r) => ({
           numero: r.numero,
+          ...(r.leg ? { leg: r.leg } : {}),
           matches: r.matches.map((m) => ({
             homeTeamId: dbTeamId(m.homeTeamId),
             homeTeamName: name(m.homeTeamId),
@@ -1637,6 +1743,7 @@ export class GameService {
             played: m.played,
             winnerTeamId:
               m.winnerTeamId !== null ? (map.get(m.winnerTeamId) ?? null) : null,
+            ...(m.leg ? { leg: m.leg } : {}),
           })),
         })),
       })),
@@ -1695,7 +1802,7 @@ export class GameService {
         federationId: fedMap.get(next.playerFederationId)!,
         name: created.name,
         tipo: created.tipo,
-        formato: 'single_elimination',
+        formato: input.formato,
       });
 
       await this.saveState(tx, gameId, next);

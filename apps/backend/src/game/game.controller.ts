@@ -215,6 +215,29 @@ export class GameController {
     );
   }
 
+  /* ---------------------------------- mid-season commissioner actions */
+
+  @Post(':id/call-review')
+  callReview(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { matchday: number; homeTeamId: number; awayTeamId: number },
+  ) {
+    return this.games.callReview(id, body.matchday, body.homeTeamId, body.awayTeamId);
+  }
+
+  @Post(':id/emergency-meeting')
+  emergencyMeeting(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { teamId: number },
+  ) {
+    return this.games.emergencyMeeting(id, body.teamId);
+  }
+
+  @Post(':id/postpone-matchday')
+  postponeMatchday(@Param('id', ParseIntPipe) id: number) {
+    return this.games.postponeMatchday(id);
+  }
+
   @Get(':id/events')
   events(@Param('id', ParseIntPipe) id: number) {
     return this.games.getEvents(id);

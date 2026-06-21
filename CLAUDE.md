@@ -104,3 +104,52 @@ pnpm --filter @football-gm/backend db:migrate   # apply migrations
   the backend resolved those imports as `any` and got stuck on stale errors.
 
 If you ever see that error, the dist types are missing — run `pnpm build` once, then `pnpm dev`.
+
+---
+
+## Current Session State
+
+> **Last updated:** Junio 2026 — After Fase 6 (batch de mejoras)
+
+### What was done
+
+10 features implemented in a batch (Baja/Media/Alta priority):
+
+| # | Feature | Key files |
+|---|---------|-----------|
+| #13 | Revisión + Reunión de emergencia | `game.service.ts`, `game.controller.ts`, `DashboardPage.tsx` |
+| #8 | Evento notificación tardía | `DashboardPage.tsx` (query invalidation) |
+| #2 | Selección masiva equipos | `CupsPage.tsx` (select all/clear buttons) |
+| #3 | BYE ocultos en brackets | `CupsPage.tsx`, `DashboardPage.tsx` |
+| #7 | UI premios mejorada | `PrizesPage.tsx` (ShareEditor component) |
+| #9 | Celebración de campeón | `DashboardPage.tsx` (golden alert) |
+| #10 | Nombres de patrocinadores | `economy.ts`, `EconomyPage.tsx` |
+| #5 | Bracket inline en dashboard | `DashboardPage.tsx` |
+| #12 | Requisitos de equipos | `TeamDetailPage.tsx`, `game.service.ts` |
+| #1 | Copa ida y vuelta | `cups.ts`, `types.ts`, `CupsPage.tsx` (full 2-leg implementation) |
+
+### What's pending
+
+| # | Feature | Priority | Notes |
+|---|---------|----------|-------|
+| #11 | Tipos de sanciones | Alta | Add `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` to NormType. Engine + contracts + NormsPage |
+| — | Tests for ida y vuelta | Alta | Add test cases for `eliminatoria_ida_vuelta` in `cups.test.ts` |
+| — | Golden snapshot update | Media | `golden.test.ts.snap` needs regeneration |
+
+### Verification status
+
+```bash
+pnpm typecheck          # 6/6 packages pass
+pnpm test               # engine 99/99 pass (14 files)
+# golden snapshot may need: pnpm --filter @football-gm/engine test -- --update
+```
+
+### Key architecture notes for next session
+
+- **Engine `CupFormat`** at `types.ts:144`: `'eliminatoria' | 'eliminatoria_ida_vuelta' | 'liga'`
+- **Engine `CupMatch.leg`** and **`CupRound.leg`**: optional `'ida' | 'vuelta'` field
+- **`playCupRound()`** in `cups.ts`: handles ida (play only) vs vuelta (play + aggregate + winner)
+- **`computeTwoLegWinner()`**: aggregate → away goals → penalties
+- **`scheduleCups()`**: ida/vuelta on consecutive matchdays
+- **Contracts `CupMatchDto.leg`** and **`CupRoundDto.leg`**: optional, passed through backend `cupsResponse()`
+- **`NormType`** in engine is `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial'` — #11 will add 3 more values

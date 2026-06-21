@@ -86,6 +86,26 @@ export function startNegotiation(prev: GameState, targetTeamId: number): GameSta
   return s;
 }
 
+export function rivalPoachAttempt(s: GameState, rivalFedId: number, targetTeamId: number): boolean {
+  const rival = s.federations.find(f => f.id === rivalFedId);
+  const target = s.teams.find(t => t.id === targetTeamId);
+  if (!rival || !target) return false;
+  if (target.federationId !== s.playerFederationId) return false;
+
+  const rivalTier = tierOf(rival.prestige);
+  const player = fedOf(s, s.playerFederationId);
+  const playerPrestige = player?.prestige ?? 0;
+
+  // Rival must be within 1 tier of the player
+  if (rivalTier < tierOf(playerPrestige) - 1) return false;
+
+  // Chance based on arraigo and prestige differential
+  let chance = 0.15 - target.arraigo * 0.002 + (rival.prestige - playerPrestige) * 0.003;
+  chance = Math.min(0.4, Math.max(0.05, chance));
+
+  return rngNext(s.rng) < chance;
+}
+
 const PRESTIGE_TRANSFER_MAX = 8;
 const WEAKENED_THRESHOLD = 15;
 

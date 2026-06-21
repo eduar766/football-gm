@@ -1,9 +1,9 @@
-import { Badge, Button, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
+import { Box, Button, Group, Paper, Skeleton, Stack, Table, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconEye, IconEyeOff, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconCheck, IconEye, IconEyeOff, IconX } from '@tabler/icons-react';
 import type { EventAction, EventStatus, EventType } from '@football-gm/contracts';
 import { api } from '../api';
 
@@ -18,6 +18,17 @@ const TIPO_LABEL: Record<EventType, string> = {
   manipulacion_resultados: 'Manipulación de resultados',
 };
 
+const TIPO_COLOR: Record<EventType, string> = {
+  arbitraje_dudoso: '#F59E0B',
+  incidente_aficion: '#EF4444',
+  declaraciones_polemicas: '#8B5CF6',
+  doping_positivo: '#EF4444',
+  conflicto_jugadores: '#F97316',
+  crisis_economica_club: '#DC2626',
+  escandalo_directiva: '#8B5CF6',
+  manipulacion_resultados: '#EF4444',
+};
+
 const STATUS_LABEL: Record<EventStatus, string> = {
   pendiente: 'Pendiente',
   resuelto_actuar: 'Resuelto (actuaste)',
@@ -25,11 +36,11 @@ const STATUS_LABEL: Record<EventStatus, string> = {
   caducado: 'Caducado',
 };
 
-const STATUS_COLOR: Record<EventStatus, string> = {
-  pendiente: 'yellow',
-  resuelto_actuar: 'green',
-  resuelto_ignorar: 'gray',
-  caducado: 'red',
+const STATUS_CONFIG: Record<EventStatus, { color: string; gradient: string }> = {
+  pendiente: { color: '#F59E0B', gradient: 'linear-gradient(135deg, #D97706, #F59E0B)' },
+  resuelto_actuar: { color: '#10B981', gradient: 'linear-gradient(135deg, #059669, #10B981)' },
+  resuelto_ignorar: { color: '#6B7280', gradient: 'linear-gradient(135deg, #4B5563, #6B7280)' },
+  caducado: { color: '#EF4444', gradient: 'linear-gradient(135deg, #DC2626, #EF4444)' },
 };
 
 export function EventsPage() {
@@ -43,36 +54,24 @@ export function EventsPage() {
     mutationFn: (v: { eventId: number; action: EventAction }) =>
       api.resolveEvent(id, v.eventId, v.action),
     onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Evento resuelto',
-      });
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Evento resuelto' });
       qc.invalidateQueries({
         predicate: (q) =>
-          ['events', 'summary', 'economy', 'teams', 'federation'].includes(
-            q.queryKey[0] as string,
-          ),
+          ['events', 'summary', 'economy', 'teams', 'federation'].includes(q.queryKey[0] as string),
       });
     },
     onError: (error: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: error.message,
-      });
+      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
     },
   });
 
   if (evs.isLoading) {
     return (
-      <>
-        <Skeleton height={60} radius="md" mb="md" />
+      <div className="page-enter">
+        <Skeleton height={120} radius="md" mb="md" />
         <Skeleton height={200} radius="md" mb="md" />
         <Skeleton height={200} radius="md" />
-      </>
+      </div>
     );
   }
 
@@ -81,70 +80,141 @@ export function EventsPage() {
 
   return (
     <div className="page-enter">
-      <Paper withBorder p="md" mb="md">
-        <Text fw={700}>Eventos y polémicas (§1, §2)</Text>
-        <Text size="xs" c="dimmed">
+      <Paper
+        p="xl"
+        mb="md"
+        style={{
+          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
+          border: '1px solid rgba(16,185,129,0.2)',
+        }}
+      >
+        <Group gap="sm">
+          <IconAlertTriangle size={22} color="#F59E0B" />
+          <Text
+            fw={800}
+            style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontSize: '28px',
+              color: '#F9FAFB',
+            }}
+          >
+            Eventos y polémicas
+          </Text>
+        </Group>
+        <Text size="sm" c="dimmed" mt="xs" ml={34}>
           Conflictos puntuales que el comisionado resuelve. Actuar cuesta dinero
           (1 M€) y arraigo del equipo; ignorar resta prestigio. Si los dejas
           pendientes al cierre, caducan y la imagen sufre más.
         </Text>
       </Paper>
 
-      <Paper withBorder p="md" mb="md">
+      <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         <Group justify="space-between" mb="sm">
           <Text fw={700}>Pendientes</Text>
-          <Badge color="yellow" variant="light">
+          <Box
+            style={{
+              padding: '2px 12px',
+              borderRadius: 14,
+              background: 'rgba(245,158,11,0.15)',
+              color: '#F59E0B',
+              fontFamily: '"Geist Mono", monospace',
+              fontWeight: 700,
+              fontSize: '13px',
+            }}
+          >
             {pending.length}
-          </Badge>
+          </Box>
         </Group>
         {pending.length === 0 ? (
-          <Text c="dimmed" size="sm">
-            Sin incidentes abiertos.
-          </Text>
+          <Text c="dimmed" size="sm">Sin incidentes abiertos.</Text>
         ) : (
-          <Table striped>
+          <Table>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Año/Jorn.</Table.Th>
-                <Table.Th>Tipo</Table.Th>
-                <Table.Th>Equipo</Table.Th>
-                <Table.Th>Detalle</Table.Th>
-                <Table.Th ta="right">Acción</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año/Jorn.</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Detalle</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Acción</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {pending.map((e) => (
-                <Table.Tr key={e.id}>
-                  <Table.Td>
-                    {e.year} / J{e.matchday}
-                  </Table.Td>
-                  <Table.Td>{TIPO_LABEL[e.tipo]}</Table.Td>
-                  <Table.Td>{e.teamName ?? '—'}</Table.Td>
-                  <Table.Td>{e.message}</Table.Td>
+              {pending.map((e, i) => {
+                const severityColor = e.severity === 'alta' ? '#EF4444' : e.severity === 'media' ? '#F97316' : '#F59E0B';
+                const borderColor = e.severity === 'alta' ? '#EF4444' : e.severity === 'media' ? '#F97316' : TIPO_COLOR[e.tipo];
+                return (
+                  <Table.Tr
+                    key={e.id}
+                    className="stagger-item"
+                    style={{
+                      borderLeft: `3px solid ${borderColor}`,
+                      background: 'rgba(245,158,11,0.04)',
+                      animationDelay: `${i * 50}ms`,
+                    }}
+                  >
+                    <Table.Td>
+                      <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{e.year} / J{e.matchday}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Box
+                          style={{
+                            display: 'inline-flex',
+                            padding: '2px 10px',
+                            borderRadius: 12,
+                            background: `${TIPO_COLOR[e.tipo]}20`,
+                            color: TIPO_COLOR[e.tipo],
+                            fontWeight: 600,
+                            fontSize: '12px',
+                          }}
+                        >
+                          {TIPO_LABEL[e.tipo]}
+                        </Box>
+                        {e.severity && (
+                          <Box
+                            style={{
+                              display: 'inline-flex',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: `${severityColor}20`,
+                              color: severityColor,
+                              fontWeight: 600,
+                              fontSize: '11px',
+                            }}
+                          >
+                            {e.severity}
+                          </Box>
+                        )}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td fw={500}>{e.teamName ?? '—'}</Table.Td>
+                    <Table.Td>
+                      <Stack gap={2}>
+                        <Text c="dimmed" size="sm">{e.message}</Text>
+                        {e.chainedFromId != null && (
+                          <Text size="xs" c="dimmed" ml="md" style={{ fontStyle: 'italic' }}>
+                            Cadena de: evento #{e.chainedFromId}
+                          </Text>
+                        )}
+                      </Stack>
+                    </Table.Td>
                   <Table.Td ta="right">
                     <Group gap="xs" justify="flex-end">
                       <Button
                         size="compact-xs"
-                        color="blue"
-                        variant="light"
-                        loading={
-                          resolve.isPending &&
-                          resolve.variables?.eventId === e.id &&
-                          resolve.variables?.action === 'actuar'
-                        }
+                        variant="gradient"
+                        gradient={{ from: '#3B82F6', to: '#2563EB' }}
+                        loading={resolve.isPending && resolve.variables?.eventId === e.id && resolve.variables?.action === 'actuar'}
                         leftSection={<IconEye size={12} />}
                         onClick={() =>
                           modals.openConfirmModal({
                             title: 'Actuar sobre el evento',
                             children: (
-                              <Text size="sm">
-                                Actuar costará 1 M€ y reducirá el arraigo del equipo. ¿Continuar?
-                              </Text>
+                              <Text size="sm">Actuar costará 1 M€ y reducirá el arraigo del equipo. ¿Continuar?</Text>
                             ),
                             labels: { confirm: 'Actuar', cancel: 'Volver' },
                             confirmProps: { color: 'blue' },
-                            onConfirm: () =>
-                              resolve.mutate({ eventId: e.id, action: 'actuar' }),
+                            onConfirm: () => resolve.mutate({ eventId: e.id, action: 'actuar' }),
                           })
                         }
                       >
@@ -154,24 +224,17 @@ export function EventsPage() {
                         size="compact-xs"
                         color="gray"
                         variant="subtle"
-                        loading={
-                          resolve.isPending &&
-                          resolve.variables?.eventId === e.id &&
-                          resolve.variables?.action === 'ignorar'
-                        }
+                        loading={resolve.isPending && resolve.variables?.eventId === e.id && resolve.variables?.action === 'ignorar'}
                         leftSection={<IconEyeOff size={12} />}
                         onClick={() =>
                           modals.openConfirmModal({
                             title: 'Ignorar el evento',
                             children: (
-                              <Text size="sm">
-                                Ignorar resta 1 punto de prestigio y puede afectar la imagen de la federación. ¿Continuar?
-                              </Text>
+                              <Text size="sm">Ignorar resta 1 punto de prestigio y puede afectar la imagen de la federación. ¿Continuar?</Text>
                             ),
                             labels: { confirm: 'Ignorar', cancel: 'Volver' },
                             confirmProps: { color: 'gray' },
-                            onConfirm: () =>
-                              resolve.mutate({ eventId: e.id, action: 'ignorar' }),
+                            onConfirm: () => resolve.mutate({ eventId: e.id, action: 'ignorar' }),
                           })
                         }
                       >
@@ -180,45 +243,104 @@ export function EventsPage() {
                     </Group>
                   </Table.Td>
                 </Table.Tr>
-              ))}
+              );
+              })}
             </Table.Tbody>
           </Table>
         )}
       </Paper>
 
-      <Paper withBorder p="md">
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         <Text fw={700} mb="sm">
           Resueltos recientes
         </Text>
         {recent.length === 0 ? (
-          <Text c="dimmed" size="sm">
-            Sin historial todavía.
-          </Text>
+          <Text c="dimmed" size="sm">Sin historial todavía.</Text>
         ) : (
-          <Table striped>
+          <Table>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Año/Jorn.</Table.Th>
-                <Table.Th>Tipo</Table.Th>
-                <Table.Th>Equipo</Table.Th>
-                <Table.Th>Desenlace</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año/Jorn.</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Desenlace</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {recent.map((e) => (
-                <Table.Tr key={e.id}>
-                  <Table.Td>
-                    {e.year} / J{e.matchday}
-                  </Table.Td>
-                  <Table.Td>{TIPO_LABEL[e.tipo]}</Table.Td>
-                  <Table.Td>{e.teamName ?? '—'}</Table.Td>
-                  <Table.Td>
-                    <Badge size="sm" variant="light" color={STATUS_COLOR[e.status]}>
-                      {STATUS_LABEL[e.status]}
-                    </Badge>
-                  </Table.Td>
-                </Table.Tr>
-              ))}
+              {recent.map((e, i) => {
+                const sc = STATUS_CONFIG[e.status];
+                const severityColor = e.severity === 'alta' ? '#EF4444' : e.severity === 'media' ? '#F97316' : '#F59E0B';
+                return (
+                  <Table.Tr
+                    key={e.id}
+                    className="stagger-item"
+                    style={{
+                      borderLeft: `3px solid ${sc.color}40`,
+                      animationDelay: `${i * 50}ms`,
+                    }}
+                  >
+                    <Table.Td>
+                      <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{e.year} / J{e.matchday}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Box
+                          style={{
+                            display: 'inline-flex',
+                            padding: '2px 10px',
+                            borderRadius: 12,
+                            background: `${TIPO_COLOR[e.tipo]}20`,
+                            color: TIPO_COLOR[e.tipo],
+                            fontWeight: 600,
+                            fontSize: '12px',
+                          }}
+                        >
+                          {TIPO_LABEL[e.tipo]}
+                        </Box>
+                        {e.severity && (
+                          <Box
+                            style={{
+                              display: 'inline-flex',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: `${severityColor}20`,
+                              color: severityColor,
+                              fontWeight: 600,
+                              fontSize: '11px',
+                            }}
+                          >
+                            {e.severity}
+                          </Box>
+                        )}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td fw={500}>{e.teamName ?? '—'}</Table.Td>
+                    <Table.Td>
+                      <Stack gap={2}>
+                        <Box
+                          style={{
+                            display: 'inline-flex',
+                            padding: '2px 10px',
+                            borderRadius: 12,
+                            background: sc.gradient,
+                            color: '#fff',
+                            fontWeight: 600,
+                            fontSize: '12px',
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          {STATUS_LABEL[e.status]}
+                        </Box>
+                        {e.chainedFromId != null && (
+                          <Text size="xs" c="dimmed" ml="md" style={{ fontStyle: 'italic' }}>
+                            Cadena de: evento #{e.chainedFromId}
+                          </Text>
+                        )}
+                      </Stack>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
             </Table.Tbody>
           </Table>
         )}

@@ -6,7 +6,7 @@ import { makeRng, randInt, rngNext } from './rng';
 import { buildDivisionFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import { computeStandings, type StandingRow } from './standings';
-import { progressNegotiations } from './negotiation';
+import { progressNegotiations, rivalPoachAttempt } from './negotiation';
 import { divisionName, PROMOTION_RELEGATION } from './structure';
 import {
   generateContractOffers,
@@ -34,6 +34,7 @@ import type {
   Federation,
   Fixture,
   GameState,
+  GlobalRanking,
   Player,
   PlayerSeed,
   Team,
@@ -64,6 +65,8 @@ const DEFAULT_ARRAIGO = 50;
 export const CREATE_TEAM_COST = 5_000_000;
 const CREATED_TEAM_STRENGTH = 35;
 const CREATED_TEAM_ARRAIGO = 75;
+const DEFAULT_STADIUM_CAPACITY = 25_000;
+const DEFAULT_ACADEMIA = 40;
 
 function teamsInDivision(teams: Team[], orden: number): Team[] {
   return teams.filter((t) => t.divisionOrden === orden);
@@ -101,6 +104,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         divisionOrden: 1,
         youthStrength: t.youthStrength ?? Math.max(20, t.strength - 12),
         wageCap: 0,
+        stadiumCapacity: t.stadiumCapacity ?? DEFAULT_STADIUM_CAPACITY,
+        academia: t.academia ?? DEFAULT_ACADEMIA,
       });
       if (t.squad) {
         for (const p of t.squad) {
@@ -110,6 +115,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
             name: p.name,
             posicion: p.posicion,
             calidad: p.calidad,
+            age: 20 + Math.floor(randInt(rng, 0, 10)),
             season: {
               goals: 0,
               assists: 0,
@@ -136,6 +142,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         divisionOrden: 1,
         youthStrength: Math.max(20, strength - 12),
         wageCap: 0,
+        stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
+        academia: DEFAULT_ACADEMIA,
       });
     }
   }
@@ -161,6 +169,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         divisionOrden: null,
         youthStrength: Math.max(20, rt.strength - 12),
         wageCap: 0,
+        stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
+        academia: DEFAULT_ACADEMIA,
       });
     }
   }
@@ -225,6 +235,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     pendingImpulses: [],
     actionHistory: [],
     nextActionId: 1,
+    rivalActions: [],
+    globalRankings: [],
     history: [],
     seasonOver: false,
   };
@@ -306,6 +318,8 @@ export function createOwnTeam(
     divisionOrden: lowestOrden,
     youthStrength: Math.max(20, CREATED_TEAM_STRENGTH - 12),
     wageCap: 0,
+    stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
+    academia: DEFAULT_ACADEMIA,
   });
   if (squad) {
     for (const p of squad) {
@@ -315,6 +329,7 @@ export function createOwnTeam(
         name: p.name,
         posicion: p.posicion,
         calidad: p.calidad,
+        age: 18 + Math.floor(randInt(s.rng, 0, 5)),
         season: {
           goals: 0,
           assists: 0,
@@ -412,6 +427,107 @@ export function setLeagueFormat(
   return s;
 }
 
+export function processRivalActions(s: GameState): void {
+  s.rivalActions = [];
+
+  for (const fed of s.federations) {
+    if (fed.isPlayer) continue;
+
+    // Defensive poaching: rivals with prestige > 30 try to steal player's teams
+    if (fed.prestige > 30) {
+      const playerTeams = s.teams.filter(t =>
+        t.federationId === s.playerFederationId && t.divisionOrden !== null
+      );
+      for (const team of playerTeams) {
+        if (rngNext(s.rng) < 0.2) {
+          const success = rivalPoachAttempt(s, fed.id, team.id);
+          if (success) {
+            // Rival poaches the team
+            const transfer = Math.min(8, Math.max(1, Math.round(team.strength / 8)));
+            fed.prestige += transfer;
+            const playerFed = s.federations.find(f => f.id === s.playerFederationId);
+            if (playerFed) playerFed.prestige = Math.max(0, playerFed.prestige - transfer);
+            s.prestige = Math.max(0, s.prestige - transfer);
+            team.federationId = fed.id;
+            team.arraigo = 30;
+            s.rivalActions.push({
+              federationId: fed.id,
+              type: 'poach',
+              targetTeamId: team.id,
+              description: `${fed.name} ha fichado a ${team.name}`,
+            });
+          } else {
+            s.rivalActions.push({
+              federationId: fed.id,
+              type: 'retaliate',
+              targetTeamId: team.id,
+              description: `${fed.name} intentó fichar a ${team.name} pero resistieron`,
+            });
+          }
+          break; // max one attempt per rival per season
+        }
+      }
+    }
+
+    // Investment: weak rivals auto-invest
+    if (fed.prestige < 15 && fed.prestige > 0) {
+      s.rivalActions.push({
+        federationId: fed.id,
+        type: 'invest',
+        amount: 2_000_000,
+        description: `${fed.name} invierte en desarrollo de talento`,
+      });
+    }
+  }
+
+  // Retaliation: if player poached a team this window, rivals get +1 prestige
+  const recentPoaches = s.negotiations.filter(
+    n => n.state === 'effective' && n.effectiveYear === s.year
+  );
+  if (recentPoaches.length > 0) {
+    for (const fed of s.federations) {
+      if (fed.isPlayer) continue;
+      fed.prestige = Math.min(100, fed.prestige + 1);
+    }
+  }
+}
+
+export function computeGlobalRanking(s: GameState): void {
+  const rankings: GlobalRanking[] = [];
+
+  for (const fed of s.federations) {
+    const teams = s.teams.filter(t => t.federationId === fed.id && t.divisionOrden !== null);
+    if (teams.length === 0) continue;
+
+    const avgStrength = teams.reduce((a, t) => a + t.strength, 0) / teams.length;
+    const score = avgStrength * 0.4 + fed.prestige * 0.6;
+
+    rankings.push({
+      federationId: fed.id,
+      federationName: fed.name,
+      rank: 0,
+      avgStrength: Math.round(avgStrength),
+      prestige: fed.prestige,
+      teamCount: teams.length,
+      score: Math.round(score * 10) / 10,
+    });
+  }
+
+  rankings.sort((a, b) => b.score - a.score);
+  rankings.forEach((r, i) => r.rank = i + 1);
+
+  // Top federation gets +2 prestige bonus
+  if (rankings.length > 0) {
+    const top = s.federations.find(f => f.id === rankings[0].federationId);
+    if (top) top.prestige += 2;
+    if (rankings[0].federationId === s.playerFederationId) {
+      s.prestige += 2;
+    }
+  }
+
+  s.globalRankings = rankings;
+}
+
 // Closes the finished season: writes one history record per division, moves
 // player prestige from top-flight performance, advances negotiations, applies
 // promotion/relegation, then lands in pretemporada of the next year (the
@@ -492,10 +608,46 @@ export function closeSeason(prev: GameState): GameState {
   // Decay violation history for teams not penalized this year.
   decayViolationHistory(s);
 
-  // Teams evolve on their own (commissioner doesn't manage squads). Drift keeps
-  // seasons from being identical and makes "advance season" worth watching.
+  // Player career arcs: growth, peak, decline
+  for (const p of s.players) {
+    p.age += 1;
+    if (p.age < 27) {
+      // Growth phase: young players improve
+      p.calidad = Math.min(95, p.calidad + randInt(s.rng, 0, 2));
+    } else if (p.age < 32) {
+      // Peak phase: stable with small variation
+      p.calidad = Math.min(95, Math.max(20, p.calidad + randInt(s.rng, -1, 1)));
+    } else {
+      // Decline phase: older players decline
+      p.calidad = Math.max(20, p.calidad + randInt(s.rng, -3, -1));
+    }
+  }
+
+  // Retire players who are too old or too weak
+  s.players = s.players.filter(p => p.age <= 37 && p.calidad >= 25);
+
+  // Youth academy investment: improve young players based on team's academia
   for (const t of s.teams) {
-    t.strength = Math.min(85, Math.max(35, t.strength + randInt(s.rng, -3, 3)));
+    if (t.divisionOrden === null || !t.academia) continue;
+    const youngPlayers = s.players.filter(p => p.teamId === t.id && p.age <= 23);
+    for (const p of youngPlayers) {
+      const bonus = Math.round(t.academia / 20); // academia 20-100 → 1-5 bonus
+      p.calidad = Math.min(95, p.calidad + bonus);
+    }
+  }
+
+  // Team strength from squad (for teams with players)
+  for (const t of s.teams) {
+    if (t.divisionOrden === null) continue;
+    const squadPlayers = s.players.filter(p => p.teamId === t.id);
+    if (squadPlayers.length > 0) {
+      const sorted = [...squadPlayers].sort((a, b) => b.calidad - a.calidad);
+      const top = sorted.slice(0, Math.min(11, sorted.length));
+      t.strength = Math.round(Math.max(35, Math.min(85, top.reduce((a, p) => a + p.calidad, 0) / top.length)));
+    } else {
+      // Teams without tracked players still get flat drift
+      t.strength = Math.min(85, Math.max(35, t.strength + randInt(s.rng, -3, 3)));
+    }
   }
   // Talent formation lifts the league's quality (deterministic, post-drift).
   if (talentBump > 0) {
@@ -508,6 +660,8 @@ export function closeSeason(prev: GameState): GameState {
 
   s.year += 1;
   progressNegotiations(s); // §4.2 timers compare against the new year
+  processRivalActions(s);
+  computeGlobalRanking(s);
 
   // Fase 6.4: transfer window between seasons. Mutates s.players (teamId) and
   // recomputes team.strength from the squad when players are tracked. Uses an

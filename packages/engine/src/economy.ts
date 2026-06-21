@@ -22,6 +22,14 @@ const CONTRACT_TYPES: CommercialContractType[] = [
   'derechos_imagen',
 ];
 
+const SPONSOR_NAMES = [
+  'Coca-Cola', 'Nike', 'Adidas', 'Emirates', 'Pepsi', 'Santander',
+  'Movistar', 'BBVA', 'Repsol', 'Iberdrola', 'Telefónica', 'CaixaBank',
+  'Banco Sabadell', 'El Corte Inglés', 'Mapfre', 'AXA', 'Vodafone',
+  'Orange', 'Samsung', 'Sony', 'BMW', 'Mercedes-Benz', 'Ford', 'Toyota',
+  'Visa', 'Mastercard', 'Budweiser', 'Heineken', 'Puma', 'Under Armour',
+];
+
 export type FinancialHealth = 'saneada' | 'ajustada' | 'en_riesgo' | 'quiebra';
 
 export function financialHealth(treasury: number): FinancialHealth {
@@ -49,6 +57,7 @@ export function generateContractOffers(
   return Array.from({ length: count }, (_, i) => ({
     id: year * 100 + i,
     tipo: CONTRACT_TYPES[randInt(rng, 0, CONTRACT_TYPES.length - 1)],
+    nombre: SPONSOR_NAMES[randInt(rng, 0, SPONSOR_NAMES.length - 1)],
     valorAnual: base + randInt(rng, 0, base),
     years: randInt(rng, 2, 4),
   }));
@@ -61,6 +70,7 @@ export function signContract(prev: GameState, offerId: number): GameState {
   s.commercialContracts.push({
     id: s.nextContractId,
     tipo: offer.tipo,
+    nombre: offer.nombre,
     valorAnual: offer.valorAnual,
     yearsLeft: offer.years,
   });
@@ -103,12 +113,26 @@ export function processEconomy(s: GameState): {
   talentBump: number;
 } {
   const competing = s.teams.filter((t) => t.divisionOrden !== null).length;
-  const income = s.commercialContracts.reduce((a, c) => a + c.valorAnual, 0);
+  const contractIncome = s.commercialContracts.reduce((a, c) => a + c.valorAnual, 0);
   const cost = operatingCost(competing, s.divisions.length);
   const prizes = s.prizePayments
     .filter((p) => p.year === s.year)
     .reduce((a, p) => a + p.amount, 0);
   const talent = Math.max(0, s.economy.talentInvestment);
+
+  // Matchday revenue: home matches × capacity × ticket price × 0.7
+  let matchdayRevenue = 0;
+  for (const t of s.teams) {
+    if (t.stadiumCapacity > 0 && t.divisionOrden !== null) {
+      const homeMatches = s.results.filter((r) => r.homeId === t.id).length;
+      matchdayRevenue += homeMatches * t.stadiumCapacity * 15 * 0.7;
+    }
+  }
+
+  // Merchandise revenue: scales with league prestige × number of teams
+  const merchandiseRevenue = s.prestige * s.teams.length * 50_000;
+
+  const income = contractIncome + matchdayRevenue + merchandiseRevenue;
   // Income / cost / talent move the treasury here; prize payouts already did.
   const net = income - cost - talent;
   s.treasury += net;
@@ -139,6 +163,8 @@ export function processEconomy(s: GameState): {
     net: net - prizes,
     transferFees,
     transferIncome,
+    matchday: Math.round(matchdayRevenue),
+    merchandise: Math.round(merchandiseRevenue),
     treasuryAfter: s.treasury,
   };
 

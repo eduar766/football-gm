@@ -157,4 +157,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ format }),
     }),
+  callReview: (id: number, matchday: number, homeTeamId: number, awayTeamId: number) =>
+    req<GameSummary>(`/games/${id}/call-review`, {
+      method: 'POST',
+      body: JSON.stringify({ matchday, homeTeamId, awayTeamId }),
+    }),
+  emergencyMeeting: (id: number, teamId: number) =>
+    req<GameSummary>(`/games/${id}/emergency-meeting`, {
+      method: 'POST',
+      body: JSON.stringify({ teamId }),
+    }),
+  postponeMatchday: (id: number) =>
+    req<GameSummary>(`/games/${id}/postpone-matchday`, { method: 'POST' }),
 };

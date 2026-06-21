@@ -35,6 +35,8 @@ export interface Team {
   // from the academy rating; falls back to a value below the first team.
   youthStrength: number;
   wageCap: number;
+  stadiumCapacity: number;
+  academia: number;
 }
 
 // How the player's league is contested (§4.4 "define su liga como quiera").
@@ -127,6 +129,7 @@ export interface Player {
   // team plays; while > 0 the player can't score, assist, or be re-affected.
   matchesSuspendedLeft: number;
   injuredMatchesLeft: number;
+  age: number;
 }
 
 // Cups / tournaments (§4.4): elimination brackets that run alongside the
@@ -137,7 +140,8 @@ export type CupType = 'copa' | 'liga_juvenil' | 'torneo_verano';
 export type CupStatus = 'en_curso' | 'finalizada';
 
 // Knockout vs round-robin; first team vs youth (cantera) sides.
-export type CupFormat = 'eliminatoria' | 'liga';
+// 'eliminatoria' = single-leg knockout; 'eliminatoria_ida_vuelta' = two-leg.
+export type CupFormat = 'eliminatoria' | 'eliminatoria_ida_vuelta' | 'liga';
 export type CupCategory = 'primer_equipo' | 'juvenil';
 
 export interface CupMatch {
@@ -147,11 +151,13 @@ export interface CupMatch {
   awayGoals: number | null;
   played: boolean;
   winnerTeamId: number | null;
+  leg?: 'ida' | 'vuelta';
 }
 
 export interface CupRound {
   numero: number;
   matches: CupMatch[];
+  leg?: 'ida' | 'vuelta';
 }
 
 export interface Cup {
@@ -270,6 +276,7 @@ export type CommercialContractType =
 export interface CommercialContract {
   id: number;
   tipo: CommercialContractType;
+  nombre: string;
   valorAnual: number;
   yearsLeft: number;
 }
@@ -277,6 +284,7 @@ export interface CommercialContract {
 export interface ContractOffer {
   id: number;
   tipo: CommercialContractType;
+  nombre: string;
   valorAnual: number;
   years: number;
 }
@@ -319,6 +327,8 @@ export interface LastEconomy {
   net: number;
   transferFees: number;
   transferIncome: number;
+  matchday: number;
+  merchandise: number;
   treasuryAfter: number;
 }
 
@@ -348,6 +358,24 @@ export interface ActionRecord {
   cost: number;
   targetTeamId: number | null;
   result: string;
+}
+
+export interface RivalAction {
+  federationId: number;
+  type: 'poach' | 'invest' | 'retaliate';
+  targetTeamId?: number;
+  amount?: number;
+  description: string;
+}
+
+export interface GlobalRanking {
+  federationId: number;
+  federationName: string;
+  rank: number;
+  avgStrength: number;
+  prestige: number;
+  teamCount: number;
+  score: number;
 }
 
 export interface SeasonRecord {
@@ -423,6 +451,8 @@ export interface GameState {
   pendingImpulses: PendingImpulse[];
   actionHistory: ActionRecord[];
   nextActionId: number;
+  rivalActions: RivalAction[];
+  globalRankings: GlobalRanking[];
   history: SeasonRecord[];
   seasonOver: boolean;
 }
@@ -435,6 +465,8 @@ export interface CreateGameOptions {
     strength: number;
     arraigo?: number;
     youthStrength?: number;
+    stadiumCapacity?: number;
+    academia?: number;
     squad?: PlayerSeed[];
   }>;
   // Rival federations and the external teams they own (negotiation targets).

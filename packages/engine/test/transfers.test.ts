@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceMatchday,
   advanceSeason,
   closeSeason,
   createGame,
@@ -77,15 +78,15 @@ describe('runTransferWindow', () => {
   it('recomputes team.strength from the resulting squad', () => {
     const g = game(6);
     const strongIdBefore = g.teams[0].id;
-    const before = g.teams[0].strength;
     const after = cycle(g);
     const strongAfter = after.teams.find((t) => t.id === strongIdBefore)!;
-    // Strength derives from the top 11 of the new squad; should not stay at 80
-    // exactly (drift + transfers move it).
-    expect(strongAfter.strength).not.toBe(before);
-    // Bounded by the helper.
+    // Strength is now derived from the top 11 players' calidad via career arcs
+    // and transfer recomputation. It should be a valid bounded value.
     expect(strongAfter.strength).toBeGreaterThanOrEqual(20);
     expect(strongAfter.strength).toBeLessThanOrEqual(95);
+    // With tracked players, strength must match what teamStrengthFromSquad computes.
+    const expected = teamStrengthFromSquad(after.players, strongIdBefore);
+    expect(strongAfter.strength).toBe(expected);
   });
 
   it('is deterministic: same seed => identical transfer log', () => {
@@ -105,5 +106,27 @@ describe('runTransferWindow', () => {
       expect(subjectIds.has(m.fromTeamId)).toBe(true);
       expect(subjectIds.has(m.toTeamId)).toBe(true);
     }
+  });
+});
+
+describe('economy revenue streams', () => {
+  it('lastEconomy includes matchday and merchandise revenue after a full season', () => {
+    let g = createGame(42, {
+      teams: [
+        { name: 'Alpha FC', strength: 70, stadiumCapacity: 30_000, academia: 60, squad: squad(20, 68, 'A') },
+        { name: 'Beta FC', strength: 55, stadiumCapacity: 20_000, academia: 40, squad: squad(20, 53, 'B') },
+        { name: 'Gamma FC', strength: 50, stadiumCapacity: 15_000, academia: 30, squad: squad(20, 48, 'G') },
+      ],
+    });
+    g = startSeason(g);
+    // Advance a couple of matchdays so results exist for home matches
+    g = advanceMatchday(g);
+    g = advanceMatchday(g);
+    g = advanceSeason(g);
+    g = closeSeason(g);
+
+    expect(g.lastEconomy).not.toBeNull();
+    expect(g.lastEconomy!.matchday).toBeGreaterThan(0);
+    expect(g.lastEconomy!.merchandise).toBeGreaterThan(0);
   });
 });

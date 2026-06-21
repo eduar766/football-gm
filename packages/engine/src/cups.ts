@@ -55,14 +55,14 @@ function shuffle<T>(arr: T[], rng: RngState): T[] {
   return out;
 }
 
-function buildMatch(homeId: number, awayId: number): CupMatch {
+function buildMatch(homeId: number, awayId: number, leg?: 'ida' | 'vuelta'): CupMatch {
   if (homeId === BYE && awayId !== BYE) {
-    return { homeTeamId: BYE, awayTeamId: awayId, homeGoals: 0, awayGoals: 1, played: true, winnerTeamId: awayId };
+    return { homeTeamId: BYE, awayTeamId: awayId, homeGoals: 0, awayGoals: 1, played: true, winnerTeamId: awayId, leg };
   }
   if (awayId === BYE && homeId !== BYE) {
-    return { homeTeamId: homeId, awayTeamId: BYE, homeGoals: 1, awayGoals: 0, played: true, winnerTeamId: homeId };
+    return { homeTeamId: homeId, awayTeamId: BYE, homeGoals: 1, awayGoals: 0, played: true, winnerTeamId: homeId, leg };
   }
-  return { homeTeamId: homeId, awayTeamId: awayId, homeGoals: null, awayGoals: null, played: false, winnerTeamId: null };
+  return { homeTeamId: homeId, awayTeamId: awayId, homeGoals: null, awayGoals: null, played: false, winnerTeamId: null, leg };
 }
 
 function isCompetingPlayerTeam(state: GameState, teamId: number): boolean {
@@ -98,6 +98,7 @@ export function createCup(
 
   const s = structuredClone(prev);
   let firstRound: CupMatch[];
+  let secondRound: CupMatch[] | null = null;
   if (formato === 'liga') {
     // Single round-robin among all participants (everyone plays everyone once).
     firstRound = generateFixtures(unique, s.cupsRng, 0, 1).map((f) =>
@@ -109,9 +110,17 @@ export function createCup(
     const shuffled = shuffle(padded, s.cupsRng);
     firstRound = [];
     for (let i = 0; i < shuffled.length; i += 2) {
-      firstRound.push(buildMatch(shuffled[i], shuffled[i + 1]));
+      firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], 'ida'));
+    }
+    if (formato === 'eliminatoria_ida_vuelta') {
+      secondRound = [];
+      for (let i = 0; i < shuffled.length; i += 2) {
+        secondRound.push(buildMatch(shuffled[i + 1], shuffled[i], 'vuelta'));
+      }
     }
   }
+  const rounds: CupRound[] = [{ numero: 1, matches: firstRound, ...(formato === 'eliminatoria_ida_vuelta' ? { leg: 'ida' as const } : {}) }];
+  if (secondRound) rounds.push({ numero: 2, matches: secondRound, leg: 'vuelta' as const });
   s.cups.push({
     id: s.nextCupId++,
     name: trimmed,
@@ -121,7 +130,7 @@ export function createCup(
     year: s.year,
     status: 'en_curso',
     participantTeamIds: unique,
-    rounds: [{ numero: 1, matches: firstRound }],
+    rounds,
     championTeamId: null,
   });
   return s;
@@ -131,7 +140,6 @@ function playPendingInRound(
   s: GameState,
   round: CupRound,
   categoria: CupCategory,
-  knockout: boolean,
 ): void {
   for (const m of round.matches) {
     if (m.played) continue;
@@ -149,13 +157,6 @@ function playPendingInRound(
     );
     m.homeGoals = homeGoals;
     m.awayGoals = awayGoals;
-    if (homeGoals > awayGoals) m.winnerTeamId = home.id;
-    else if (awayGoals > homeGoals) m.winnerTeamId = away.id;
-    else if (knockout) {
-      const penalties = simulatePenalties(s.cupsRng, home, away);
-      m.winnerTeamId = penalties.homePenalties > penalties.awayPenalties ? home.id : away.id;
-    }
-    else m.winnerTeamId = null; // league draws have no winner
     m.played = true;
   }
 }
@@ -178,26 +179,133 @@ function crownLeagueCup(s: GameState, cup: Cup): void {
 
 // Generate the next knockout round from the winners of the last played one.
 // Idempotent: returns silently if the round already exists.
+// For ida_vuelta cups, looks back further to find the last completed leg
+// (vuelta leg) that has winners, since ida legs don't determine winners.
 function ensureNextKnockoutRound(cup: Cup, numero: number): void {
   if (cup.rounds.some((r) => r.numero === numero)) return;
-  const prev = cup.rounds[cup.rounds.length - 1];
+
+  // Find the most recent round that has actual winners (vuelta legs for ida_vuelta,
+  // any round for single-leg). Walk backwards until we find one.
+  let prev: CupRound | undefined;
+  for (let i = cup.rounds.length - 1; i >= 0; i--) {
+    const r = cup.rounds[i];
+    const hasWinners = r.matches.some((m) => m.winnerTeamId !== null);
+    if (hasWinners) { prev = r; break; }
+  }
   if (!prev) return;
+
   const winners = prev.matches
     .map((m) => m.winnerTeamId)
     .filter((id): id is number => id !== null);
   const nextMatches: CupMatch[] = [];
+  const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
+  const leg = isIdaVuelta ? 'ida' as const : undefined;
   for (let i = 0; i < winners.length; i += 2) {
-    nextMatches.push(buildMatch(winners[i], winners[i + 1] ?? BYE));
+    nextMatches.push(buildMatch(winners[i], winners[i + 1] ?? BYE, leg));
   }
-  cup.rounds.push({ numero, matches: nextMatches });
+  cup.rounds.push({ numero, matches: nextMatches, ...(isIdaVuelta ? { leg: 'ida' as const } : {}) });
+  // For ida_vuelta, also create the corresponding vuelta round immediately.
+  if (isIdaVuelta && nextMatches.length > 0 && winners.length >= 2) {
+    const vueltaMatches: CupMatch[] = [];
+    for (let i = 0; i < winners.length; i += 2) {
+      vueltaMatches.push(buildMatch(winners[i + 1] ?? BYE, winners[i], 'vuelta'));
+    }
+    cup.rounds.push({ numero: numero + 1, matches: vueltaMatches, leg: 'vuelta' as const });
+  }
 }
 
 // Number of rounds a cup will play in total. Used by scheduleCups so the
 // calendar can place each round at (i-0.5)·T/R inside the league season.
+// For ida_vuelta, each logical round produces 2 legs (ida + vuelta).
 export function roundsForCup(cup: Cup): number {
   if (cup.formato === 'liga') return 1;
   const n = nextPowerOf2(Math.max(2, cup.participantTeamIds.length));
-  return Math.ceil(Math.log2(n));
+  const knockoutRounds = Math.ceil(Math.log2(n));
+  return cup.formato === 'eliminatoria_ida_vuelta' ? knockoutRounds * 2 : knockoutRounds;
+}
+
+// Compute aggregate winner for a two-leg matchup (ida + vuelta).
+// Returns the winning teamId, or null if still pending.
+function computeTwoLegWinner(idaMatches: CupMatch[], vueltaMatches: CupMatch[], s: GameState, categoria: CupCategory): void {
+  for (let i = 0; i < idaMatches.length; i++) {
+    const ida = idaMatches[i];
+    const vuelta = vueltaMatches[i];
+    if (!ida || !vuelta) continue;
+    if (!ida.played || !vuelta.played) continue;
+
+    const idaHome = ida.homeTeamId;
+    const idaAway = ida.awayTeamId;
+    // In vuelta, home/away are reversed: vuelta.home = ida.away, vuelta.away = ida.home
+    const aggHome = (ida.homeGoals ?? 0) + (vuelta.awayGoals ?? 0); // ida home team's total goals
+    const aggAway = (ida.awayGoals ?? 0) + (vuelta.homeGoals ?? 0); // ida away team's total goals
+
+    if (aggHome > aggAway) {
+      ida.winnerTeamId = idaHome;
+      vuelta.winnerTeamId = idaHome;
+    } else if (aggAway > aggHome) {
+      ida.winnerTeamId = idaAway;
+      vuelta.winnerTeamId = idaAway;
+    } else {
+      // Away goals: the ida away team scored more in the ida home venue? No —
+      // away goals means the team that played away in the first leg scores at home.
+      // Equivalently: compare ida.awayGoals vs vuelta.awayGoals.
+      // ida away team's away goals = ida.awayGoals; ida home team's away goals = vuelta.awayGoals
+      if ((ida.awayGoals ?? 0) > (vuelta.awayGoals ?? 0)) {
+        ida.winnerTeamId = idaAway;
+        vuelta.winnerTeamId = idaAway;
+      } else if ((vuelta.awayGoals ?? 0) > (ida.awayGoals ?? 0)) {
+        ida.winnerTeamId = idaHome;
+        vuelta.winnerTeamId = idaHome;
+      } else {
+        // Penalties
+        const home = s.teams.find((t) => t.id === idaHome);
+        const away = s.teams.find((t) => t.id === idaAway);
+        if (home && away) {
+          const penalties = simulatePenalties(s.cupsRng, effectiveTeam(home, categoria), effectiveTeam(away, categoria));
+          const penWinner = penalties.homePenalties > penalties.awayPenalties ? idaHome : idaAway;
+          ida.winnerTeamId = penWinner;
+          vuelta.winnerTeamId = penWinner;
+        } else {
+          ida.winnerTeamId = idaHome;
+          vuelta.winnerTeamId = idaHome;
+        }
+      }
+    }
+  }
+}
+
+// Determine single-match winner (for single-leg knockout).
+function determineMatchWinners(round: CupRound, s: GameState, categoria: CupCategory): void {
+  for (const m of round.matches) {
+    if (!m.played || m.winnerTeamId !== null) continue;
+    const home = s.teams.find((t) => t.id === m.homeTeamId);
+    const away = s.teams.find((t) => t.id === m.awayTeamId);
+    if (!home || !away) { m.winnerTeamId = home?.id ?? away?.id ?? null; continue; }
+    if ((m.homeGoals ?? 0) > (m.awayGoals ?? 0)) m.winnerTeamId = home.id;
+    else if ((m.awayGoals ?? 0) > (m.homeGoals ?? 0)) m.winnerTeamId = away.id;
+    else {
+      const penalties = simulatePenalties(s.cupsRng, effectiveTeam(home, categoria), effectiveTeam(away, categoria));
+      m.winnerTeamId = penalties.homePenalties > penalties.awayPenalties ? home.id : away.id;
+    }
+  }
+}
+
+function crownChampion(s: GameState, cup: Cup): void {
+  if (cup.championTeamId) {
+    const champion = s.teams.find(t => t.id === cup.championTeamId);
+    if (champion) {
+      const participants = cup.participantTeamIds
+        .map(id => s.teams.find(t => t.id === id))
+        .filter((t): t is Team => !!t && t.id !== cup.championTeamId);
+      const avgStrength = participants.reduce((a, t) => a + t.strength, 0) / participants.length;
+      if (champion.strength + 15 < avgStrength) {
+        const fed = s.federations.find(f => f.id === champion.federationId);
+        if (fed) fed.prestige += 2;
+        if (champion.federationId === s.playerFederationId) s.prestige += 2;
+      }
+    }
+  }
+  payCupPrize(s, cup); // Fase 6.5
 }
 
 // Play one scheduled cup round inside advanceMatchday (Fase 6.2). Pure on
@@ -211,60 +319,69 @@ export function playCupRound(s: GameState, cupId: number, roundNumero: number): 
     // Round-robin: one round contains every match; play it whole and crown.
     const round = cup.rounds[0];
     if (!round) return;
-    playPendingInRound(s, round, cup.categoria, false);
+    playPendingInRound(s, round, cup.categoria);
     crownLeagueCup(s, cup);
-    if (cup.championTeamId) {
-      const champion = s.teams.find(t => t.id === cup.championTeamId);
-      if (champion) {
-        const participants = cup.participantTeamIds
-          .map(id => s.teams.find(t => t.id === id))
-          .filter((t): t is Team => !!t && t.id !== cup.championTeamId);
-        const avgStrength = participants.reduce((a, t) => a + t.strength, 0) / participants.length;
-        if (champion.strength + 15 < avgStrength) {
-          const fed = s.federations.find(f => f.id === champion.federationId);
-          if (fed) fed.prestige += 2;
-          if (champion.federationId === s.playerFederationId) s.prestige += 2;
-        }
-      }
-    }
-    payCupPrize(s, cup); // Fase 6.5
+    crownChampion(s, cup);
     return;
   }
 
-  // Knockout: ensure the round exists (built from the prior winners) and play it.
+  const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
+
+  if (isIdaVuelta) {
+    const currentRound = cup.rounds.find((r) => r.numero === roundNumero);
+    if (!currentRound) return;
+
+    if (currentRound.leg !== 'ida') {
+      // This is a vuelta leg — play it and compute aggregate.
+      playPendingInRound(s, currentRound, cup.categoria);
+      // Find the matching ida round (numero - 1).
+      const matchingIda = cup.rounds.find((r) => r.numero === roundNumero - 1);
+      if (matchingIda) {
+        computeTwoLegWinner(matchingIda.matches, currentRound.matches, s, cup.categoria);
+      }
+    } else {
+      // This is an ida leg — just play it (vuelta will come on next matchday).
+      playPendingInRound(s, currentRound, cup.categoria);
+    }
+
+    // Check if this was the final: the last vuelta leg determines the champion.
+    const lastVuelta = cup.rounds.filter((r) => r.leg === 'vuelta').pop();
+    if (currentRound.leg === 'vuelta' && lastVuelta && lastVuelta.numero === roundNumero) {
+      // Vuelta leg of the final was just completed — crown the champion.
+      const winners = currentRound.matches
+        .map((m) => m.winnerTeamId)
+        .filter((id): id is number => id !== null);
+      if (winners.length <= 1) {
+        cup.championTeamId = winners[0] ?? null;
+        cup.status = 'finalizada';
+        crownChampion(s, cup);
+      }
+    }
+    return;
+  }
+
+  // Single-leg knockout: play the round, determine winners, advance.
   ensureNextKnockoutRound(cup, roundNumero);
   const round = cup.rounds.find((r) => r.numero === roundNumero);
   if (!round) return;
-  playPendingInRound(s, round, cup.categoria, true);
+  playPendingInRound(s, round, cup.categoria);
+  determineMatchWinners(round, s, cup.categoria);
 
-  // If only one team advances, this was the final → crown the champion.
   const winners = round.matches
     .map((m) => m.winnerTeamId)
     .filter((id): id is number => id !== null);
   if (winners.length <= 1) {
     cup.championTeamId = winners[0] ?? null;
     cup.status = 'finalizada';
-    if (cup.championTeamId) {
-      const champion = s.teams.find(t => t.id === cup.championTeamId);
-      if (champion) {
-        const participants = cup.participantTeamIds
-          .map(id => s.teams.find(t => t.id === id))
-          .filter((t): t is Team => !!t && t.id !== cup.championTeamId);
-        const avgStrength = participants.reduce((a, t) => a + t.strength, 0) / participants.length;
-        if (champion.strength + 15 < avgStrength) {
-          const fed = s.federations.find(f => f.id === champion.federationId);
-          if (fed) fed.prestige += 2;
-          if (champion.federationId === s.playerFederationId) s.prestige += 2;
-        }
-      }
-    }
-    payCupPrize(s, cup); // Fase 6.5
+    crownChampion(s, cup);
   }
 }
 
 // Build the calendar slots for every in-progress cup in the current year.
 // Each round i of R is placed at round((i-0.5)·T/R), clamped to [1, T] so
 // the rounds spread evenly through the league matchdays.
+// For ida_vuelta, each pair of consecutive legs (ida+vuelta) shares a slot
+// range and are placed on consecutive matchdays.
 export function scheduleCups(s: GameState, totalMatchdays: number): CupScheduleEntry[] {
   if (totalMatchdays <= 0) return [];
   const schedule: CupScheduleEntry[] = [];
@@ -272,10 +389,23 @@ export function scheduleCups(s: GameState, totalMatchdays: number): CupScheduleE
     if (cup.status === 'finalizada') continue;
     if (cup.year !== s.year) continue;
     const R = roundsForCup(cup);
-    for (let i = 1; i <= R; i++) {
-      const raw = Math.round(((i - 0.5) * totalMatchdays) / R);
-      const md = Math.min(totalMatchdays, Math.max(1, raw));
-      schedule.push({ matchday: md, cupId: cup.id, roundNumero: i });
+    if (cup.formato === 'eliminatoria_ida_vuelta') {
+      // Each logical round occupies 2 legs on consecutive matchdays.
+      const logicalRounds = R / 2;
+      for (let i = 1; i <= logicalRounds; i++) {
+        const raw = Math.round(((i - 0.5) * totalMatchdays) / logicalRounds);
+        const md = Math.min(totalMatchdays, Math.max(1, raw));
+        const idaNumero = i * 2 - 1;
+        const vueltaNumero = i * 2;
+        schedule.push({ matchday: md, cupId: cup.id, roundNumero: idaNumero });
+        schedule.push({ matchday: Math.min(totalMatchdays, md + 1), cupId: cup.id, roundNumero: vueltaNumero });
+      }
+    } else {
+      for (let i = 1; i <= R; i++) {
+        const raw = Math.round(((i - 0.5) * totalMatchdays) / R);
+        const md = Math.min(totalMatchdays, Math.max(1, raw));
+        schedule.push({ matchday: md, cupId: cup.id, roundNumero: i });
+      }
     }
   }
   // Stable order: by matchday, then by cup id, then by round.

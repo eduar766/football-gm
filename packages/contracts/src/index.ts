@@ -156,6 +156,11 @@ export const TrajectoryRow = z.object({
 });
 export type TrajectoryRow = z.infer<typeof TrajectoryRow>;
 
+/* ----------------------------------- commissioner: norms & sanctions (§4.7) */
+
+export const NormType = z.enum(['tope_plantilla', 'minimo_competitivo', 'tope_salarial']);
+export type NormType = z.infer<typeof NormType>;
+
 export const TeamDetail = z.object({
   id: Id,
   name: z.string(),
@@ -174,6 +179,22 @@ export const TeamDetail = z.object({
   divisionName: z.string().nullable(),
   squad: z.array(PlayerDto),
   trajectory: z.array(TrajectoryRow),
+  requirements: z.object({
+    breaches: z.array(z.object({
+      teamId: Id,
+      teamName: z.string(),
+      normId: Id,
+      tipo: NormType,
+      valor: z.number().int(),
+      valorActual: z.number().int(),
+      sanctioned: z.boolean(),
+    })),
+    sanctions: z.array(z.object({
+      year: z.number().int(),
+      motivo: z.string(),
+      castigo: z.string(),
+    })),
+  }),
 });
 export type TeamDetail = z.infer<typeof TeamDetail>;
 
@@ -338,6 +359,7 @@ export type FinancialHealth = z.infer<typeof FinancialHealth>;
 export const CommercialContractDto = z.object({
   id: Id,
   tipo: CommercialContractType,
+  nombre: z.string(),
   valorAnual: z.number().int(),
   yearsLeft: z.number().int(),
 });
@@ -346,6 +368,7 @@ export type CommercialContractDto = z.infer<typeof CommercialContractDto>;
 export const ContractOfferDto = z.object({
   id: z.number().int(),
   tipo: CommercialContractType,
+  nombre: z.string(),
   valorAnual: z.number().int(),
   years: z.number().int(),
 });
@@ -365,6 +388,10 @@ export const LastEconomyDto = z.object({
   prizes: z.number().int(),
   talent: z.number().int(),
   net: z.number().int(),
+  transferFees: z.number().int(),
+  transferIncome: z.number().int(),
+  matchday: z.number().int(),
+  merchandise: z.number().int(),
   treasuryAfter: z.number().int(),
 });
 export type LastEconomyDto = z.infer<typeof LastEconomyDto>;
@@ -475,10 +502,6 @@ export const ComplianceResponse = z.object({
 });
 export type ComplianceResponse = z.infer<typeof ComplianceResponse>;
 
-/* ----------------------------------- commissioner: norms & sanctions (§4.7) */
-
-export const NormType = z.enum(['tope_plantilla', 'minimo_competitivo', 'tope_salarial']);
-export type NormType = z.infer<typeof NormType>;
 
 export const NormDto = z.object({
   id: Id,
@@ -657,7 +680,7 @@ export type CupType = z.infer<typeof CupType>;
 export const CupStatus = z.enum(['en_curso', 'finalizada']);
 export type CupStatus = z.infer<typeof CupStatus>;
 
-export const CupFormat = z.enum(['eliminatoria', 'liga']);
+export const CupFormat = z.enum(['eliminatoria', 'eliminatoria_ida_vuelta', 'liga']);
 export type CupFormat = z.infer<typeof CupFormat>;
 
 export const CupCategory = z.enum(['primer_equipo', 'juvenil']);
@@ -672,12 +695,14 @@ export const CupMatchDto = z.object({
   awayGoals: z.number().int().nullable(),
   played: z.boolean(),
   winnerTeamId: z.number().int().nullable(),
+  leg: z.enum(['ida', 'vuelta']).optional(),
 });
 export type CupMatchDto = z.infer<typeof CupMatchDto>;
 
 export const CupRoundDto = z.object({
   numero: z.number().int(),
   matches: z.array(CupMatchDto),
+  leg: z.enum(['ida', 'vuelta']).optional(),
 });
 export type CupRoundDto = z.infer<typeof CupRoundDto>;
 

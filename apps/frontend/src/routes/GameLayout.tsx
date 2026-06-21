@@ -250,6 +250,15 @@ export function GameLayout() {
                   >
                     <Box
                       onClick={() => go(item.value)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={item.label}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          go(item.value);
+                        }
+                      }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -344,6 +353,15 @@ export function GameLayout() {
                   <Box
                     key={item.value}
                     onClick={() => go(item.value)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={item.label}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        go(item.value);
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -423,7 +441,7 @@ function Stat({
   color?: string;
 }) {
   return (
-    <Box>
+    <Box aria-label={`${label}: ${value}${extra ? ` (${extra})` : ''}`}>
       <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
         {label}
       </Text>

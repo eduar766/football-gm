@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { Paper, Text } from '@mantine/core';
 
 interface PalmaresItem {
@@ -18,6 +18,33 @@ const COLORS = [
   'var(--mantine-color-teal-5)',
 ];
 
+interface TooltipPayload {
+  value: number;
+  name: string;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
+  if (!active || !payload?.length) return null;
+  const value = payload[0].value;
+  return (
+    <Paper p="sm" radius="md" style={{
+      backgroundColor: '#1A2332',
+      border: '1px solid rgba(255,255,255,0.1)',
+    }}>
+      <Text size="sm" fw={600} c="dimmed">{label}</Text>
+      <Text size="sm" fw={700} style={{ fontFamily: '"Geist Mono", monospace' }}>
+        {value} títulos
+      </Text>
+    </Paper>
+  );
+};
+
 export function PalmaresChart({ data }: { data: PalmaresItem[] }) {
   if (data.length === 0) return null;
 
@@ -33,22 +60,18 @@ export function PalmaresChart({ data }: { data: PalmaresItem[] }) {
       </Text>
       <ResponsiveContainer width="100%" height={250}>
         <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--mantine-color-dimmed)' }} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <XAxis
+            type="number"
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
+          />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'var(--mantine-color-dimmed)' }}
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
             width={100}
           />
-          <Tooltip
-            formatter={(value) => [`${value} títulos`, '']}
-            contentStyle={{
-              backgroundColor: 'var(--mantine-color-dark-6)',
-              border: '1px solid var(--mantine-color-dark-4)',
-              borderRadius: '8px',
-              color: 'var(--mantine-color-white)',
-            }}
-          />
+          <Tooltip content={<CustomTooltip />} />
           <Bar dataKey="titles" radius={[0, 4, 4, 0]}>
             {chartData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
