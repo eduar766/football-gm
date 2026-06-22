@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import type { NormType } from '@football-gm/engine';
 import {
   advanceMatchday as engineAdvanceMatchday,
   advanceSeason as engineAdvanceSeason,
@@ -18,6 +19,7 @@ import {
   createCup as engineCreateCup,
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
+  cultivateArraigo as engineCultivateArraigo,
   emergencyMeeting as engineEmergencyMeeting,
   financialHealth,
   negotiableTeams,
@@ -88,7 +90,14 @@ export class GameService {
       .from(s.gameEngineStates)
       .where(eq(s.gameEngineStates.gameId, gameId));
     if (!row) throw new NotFoundException(`Game ${gameId} not found`);
-    return row.state as unknown as GameState;
+    const state = row.state as unknown as GameState;
+    // Ensure fields added in later versions exist on old serialized states.
+    if (!state.poachCooldowns) state.poachCooldowns = {};
+    if (state.eventStrengthPenalty === undefined) state.eventStrengthPenalty = 0;
+    if (state.eventCapacityPenaltyPct === undefined) state.eventCapacityPenaltyPct = 0;
+    if (state.eventImpulseLoss === undefined) state.eventImpulseLoss = 0;
+    if (state.eventTreasuryInjection === undefined) state.eventTreasuryInjection = 0;
+    return state;
   }
 
   private async saveState(tx: Tx, gameId: number, state: GameState) {
@@ -342,6 +351,8 @@ export class GameService {
                 name: p.name,
                 posicion: p.posicion,
                 calidad: p.calidad,
+                nationality: p.nationality,
+                cantera: p.cantera,
               })),
             );
           }
@@ -509,6 +520,28 @@ export class GameService {
       if (next === state) {
         throw new BadRequestException(
           'No se pudo posponer: la temporada ya terminó o no estás en temporada',
+        );
+      }
+      await this.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async cultivateArraigo(gameId: number, teamId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      this.assertPretemporada(state, 'cultivar arraigo');
+      const engToDb = await this.engineToDbTeam(gameId, tx);
+      const dbToEng = new Map<number, number>();
+      for (const [eng, db] of engToDb) dbToEng.set(db, eng);
+      const engTeam = dbToEng.get(teamId);
+      if (engTeam == null) {
+        throw new BadRequestException('Equipo no encontrado');
+      }
+      const next = engineCultivateArraigo(state, engTeam);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo cultivar arraigo: límite de 2 equipos/temporada alcanzado, falta presupuesto, o no estás en pretemporada',
         );
       }
       await this.saveState(tx, gameId, next);
@@ -859,6 +892,8 @@ export class GameService {
           name: p.name,
           posicion: p.posicion,
           calidad: p.calidad,
+          nationality: p.nationality,
+          cantera: p.cantera,
         })),
       );
 
@@ -892,9 +927,12 @@ export class GameService {
         strength: s.teams.strength,
         prestige: s.teams.prestige,
         divisionName: s.divisions.name,
+        federationId: s.teams.federationId,
+        federationName: s.federations.name,
       })
       .from(s.teams)
       .leftJoin(s.divisions, eq(s.teams.divisionId, s.divisions.id))
+      .leftJoin(s.federations, eq(s.teams.federationId, s.federations.id))
       .where(eq(s.teams.gameId, gameId))
       .orderBy(desc(s.teams.strength));
     return rows.map((r) => ({
@@ -903,6 +941,8 @@ export class GameService {
       strength: r.strength,
       prestige: r.prestige,
       divisionName: r.divisionName ?? null,
+      federationId: r.federationId,
+      federationName: r.federationName ?? null,
     }));
   }
 
@@ -938,6 +978,8 @@ export class GameService {
         name: s.players.name,
         posicion: s.players.posicion,
         calidad: s.players.calidad,
+        nationality: s.players.nationality,
+        cantera: s.players.cantera,
       })
       .from(s.players)
       .where(eq(s.players.teamId, teamId))
@@ -953,6 +995,8 @@ export class GameService {
         name: p.name,
         posicion: p.posicion,
         calidad: p.calidad,
+        nationality: p.nationality,
+        cantera: p.cantera,
         yellowCardsThisSeason: eng?.season.yellowCards ?? 0,
         redCardsThisSeason: eng?.season.redCards ?? 0,
         matchesSuspendedLeft: eng?.matchesSuspendedLeft ?? 0,
@@ -984,12 +1028,40 @@ export class GameService {
       })
       .map((sa) => ({ year: sa.year, motivo: sa.motivo, castigo: sa.castigo }));
 
+    // Palmarés: count league and cup titles for this team.
+    const records = await this.db
+      .select({
+        divisionName: s.divisions.name,
+        cupName: s.cups.name,
+        cupTipo: s.cups.tipo,
+      })
+      .from(s.seasonRecords)
+      .leftJoin(s.divisions, eq(s.seasonRecords.divisionId, s.divisions.id))
+      .leftJoin(s.cups, eq(s.seasonRecords.cupId, s.cups.id))
+      .where(and(eq(s.seasonRecords.gameId, gameId), eq(s.seasonRecords.championTeamId, teamId)));
+
+    const palmaresMap = new Map<string, { competition: string; count: number; isYouth: boolean }>();
+    for (const r of records) {
+      const isCup = r.cupName != null;
+      const name = isCup ? r.cupName! : (r.divisionName ?? 'Liga');
+      const isYouth = isCup && (r.cupTipo === 'liga_juvenil');
+      const key = `${name}|${isYouth}`;
+      const existing = palmaresMap.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        palmaresMap.set(key, { competition: name, count: 1, isYouth });
+      }
+    }
+    const palmares = [...palmaresMap.values()].sort((a, b) => b.count - a.count);
+
     return {
       ...team,
       divisionName: team.divisionName ?? null,
       federationName: team.federationName ?? null,
       squad,
       trajectory,
+      palmares,
       requirements: {
         breaches: teamBreaches.map((b) => ({
           teamId: teamId,
@@ -1050,6 +1122,74 @@ export class GameService {
         orden: d.orden,
         plazas: d.plazas,
         teamCount: countByDiv.get(d.id) ?? 0,
+      })),
+    };
+  }
+
+  async getFederationById(gameId: number, federationId: number): Promise<FederationOverview> {
+    const [fed] = await this.db
+      .select()
+      .from(s.federations)
+      .where(and(eq(s.federations.gameId, gameId), eq(s.federations.id, federationId)));
+    if (!fed) throw new NotFoundException(`Federation ${federationId} not found`);
+
+    const [league] = await this.db
+      .select({ id: s.leagues.id, name: s.leagues.name })
+      .from(s.leagues)
+      .where(eq(s.leagues.federationId, federationId));
+
+    const divisions = league
+      ? await this.db
+          .select({
+            id: s.divisions.id,
+            name: s.divisions.name,
+            orden: s.divisions.orden,
+            plazas: s.divisions.plazas,
+          })
+          .from(s.divisions)
+          .where(eq(s.divisions.leagueId, league.id))
+          .orderBy(asc(s.divisions.orden))
+      : [];
+
+    const teamRows = await this.db
+      .select({
+        id: s.teams.id,
+        name: s.teams.name,
+        strength: s.teams.strength,
+        arraigo: s.teams.arraigo,
+        divisionId: s.teams.divisionId,
+      })
+      .from(s.teams)
+      .where(eq(s.teams.federationId, federationId))
+      .orderBy(desc(s.teams.strength));
+
+    const teamCount = teamRows.length;
+    const divisionTeams = new Map<number, typeof teamRows>();
+    const pendingTeams: typeof teamRows = [];
+    for (const t of teamRows) {
+      if (t.divisionId != null) {
+        const arr = divisionTeams.get(t.divisionId) ?? [];
+        arr.push(t);
+        divisionTeams.set(t.divisionId, arr);
+      } else {
+        pendingTeams.push(t);
+      }
+    }
+
+    return {
+      id: fed.id,
+      name: fed.name,
+      prestige: fed.prestige,
+      tier: tierOf(fed.prestige),
+      isPlayer: fed.isPlayer,
+      leagueName: league?.name ?? null,
+      teamCount,
+      divisions: divisions.map((d) => ({
+        id: d.id,
+        name: d.name ?? 'División',
+        orden: d.orden,
+        plazas: d.plazas,
+        teamCount: (divisionTeams.get(d.id) ?? []).length,
       })),
     };
   }
@@ -1491,7 +1631,7 @@ export class GameService {
 
   async addNorm(
     gameId: number,
-    tipo: 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial',
+    tipo: NormType,
     valor: number,
   ): Promise<NormsResponse> {
     return this.db.transaction(async (tx) => {
@@ -1658,6 +1798,19 @@ export class GameService {
 
   /* --------------------------------- season events / polémicas (§1, §2) */
 
+  private effectDescription(tipo: GameState['events'][number]['tipo']): string {
+    switch (tipo) {
+      case 'arbitraje_dudoso': return 'Si actúas: -1M€, -3 arraigo, pierdes 1 impulse.';
+      case 'incidente_aficion': return 'Si actúas: -1M€, -3 arraigo, -10% capacidad de estadio.';
+      case 'declaraciones_polemicas': return 'Si actúas: -1M€, -3 arraigo, -1 prestige (multa).';
+      case 'doping_positivo': return 'Si actúas: -1M€, -3 arraigo, el equipo pierde -10 strength.';
+      case 'conflicto_jugadores': return 'Si actúas: -1M€, -3 arraigo, el equipo pierde -5 strength.';
+      case 'crisis_economica_club': return 'Si actúas: -1M€, -3 arraigo, +3M€ bailout pero -5 strength al club.';
+      case 'escandalo_directiva': return 'Si actúas: -1M€, -3 arraigo, pierdes 2 impulses.';
+      case 'manipulacion_resultados': return 'Si actúas: -1M€, -3 arraigo, descenso 1 división.';
+    }
+  }
+
   private eventsResponse(
     state: GameState,
     map: Map<number, number>,
@@ -1675,6 +1828,7 @@ export class GameService {
       resolvedAction: e.resolvedAction,
       severity: e.severity,
       chainedFromId: e.chainedFromId,
+      effectDescription: this.effectDescription(e.tipo),
     });
     const sorted = [...state.events].sort(
       (a, b) => b.year - a.year || b.matchday - a.matchday || b.id - a.id,
@@ -1746,6 +1900,7 @@ export class GameService {
             ...(m.leg ? { leg: m.leg } : {}),
           })),
         })),
+        recurring: c.recurring,
       })),
     };
   }
@@ -1785,6 +1940,7 @@ export class GameService {
         input.formato,
         input.categoria,
         engineIds,
+        input.recurring,
       );
       if (next === state) {
         throw new BadRequestException(

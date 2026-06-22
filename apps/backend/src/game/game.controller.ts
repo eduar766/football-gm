@@ -238,6 +238,14 @@ export class GameController {
     return this.games.postponeMatchday(id);
   }
 
+  @Post(':id/cultivate-arraigo')
+  cultivateArraigo(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { teamId: number },
+  ) {
+    return this.games.cultivateArraigo(id, body.teamId);
+  }
+
   @Get(':id/events')
   events(@Param('id', ParseIntPipe) id: number) {
     return this.games.getEvents(id);
@@ -291,6 +299,14 @@ export class GameController {
   @Get(':id/federations')
   federations(@Param('id', ParseIntPipe) id: number) {
     return this.games.getFederations(id);
+  }
+
+  @Get(':id/federations/:fedId')
+  federationById(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('fedId', ParseIntPipe) fedId: number,
+  ) {
+    return this.games.getFederationById(id, fedId);
   }
 
   @Get(':id/market')

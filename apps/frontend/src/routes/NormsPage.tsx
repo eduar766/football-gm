@@ -26,12 +26,18 @@ const TIPO_LABEL: Record<NormType, string> = {
   tope_plantilla: 'Tope de plantilla',
   minimo_competitivo: 'Mínimo competitivo',
   tope_salarial: 'Tope salarial',
+  tope_extrangeros: 'Tope de extranjeros',
+  minimo_cantera: 'Mínimo cantera',
+  tope_edad_media: 'Tope de edad media',
 };
 
 const DEFAULT_VALOR: Record<NormType, number> = {
   tope_plantilla: 75,
   minimo_competitivo: 50,
   tope_salarial: 1_000_000,
+  tope_extrangeros: 5,
+  minimo_cantera: 5,
+  tope_edad_media: 28,
 };
 
 const formatValor = (tipo: NormType, valor: number) =>
@@ -150,6 +156,9 @@ export function NormsPage() {
                   { value: 'tope_plantilla', label: 'Tope de plantilla (máx. fuerza)' },
                   { value: 'minimo_competitivo', label: 'Mínimo competitivo (mín. fuerza)' },
                   { value: 'tope_salarial', label: 'Tope salarial (masa salarial máx. €)' },
+                  { value: 'tope_extrangeros', label: 'Tope de extranjeros (máx. jugadores)' },
+                  { value: 'minimo_cantera', label: 'Mínimo cantera (mín. canteranos)' },
+                  { value: 'tope_edad_media', label: 'Tope de edad media (máx. años)' },
                 ]}
                 value={tipo}
                 onChange={(v) => {
@@ -169,6 +178,28 @@ export function NormsPage() {
                   step={100_000}
                   thousandSeparator="."
                   decimalSeparator=","
+                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                />
+              ) : tipo === 'tope_edad_media' ? (
+                <NumberInput
+                  label="Edad media máxima"
+                  description="Edad media máxima del plantel."
+                  value={valor}
+                  onChange={(v) => setValor(Number(v) || 0)}
+                  min={16}
+                  max={40}
+                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                />
+              ) : tipo === 'tope_extrangeros' || tipo === 'minimo_cantera' ? (
+                <NumberInput
+                  label={tipo === 'tope_extrangeros' ? 'Máximo de extranjeros' : 'Mínimo de canteranos'}
+                  description={tipo === 'tope_extrangeros'
+                    ? 'Número máximo de jugadores extranjeros en plantilla.'
+                    : 'Número mínimo de jugadores canteranos en plantilla.'}
+                  value={valor}
+                  onChange={(v) => setValor(Number(v) || 0)}
+                  min={1}
+                  max={25}
                   styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
                 />
               ) : (

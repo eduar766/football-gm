@@ -25,7 +25,7 @@ import {
   tickAvailability,
 } from './awards';
 import { expireStaleEvents, maybeSpawnEvent, pendingEvents } from './events';
-import { playCupRound, scheduleCups } from './cups';
+import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import type {
@@ -125,6 +125,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
             },
             matchesSuspendedLeft: 0,
             injuredMatchesLeft: 0,
+            nationality: p.nationality ?? 'local',
+            cantera: p.cantera ?? false,
           });
         }
       }
@@ -204,6 +206,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     cupsRng: makeRng((seed ^ 0xfeedface) >>> 0),
     nextCupId: 1,
     cupSchedule: [],
+    cupTemplates: [],
     transfersRng: makeRng((seed ^ 0xfade1eaf) >>> 0),
     transfers: [],
     competitionPrizes: [],
@@ -239,6 +242,11 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     globalRankings: [],
     history: [],
     seasonOver: false,
+    eventStrengthPenalty: 0,
+    eventCapacityPenaltyPct: 0,
+    eventImpulseLoss: 0,
+    eventTreasuryInjection: 0,
+    poachCooldowns: {},
   };
 }
 
@@ -339,6 +347,8 @@ export function createOwnTeam(
         },
         matchesSuspendedLeft: 0,
         injuredMatchesLeft: 0,
+        nationality: p.nationality ?? 'local',
+        cantera: p.cantera ?? false,
       });
     }
   }
@@ -563,7 +573,7 @@ export function closeSeason(prev: GameState): GameState {
       ? topTeams.reduce((acc, t) => acc + t.strength, 0) / topTeams.length
       : 55;
 
-  let delta = Math.round((meanStrength - 55) / 4) - 1; // -1 base decay
+  let delta = Math.round((meanStrength - 55) / 4) - 2; // -2 base decay
   if (titleRaceGap <= 3) delta += 3;
   else if (titleRaceGap <= 6) delta += 2;
   else if (titleRaceGap <= 10) delta += 1;
@@ -658,6 +668,13 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
+  // Arraigo decay: teams slowly lose loyalty if not maintained (-2/season).
+  for (const t of s.teams) {
+    if (t.federationId === s.playerFederationId) {
+      t.arraigo = Math.max(0, t.arraigo - 2);
+    }
+  }
+
   s.year += 1;
   progressNegotiations(s); // §4.2 timers compare against the new year
   processRivalActions(s);
@@ -700,9 +717,61 @@ export function closeSeason(prev: GameState): GameState {
   s.impulsesRemaining = s.impulsesPerSeason;
   s.pendingImpulses = [];
   s.seasonOver = false;
+  // Reset event-driven temporary effects.
+  s.eventStrengthPenalty = 0;
+  s.eventCapacityPenaltyPct = 0;
+  s.eventImpulseLoss = 0;
+  s.eventTreasuryInjection = 0;
+  // Save recurring cup templates for next season.
+  saveRecurringCupTemplates(s);
+  // Recreate recurring cups from templates for the new season.
+  recreateRecurringCups(s);
   s.phase = 'pretemporada';
   return s;
 }
+
+// ─── Pretemporada: cultivate team loyalty (Fase 8 Batch 1) ──────────────────
+
+const CULTIVATE_ARRAIGO_COST = 2_000_000;
+const CULTIVATE_ARRAIGO_MIN = 5;
+const CULTIVATE_ARRAIGO_MAX = 10;
+const MAX_CULTIVATE_PER_SEASON = 2;
+
+// Raise a team's arraigo (loyalty) during pretemporada. Limits: 2 teams/season,
+// costs 2M€ per use, +5–10 arraigo (random).
+export function cultivateArraigo(
+  prev: GameState,
+  teamId: number,
+): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  if (prev.treasury < CULTIVATE_ARRAIGO_COST) return prev;
+  // Count how many times the player already cultivated this season.
+  const used = prev.actionHistory.filter(
+    (a) => a.year === prev.year && a.type === 'cultivate_arraigo',
+  ).length;
+  if (used >= MAX_CULTIVATE_PER_SEASON) return prev;
+
+  const s = structuredClone(prev);
+  const team = s.teams.find((t) => t.id === teamId);
+  if (!team) return prev;
+  if (team.federationId !== s.playerFederationId) return prev;
+
+  s.treasury -= CULTIVATE_ARRAIGO_COST;
+  const gain = CULTIVATE_ARRAIGO_MIN + Math.floor(rngNext(s.rng) * (CULTIVATE_ARRAIGO_MAX - CULTIVATE_ARRAIGO_MIN + 1));
+  team.arraigo = Math.min(100, team.arraigo + gain);
+  s.actionHistory.push({
+    id: s.nextActionId++,
+    year: s.year,
+    type: 'cultivate_arraigo',
+    matchday: 0,
+    cost: CULTIVATE_ARRAIGO_COST,
+    targetTeamId: teamId,
+    result: `+${gain} arraigo`,
+  });
+  return s;
+}
+
+// ─── Pretemporada: veto outgoing transfer (Fase 8 Batch 3) ──────────────────
 
 // ─── Mid-season commissioner actions (Proposal 1: Mid-Season Agency) ────────
 

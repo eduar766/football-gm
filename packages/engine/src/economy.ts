@@ -14,6 +14,7 @@ export const STARTING_TREASURY = 80_000_000;
 const OP_BASE = 1_000_000;
 const OP_PER_TEAM = 400_000;
 const OP_PER_DIVISION = 800_000;
+const NORM_ENFORCEMENT_COST = 500_000;
 
 const CONTRACT_TYPES: CommercialContractType[] = [
   'patrocinio',
@@ -115,17 +116,19 @@ export function processEconomy(s: GameState): {
   const competing = s.teams.filter((t) => t.divisionOrden !== null).length;
   const contractIncome = s.commercialContracts.reduce((a, c) => a + c.valorAnual, 0);
   const cost = operatingCost(competing, s.divisions.length);
+  const normCost = s.norms.length * NORM_ENFORCEMENT_COST;
   const prizes = s.prizePayments
     .filter((p) => p.year === s.year)
     .reduce((a, p) => a + p.amount, 0);
   const talent = Math.max(0, s.economy.talentInvestment);
 
   // Matchday revenue: home matches × capacity × ticket price × 0.7
+  const capacityMultiplier = 1 - s.eventCapacityPenaltyPct;
   let matchdayRevenue = 0;
   for (const t of s.teams) {
     if (t.stadiumCapacity > 0 && t.divisionOrden !== null) {
       const homeMatches = s.results.filter((r) => r.homeId === t.id).length;
-      matchdayRevenue += homeMatches * t.stadiumCapacity * 15 * 0.7;
+      matchdayRevenue += homeMatches * t.stadiumCapacity * 15 * 0.7 * capacityMultiplier;
     }
   }
 
@@ -133,8 +136,8 @@ export function processEconomy(s: GameState): {
   const merchandiseRevenue = s.prestige * s.teams.length * 50_000;
 
   const income = contractIncome + matchdayRevenue + merchandiseRevenue;
-  // Income / cost / talent move the treasury here; prize payouts already did.
-  const net = income - cost - talent;
+  // Income / cost / talent / norm enforcement move the treasury here.
+  const net = income - cost - talent - normCost;
   s.treasury += net;
 
   const transferFees = s.transfers
@@ -156,6 +159,7 @@ export function processEconomy(s: GameState): {
     year: s.year,
     income,
     operatingCost: cost,
+    normCost,
     prizes,
     talent,
     // Reported net includes prizes (already debited) so the UI reads the full

@@ -16,16 +16,43 @@ function isSubject(state: GameState, t: Team): boolean {
 
 // What the norm cares about for a given team. For strength-based norms it's
 // team.strength (1-100); for the wage cap it's the team's annual wage bill.
+// For count norms it's the count of matching players in the squad.
 function valorActual(team: Team, norm: Norm, players: Player[]): number {
-  return norm.tipo === 'tope_salarial' ? wageBill(team.id, players) : team.strength;
+  const squad = players.filter((p) => p.teamId === team.id);
+  switch (norm.tipo) {
+    case 'tope_salarial':
+      return wageBill(team.id, players);
+    case 'tope_extrangeros':
+      return squad.filter((p) => p.nationality !== 'local').length;
+    case 'minimo_cantera':
+      return squad.filter((p) => p.cantera).length;
+    case 'tope_edad_media':
+      return squad.length > 0
+        ? Math.round(squad.reduce((a, p) => a + p.age, 0) / squad.length)
+        : 0;
+    default:
+      return team.strength;
+  }
 }
 
 function breaches(team: Team, norm: Norm, players: Player[]): boolean {
   const actual = valorActual(team, norm, players);
-  if (norm.tipo === 'tope_plantilla') return actual > norm.valor;
-  if (norm.tipo === 'minimo_competitivo') return actual < norm.valor;
-  if (norm.tipo === 'tope_salarial') return actual > norm.valor;
-  return false;
+  switch (norm.tipo) {
+    case 'tope_plantilla':
+      return actual > norm.valor;      // too strong
+    case 'minimo_competitivo':
+      return actual < norm.valor;      // too weak
+    case 'tope_salarial':
+      return actual > norm.valor;      // too expensive
+    case 'tope_extrangeros':
+      return actual > norm.valor;      // too many foreigners
+    case 'minimo_cantera':
+      return actual < norm.valor;      // too few homegrown
+    case 'tope_edad_media':
+      return actual > norm.valor;      // squad too old
+    default:
+      return false;
+  }
 }
 
 function isSanctioned(
@@ -64,13 +91,18 @@ export function addNorm(
   tipo: NormType,
   valor: number,
 ): GameState {
-  // Salary cap is denominated in € (large integers); strength-based norms
-  // live in 1-100. Clamp accordingly so each norm's UI input range stays
-  // meaningful in its own units.
-  const v =
-    tipo === 'tope_salarial'
-      ? Math.max(0, Math.min(MAX_SALARY_CAP, Math.round(valor)))
-      : Math.max(1, Math.min(100, Math.round(valor)));
+  // Clamp per norm type: salary cap uses large € values; count norms use
+  // small integers; strength norms use 1-100; age uses 16-40.
+  let v: number;
+  if (tipo === 'tope_salarial') {
+    v = Math.max(0, Math.min(MAX_SALARY_CAP, Math.round(valor)));
+  } else if (tipo === 'tope_edad_media') {
+    v = Math.max(16, Math.min(40, Math.round(valor)));
+  } else if (tipo === 'tope_extrangeros' || tipo === 'minimo_cantera') {
+    v = Math.max(1, Math.min(25, Math.round(valor)));
+  } else {
+    v = Math.max(1, Math.min(100, Math.round(valor)));
+  }
   const s = structuredClone(prev);
   // At most one active norm per type — adding replaces.
   s.norms = s.norms.filter((n) => n.tipo !== tipo);
@@ -106,7 +138,13 @@ export function sanctionTeam(
       ? `Supera el tope de plantilla (${actual} > ${norm.valor})`
       : norm.tipo === 'minimo_competitivo'
         ? `No alcanza el mínimo competitivo (${actual} < ${norm.valor})`
-        : `Supera el tope salarial (${actual.toLocaleString('es-ES')} € > ${norm.valor.toLocaleString('es-ES')} €)`;
+        : norm.tipo === 'tope_extrangeros'
+          ? `Supera el tope de extranjeros (${actual} > ${norm.valor})`
+          : norm.tipo === 'minimo_cantera'
+            ? `No alcanza el mínimo de cantera (${actual} < ${norm.valor})`
+            : norm.tipo === 'tope_edad_media'
+              ? `Supera el tope de edad media (${actual} > ${norm.valor})`
+              : `Supera el tope salarial (${actual.toLocaleString('es-ES')} € > ${norm.valor.toLocaleString('es-ES')} €)`;
   s.sanctions.push({
     id: s.nextSanctionId,
     teamId,

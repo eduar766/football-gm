@@ -1,6 +1,7 @@
 import {
   Badge,
   Box,
+  Button,
   Card,
   Grid,
   Group,
@@ -11,9 +12,10 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconTrophy } from '@tabler/icons-react';
+import { IconCheck, IconHeart, IconTrophy, IconTrophyOff, IconX } from '@tabler/icons-react';
 import { api } from '../api';
 import { money as fmtMoney } from '../utils/format';
 
@@ -61,6 +63,19 @@ export function TeamDetailPage() {
   const team = useQuery({
     queryKey: ['team', id, tid],
     queryFn: () => api.team(id, tid),
+  });
+  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
+  const qc = useQueryClient();
+
+  const cultivate = useMutation({
+    mutationFn: () => api.cultivateArraigo(id, tid),
+    onSuccess: () => {
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Arraigo cultivado correctamente' });
+      qc.invalidateQueries({ predicate: (q) => ['team', 'summary'].includes(q.queryKey[0] as string) });
+    },
+    onError: (e: Error) => {
+      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
+    },
   });
 
   if (team.isLoading || !team.data) {
@@ -246,6 +261,19 @@ export function TeamDetailPage() {
               </Paper>
             ))}
           </SimpleGrid>
+          {summary.data?.phase === 'pretemporada' && (
+            <Button
+              mt="md"
+              size="compact-sm"
+              variant="light"
+              color="blue"
+              leftSection={<IconHeart size={14} />}
+              loading={cultivate.isPending}
+              onClick={() => cultivate.mutate()}
+            >
+              Cultivar arraigo (2M€, +5-10)
+            </Button>
+          )}
         </Card>
       </Grid.Col>
 
@@ -424,6 +452,91 @@ export function TeamDetailPage() {
                 })}
               </Table.Tbody>
             </Table>
+          )}
+        </Paper>
+
+        {/* Palmarés */}
+        <Paper withBorder p="md" mb="md">
+          <Group gap="sm" mb="sm">
+            <IconTrophy size={16} color="#F59E0B" />
+            <Text fw={700}>Palmarés</Text>
+          </Group>
+          {t.palmares.length === 0 ? (
+            <Group gap="sm">
+              <IconTrophyOff size={14} color="rgba(255,255,255,0.3)" />
+              <Text c="dimmed" size="sm">
+                Sin títulos aún.
+              </Text>
+            </Group>
+          ) : (
+            <SimpleGrid cols={2} spacing="sm">
+              {t.palmares.map((p, i) => (
+                <Paper
+                  key={`${p.competition}-${p.isYouth ? 'j' : 'a'}`}
+                  p="sm"
+                  radius="sm"
+                  className="stagger-item"
+                  style={{
+                    background: p.isYouth
+                      ? 'rgba(139,92,246,0.06)'
+                      : 'rgba(245,158,11,0.06)',
+                    border: `1px solid ${p.isYouth ? 'rgba(139,92,246,0.2)' : 'rgba(245,158,11,0.2)'}`,
+                    animationDelay: `${i * 50}ms`,
+                  }}
+                >
+                  <Group gap="sm" wrap="nowrap">
+                    <Box
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: '50%',
+                        background: p.isYouth
+                          ? 'rgba(139,92,246,0.15)'
+                          : 'rgba(245,158,11,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <IconTrophy
+                        size={16}
+                        color={p.isYouth ? '#8B5CF6' : '#F59E0B'}
+                      />
+                    </Box>
+                    <Box style={{ minWidth: 0, flex: 1 }}>
+                      <Text
+                        size="xs"
+                        fw={600}
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: '#F9FAFB',
+                        }}
+                      >
+                        {p.competition}
+                      </Text>
+                      <Group gap={4}>
+                        <Text
+                          fw={800}
+                          size="sm"
+                          style={{
+                            fontFamily: '"Geist Mono", monospace',
+                            color: p.isYouth ? '#8B5CF6' : '#F59E0B',
+                          }}
+                        >
+                          {p.count}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {p.count === 1 ? 'título' : 'títulos'}
+                        </Text>
+                      </Group>
+                    </Box>
+                  </Group>
+                </Paper>
+              ))}
+            </SimpleGrid>
           )}
         </Paper>
 

@@ -29,6 +29,12 @@ const TIPO_COLOR: Record<EventType, string> = {
   manipulacion_resultados: '#EF4444',
 };
 
+function ignorePrestigeCost(severity: string): number {
+  if (severity === 'alta') return 4;
+  if (severity === 'media') return 2;
+  return 1;
+}
+
 const STATUS_LABEL: Record<EventStatus, string> = {
   pendiente: 'Pendiente',
   resuelto_actuar: 'Resuelto (actuaste)',
@@ -191,6 +197,11 @@ export function EventsPage() {
                     <Table.Td>
                       <Stack gap={2}>
                         <Text c="dimmed" size="sm">{e.message}</Text>
+                        {e.status === 'pendiente' && (
+                          <Text size="xs" fw={600} style={{ color: '#F59E0B' }}>
+                            {e.effectDescription}
+                          </Text>
+                        )}
                         {e.chainedFromId != null && (
                           <Text size="xs" c="dimmed" ml="md" style={{ fontStyle: 'italic' }}>
                             Cadena de: evento #{e.chainedFromId}
@@ -210,7 +221,7 @@ export function EventsPage() {
                           modals.openConfirmModal({
                             title: 'Actuar sobre el evento',
                             children: (
-                              <Text size="sm">Actuar costará 1 M€ y reducirá el arraigo del equipo. ¿Continuar?</Text>
+                              <Text size="sm">{e.effectDescription} ¿Continuar?</Text>
                             ),
                             labels: { confirm: 'Actuar', cancel: 'Volver' },
                             confirmProps: { color: 'blue' },
@@ -230,7 +241,7 @@ export function EventsPage() {
                           modals.openConfirmModal({
                             title: 'Ignorar el evento',
                             children: (
-                              <Text size="sm">Ignorar resta 1 punto de prestigio y puede afectar la imagen de la federación. ¿Continuar?</Text>
+                              <Text size="sm">Ignorar resta {ignorePrestigeCost(e.severity)} punto{ignorePrestigeCost(e.severity) > 1 ? 's' : ''} de prestigio y puede afectar la imagen de la federación. ¿Continuar?</Text>
                             ),
                             labels: { confirm: 'Ignorar', cancel: 'Volver' },
                             confirmProps: { color: 'gray' },
@@ -238,7 +249,7 @@ export function EventsPage() {
                           })
                         }
                       >
-                        Ignorar (−1 prestigio)
+                        Ignorar (−{ignorePrestigeCost(e.severity)} prestigio)
                       </Button>
                     </Group>
                   </Table.Td>

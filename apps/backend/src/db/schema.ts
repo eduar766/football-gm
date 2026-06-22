@@ -185,6 +185,8 @@ export const players = pgTable(
     name: text('name').notNull(),
     posicion: playerPosition('posicion').notNull(),
     calidad: integer('calidad').notNull(),
+    nationality: text('nationality').notNull().default('local'),
+    cantera: boolean('cantera').notNull().default(false),
   },
   (t) => [
     index('players_team_idx').on(t.teamId),

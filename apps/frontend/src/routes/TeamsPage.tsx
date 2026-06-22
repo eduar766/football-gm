@@ -1,79 +1,32 @@
-import { Box, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
+import { Box, Group, Paper, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconUsers } from '@tabler/icons-react';
+import { IconBuilding, IconUsers } from '@tabler/icons-react';
 import { api } from '../api';
 
-export function TeamsPage() {
-  const { gameId } = useParams({ strict: false }) as { gameId: string };
-  const id = Number(gameId);
-  const teams = useQuery({ queryKey: ['teams', id], queryFn: () => api.teams(id) });
+const divColors = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444'];
 
-  if (teams.isLoading) {
-    return (
-      <div className="page-enter">
-        <Paper
-          p="xl"
-          mb="md"
-          style={{
-            background: 'linear-gradient(135deg, #111820 0%, #1A2332 100%)',
-            border: '1px solid rgba(255,255,255,0.06)',
-          }}
-        >
-          <Group gap="sm">
-            <IconUsers size={22} color="#10B981" />
-            <Skeleton height={28} width={160} />
-          </Group>
-        </Paper>
-        <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} height={48} mb="xs" />
-          ))}
-        </Paper>
-      </div>
-    );
-  }
-
-  const grouped = (teams.data ?? []).reduce<Record<string, typeof teams.data>>((acc, t) => {
-    const div = t.divisionName ?? 'Sin división';
-    if (!acc[div]) acc[div] = [];
-    acc[div].push(t);
+function TeamTable({
+  teams,
+  gameId,
+  groupBy,
+}: {
+  teams: { id: number; name: string; strength: number; prestige: number; divisionName: string | null; federationId: number | null; federationName: string | null }[];
+  gameId: string;
+  groupBy: 'division' | 'federation';
+}) {
+  const grouped = teams.reduce<Record<string, typeof teams>>((acc, t) => {
+    const key = groupBy === 'division' ? (t.divisionName ?? 'Sin división') : (t.federationName ?? 'Sin federación');
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
     return acc;
   }, {});
 
-  const divColors = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444'];
-
   return (
-    <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconUsers size={22} color="#10B981" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Equipos
-          </Text>
-          <Text size="sm" c="dimmed" ml="auto" style={{ fontFamily: '"Geist Mono", monospace' }}>
-            {teams.data?.length ?? 0} equipos
-          </Text>
-        </Group>
-      </Paper>
-
-      {Object.entries(grouped).map(([divName, divTeams], di) => (
+    <>
+      {Object.entries(grouped).map(([groupName, groupTeams], di) => (
         <Paper
-          key={divName}
+          key={groupName}
           p="md"
           mb="md"
           style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: `3px solid ${divColors[di % divColors.length]}` }}
@@ -85,22 +38,25 @@ export function TeamsPage() {
               tt="uppercase"
               style={{ color: divColors[di % divColors.length], letterSpacing: '0.05em' }}
             >
-              {divName}
+              {groupName}
             </Text>
             <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
-              {divTeams?.length} equipos
+              {groupTeams.length} equipos
             </Text>
           </Group>
           <Table>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                {groupBy === 'federation' && (
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>División</Table.Th>
+                )}
                 <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Fuerza</Table.Th>
                 <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Prestigio</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {divTeams?.map((t, i) => (
+              {groupTeams.map((t, i) => (
                 <Table.Tr
                   key={t.id}
                   className="stagger-item"
@@ -129,6 +85,11 @@ export function TeamsPage() {
                       </Text>
                     </Link>
                   </Table.Td>
+                  {groupBy === 'federation' && (
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">{t.divisionName ?? '—'}</Text>
+                    </Table.Td>
+                  )}
                   <Table.Td ta="right">
                     <Group gap="xs" justify="flex-end">
                       <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
@@ -170,6 +131,120 @@ export function TeamsPage() {
           </Table>
         </Paper>
       ))}
+    </>
+  );
+}
+
+export function TeamsPage() {
+  const { gameId } = useParams({ strict: false }) as { gameId: string };
+  const id = Number(gameId);
+  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
+  const teams = useQuery({ queryKey: ['teams', id], queryFn: () => api.teams(id) });
+
+  const playerFedId = summary.data?.federation.id;
+
+  if (teams.isLoading) {
+    return (
+      <div className="page-enter">
+        <Paper
+          p="xl"
+          mb="md"
+          style={{
+            background: 'linear-gradient(135deg, #111820 0%, #1A2332 100%)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          <Group gap="sm">
+            <IconUsers size={22} color="#10B981" />
+            <Skeleton height={28} width={160} />
+          </Group>
+        </Paper>
+        <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} height={48} mb="xs" />
+          ))}
+        </Paper>
+      </div>
+    );
+  }
+
+  const allTeams = teams.data ?? [];
+  const myTeams = playerFedId != null ? allTeams.filter((t) => t.federationId === playerFedId) : [];
+  const otherTeams = playerFedId != null ? allTeams.filter((t) => t.federationId !== playerFedId) : allTeams;
+
+  return (
+    <div className="page-enter">
+      <Paper
+        p="xl"
+        mb="md"
+        style={{
+          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
+          border: '1px solid rgba(16,185,129,0.2)',
+        }}
+      >
+        <Group gap="sm">
+          <IconUsers size={22} color="#10B981" />
+          <Text
+            fw={800}
+            style={{
+              fontFamily: '"Plus Jakarta Sans", sans-serif',
+              fontSize: '28px',
+              color: '#F9FAFB',
+            }}
+          >
+            Equipos
+          </Text>
+          <Text size="sm" c="dimmed" ml="auto" style={{ fontFamily: '"Geist Mono", monospace' }}>
+            {allTeams.length} equipos
+          </Text>
+        </Group>
+      </Paper>
+
+      <Tabs defaultValue="mine" variant="pills" mb="md">
+        <Tabs.List
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: 12,
+            padding: 4,
+            marginBottom: 16,
+          }}
+        >
+          <Tabs.Tab
+            value="mine"
+            leftSection={<IconBuilding size={14} />}
+            style={{ borderRadius: 10, fontWeight: 600, fontFamily: '"DM Sans", sans-serif' }}
+          >
+            Mi federación ({myTeams.length})
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="others"
+            leftSection={<IconUsers size={14} />}
+            style={{ borderRadius: 10, fontWeight: 600, fontFamily: '"DM Sans", sans-serif' }}
+          >
+            Otras federaciones ({otherTeams.length})
+          </Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="mine">
+          {myTeams.length === 0 ? (
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Text c="dimmed">No hay equipos en tu federación.</Text>
+            </Paper>
+          ) : (
+            <TeamTable teams={myTeams} gameId={gameId} groupBy="division" />
+          )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="others">
+          {otherTeams.length === 0 ? (
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Text c="dimmed">No hay equipos en otras federaciones.</Text>
+            </Paper>
+          ) : (
+            <TeamTable teams={otherTeams} gameId={gameId} groupBy="federation" />
+          )}
+        </Tabs.Panel>
+      </Tabs>
     </div>
   );
 }

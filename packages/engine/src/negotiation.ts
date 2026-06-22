@@ -92,6 +92,10 @@ export function rivalPoachAttempt(s: GameState, rivalFedId: number, targetTeamId
   if (!rival || !target) return false;
   if (target.federationId !== s.playerFederationId) return false;
 
+  // Poach cooldown: cannot re-attempt same team for 2 seasons after failure.
+  const cooldown = s.poachCooldowns[targetTeamId];
+  if (cooldown && s.year < cooldown) return false;
+
   const rivalTier = tierOf(rival.prestige);
   const player = fedOf(s, s.playerFederationId);
   const playerPrestige = player?.prestige ?? 0;
@@ -103,7 +107,12 @@ export function rivalPoachAttempt(s: GameState, rivalFedId: number, targetTeamId
   let chance = 0.15 - target.arraigo * 0.002 + (rival.prestige - playerPrestige) * 0.003;
   chance = Math.min(0.4, Math.max(0.05, chance));
 
-  return rngNext(s.rng) < chance;
+  const success = rngNext(s.rng) < chance;
+  if (!success) {
+    // Set 2-season cooldown on failure.
+    s.poachCooldowns[targetTeamId] = s.year + 2;
+  }
+  return success;
 }
 
 const PRESTIGE_TRANSFER_MAX = 8;

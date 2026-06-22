@@ -9,6 +9,8 @@ export interface WorldPlayer {
   name: string;
   posicion: 'POR' | 'DEF' | 'MED' | 'DEL';
   calidad: number;
+  nationality: string; // 'local' | 'extranjero'
+  cantera: boolean;
 }
 
 export interface WorldTeam {
@@ -111,6 +113,8 @@ function buildSquad(rng: RngState, baseQuality: number): WorldPlayer[] {
         name: `${pick(rng, FIRST_NAMES)} ${pick(rng, LAST_NAMES)}`,
         posicion: pos,
         calidad,
+        nationality: rngNext(rng) < 0.6 ? 'local' : 'extranjero',
+        cantera: rngNext(rng) < 0.5,
       });
     }
   }

@@ -13,11 +13,18 @@ const TIER_CONFIG: Record<number, { label: string; color: string; gradient: stri
 };
 
 export function FederationPage() {
-  const { gameId } = useParams({ strict: false }) as { gameId: string };
+  const { gameId, fedId } = useParams({ strict: false }) as {
+    gameId: string;
+    fedId?: string;
+  };
   const id = Number(gameId);
+
+  // If fedId is provided, show that federation; otherwise show the player's.
+  const isRival = fedId != null;
+
   const fed = useQuery({
-    queryKey: ['federation', id],
-    queryFn: () => api.federation(id),
+    queryKey: isRival ? ['federation', id, fedId] : ['federation', id],
+    queryFn: () => isRival ? api.federationById(id, Number(fedId)) : api.federation(id),
   });
 
   if (fed.isLoading || !fed.data) {
@@ -47,7 +54,7 @@ export function FederationPage() {
         <Group justify="space-between" align="flex-start">
           <div>
             <Group gap="sm" mb="xs">
-              <IconBuilding size={22} color="#10B981" />
+              <IconBuilding size={22} color={f.isPlayer ? '#10B981' : '#3B82F6'} />
               <Text
                 fw={800}
                 style={{

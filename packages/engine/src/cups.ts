@@ -24,6 +24,7 @@ import type {
 
 const BYE = -1;
 const MAX_PARTICIPANTS = 32;
+const CUP_CREATION_COST = 2_000_000;
 
 function simulatePenalties(rng: RngState, home: Team, away: Team): { homePenalties: number; awayPenalties: number } {
   let homeP = 0;
@@ -86,10 +87,12 @@ export function createCup(
   formato: CupFormat,
   categoria: CupCategory,
   participantTeamIds: number[],
+  recurring = false,
 ): GameState {
   // Competitions must exist BEFORE the season starts so the calendar can
   // include them (§4.8). Once temporada is running, no new cups may be added.
   if (prev.phase !== 'pretemporada') return prev;
+  if (prev.treasury < CUP_CREATION_COST) return prev;
   const trimmed = name.trim();
   if (trimmed.length === 0) return prev;
   const unique = Array.from(new Set(participantTeamIds));
@@ -97,6 +100,7 @@ export function createCup(
   for (const id of unique) if (!isCompetingPlayerTeam(prev, id)) return prev;
 
   const s = structuredClone(prev);
+  s.treasury -= CUP_CREATION_COST;
   let firstRound: CupMatch[];
   let secondRound: CupMatch[] | null = null;
   if (formato === 'liga') {
@@ -132,6 +136,7 @@ export function createCup(
     participantTeamIds: unique,
     rounds,
     championTeamId: null,
+    recurring,
   });
   return s;
 }
@@ -419,4 +424,65 @@ export function scheduleCups(s: GameState, totalMatchdays: number): CupScheduleE
 
 export function activeCups(state: GameState): Cup[] {
   return state.cups.filter((c) => c.status === 'en_curso');
+}
+
+// Save templates from completed recurring cups and recreate them for next season.
+export function saveRecurringCupTemplates(s: GameState): void {
+  // Remove old templates and save new ones from this season's completed recurring cups.
+  s.cupTemplates = s.cups
+    .filter((c) => c.recurring && c.status === 'finalizada')
+    .map((c) => ({
+      name: c.name,
+      tipo: c.tipo,
+      formato: c.formato,
+      categoria: c.categoria,
+      participantTeamIds: c.participantTeamIds,
+    }));
+}
+
+// Recreate recurring cups from templates. Called at the start of each new pretemporada.
+export function recreateRecurringCups(s: GameState): void {
+  if (s.cupTemplates.length === 0) return;
+  for (const tmpl of s.cupTemplates) {
+    // Filter to only team IDs that still exist in the game (teams may have been removed).
+    const validIds = tmpl.participantTeamIds.filter((id) => s.teams.some((t) => t.id === id));
+    if (validIds.length < 2) continue;
+    // Use the createCup logic inline to avoid re-charging treasury.
+    let firstRound: CupMatch[];
+    let secondRound: CupMatch[] | null = null;
+    if (tmpl.formato === 'liga') {
+      firstRound = generateFixtures(validIds, s.cupsRng, 0, 1).map((f) =>
+        buildMatch(f.homeId, f.awayId),
+      );
+    } else {
+      const padded = [...validIds];
+      while (padded.length < nextPowerOf2(validIds.length)) padded.push(BYE);
+      const shuffled = shuffle(padded, s.cupsRng);
+      firstRound = [];
+      for (let i = 0; i < shuffled.length; i += 2) {
+        firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], 'ida'));
+      }
+      if (tmpl.formato === 'eliminatoria_ida_vuelta') {
+        secondRound = [];
+        for (let i = 0; i < shuffled.length; i += 2) {
+          secondRound.push(buildMatch(shuffled[i + 1], shuffled[i], 'vuelta'));
+        }
+      }
+    }
+    const rounds: CupRound[] = [{ numero: 1, matches: firstRound, ...(tmpl.formato === 'eliminatoria_ida_vuelta' ? { leg: 'ida' as const } : {}) }];
+    if (secondRound) rounds.push({ numero: 2, matches: secondRound, leg: 'vuelta' as const });
+    s.cups.push({
+      id: s.nextCupId++,
+      name: tmpl.name,
+      tipo: tmpl.tipo,
+      formato: tmpl.formato,
+      categoria: tmpl.categoria,
+      year: s.year,
+      status: 'en_curso',
+      participantTeamIds: validIds,
+      rounds,
+      championTeamId: null,
+      recurring: true,
+    });
+  }
 }

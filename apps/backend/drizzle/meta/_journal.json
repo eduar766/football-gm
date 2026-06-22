@@ -43,6 +43,13 @@
       "when": 1779327621899,
       "tag": "0005_quiet_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782069226212,
+      "tag": "0006_reflective_gunslinger",
+      "breakpoints": true
     }
   ]
 }

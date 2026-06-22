@@ -132,6 +132,8 @@ export const PlayerDto = z.object({
   name: z.string(),
   posicion: PlayerPosition,
   calidad: z.number().int(),
+  nationality: z.string().default('local'),
+  cantera: z.boolean().default(false),
   // §7 realism: per-season cards and current availability state.
   yellowCardsThisSeason: z.number().int().default(0),
   redCardsThisSeason: z.number().int().default(0),
@@ -146,6 +148,8 @@ export const TeamListItem = z.object({
   strength: z.number().int(),
   prestige: z.number().int(),
   divisionName: z.string().nullable(),
+  federationId: Id.nullable(),
+  federationName: z.string().nullable(),
 });
 export type TeamListItem = z.infer<typeof TeamListItem>;
 
@@ -156,9 +160,16 @@ export const TrajectoryRow = z.object({
 });
 export type TrajectoryRow = z.infer<typeof TrajectoryRow>;
 
+export const PalmaresEntry = z.object({
+  competition: z.string(),
+  count: z.number().int(),
+  isYouth: z.boolean(),
+});
+export type PalmaresEntry = z.infer<typeof PalmaresEntry>;
+
 /* ----------------------------------- commissioner: norms & sanctions (§4.7) */
 
-export const NormType = z.enum(['tope_plantilla', 'minimo_competitivo', 'tope_salarial']);
+export const NormType = z.enum(['tope_plantilla', 'minimo_competitivo', 'tope_salarial', 'tope_extrangeros', 'minimo_cantera', 'tope_edad_media']);
 export type NormType = z.infer<typeof NormType>;
 
 export const TeamDetail = z.object({
@@ -179,6 +190,7 @@ export const TeamDetail = z.object({
   divisionName: z.string().nullable(),
   squad: z.array(PlayerDto),
   trajectory: z.array(TrajectoryRow),
+  palmares: z.array(PalmaresEntry),
   requirements: z.object({
     breaches: z.array(z.object({
       teamId: Id,
@@ -385,6 +397,7 @@ export const LastEconomyDto = z.object({
   year: z.number().int(),
   income: z.number().int(),
   operatingCost: z.number().int(),
+  normCost: z.number().int(),
   prizes: z.number().int(),
   talent: z.number().int(),
   net: z.number().int(),
@@ -549,8 +562,13 @@ export const AddNormRequest = z
     valor: z.number().int().nonnegative(),
   })
   .refine(
-    (v) => v.tipo === 'tope_salarial' || (v.valor >= 1 && v.valor <= 100),
-    { message: 'valor debe estar entre 1 y 100 para normas de plantilla', path: ['valor'] },
+    (v) => {
+      if (v.tipo === 'tope_salarial') return v.valor >= 0 && v.valor <= 200_000_000;
+      if (v.tipo === 'tope_edad_media') return v.valor >= 16 && v.valor <= 40;
+      // strength-based (1-100) and count-based (1-25) norms
+      return v.valor >= 1 && v.valor <= 100;
+    },
+    { message: 'valor fuera de rango para este tipo de norma', path: ['valor'] },
   );
 export type AddNormRequest = z.infer<typeof AddNormRequest>;
 
@@ -660,6 +678,7 @@ export const EventDto = z.object({
   resolvedAction: EventAction.nullable(),
   severity: EventSeverity,
   chainedFromId: Id.nullable(),
+  effectDescription: z.string(),
 });
 export type EventDto = z.infer<typeof EventDto>;
 
@@ -717,6 +736,7 @@ export const CupDto = z.object({
   championTeamId: Id.nullable(),
   championTeamName: z.string().nullable(),
   rounds: z.array(CupRoundDto),
+  recurring: z.boolean(),
 });
 export type CupDto = z.infer<typeof CupDto>;
 
@@ -731,6 +751,7 @@ export const CreateCupRequest = z.object({
   formato: CupFormat,
   categoria: CupCategory,
   participantTeamIds: z.array(Id).min(2).max(32),
+  recurring: z.boolean().optional().default(false),
 });
 export type CreateCupRequest = z.infer<typeof CreateCupRequest>;
 

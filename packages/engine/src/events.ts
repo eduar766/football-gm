@@ -126,12 +126,51 @@ export function resolveEvent(
   if (action === 'actuar') {
     s.treasury -= INVESTIGATION_COST;
     if (team) team.arraigo = Math.max(0, team.arraigo - ARRAIGO_ACT_HIT);
-    event.status = 'resuelto_actuar';
-    if (event.tipo === 'manipulacion_resultados' && team) {
-      if (team.divisionOrden !== null) {
-        team.divisionOrden += 1;
-      }
+
+    // Type-specific mechanical consequences.
+    switch (event.tipo) {
+      case 'arbitraje_dudoso':
+        // Lose 1 impulse (political capital consumed by investigation).
+        s.eventImpulseLoss += 1;
+        s.impulsesRemaining = Math.max(0, s.impulsesRemaining - 1);
+        break;
+      case 'incidente_aficion':
+        // Stadium capacity reduced 10% for this season.
+        s.eventCapacityPenaltyPct = Math.min(0.5, s.eventCapacityPenaltyPct + 0.1);
+        break;
+      case 'declaraciones_polemicas':
+        // Fine for reckless statements.
+        s.prestige = Math.max(0, s.prestige - 1);
+        mirrorPlayerPrestige(s);
+        break;
+      case 'doping_positivo':
+        // Team loses 10 strength for the season (player suspension + media pressure).
+        if (team) team.strength = Math.max(35, team.strength - 10);
+        break;
+      case 'conflicto_jugadores':
+        // Team loses 5 strength (locker room disruption).
+        if (team) team.strength = Math.max(35, team.strength - 5);
+        break;
+      case 'crisis_economica_club':
+        // Federation bails out the club with 3M€ but club loses 5 strength.
+        s.eventTreasuryInjection += 3_000_000;
+        s.treasury += 3_000_000;
+        if (team) team.strength = Math.max(35, team.strength - 5);
+        break;
+      case 'escandalo_directiva':
+        // Lose 2 impulses (crisis of confidence).
+        s.eventImpulseLoss += 2;
+        s.impulsesRemaining = Math.max(0, s.impulsesRemaining - 2);
+        break;
+      case 'manipulacion_resultados':
+        // Demote team one division (existing behavior).
+        if (team && team.divisionOrden !== null) {
+          team.divisionOrden += 1;
+        }
+        break;
     }
+
+    event.status = 'resuelto_actuar';
   } else {
     const ignorePrestigeCost = event.severity === 'alta' ? 4 : event.severity === 'media' ? 2 : 1;
     s.prestige = Math.max(0, s.prestige - ignorePrestigeCost);

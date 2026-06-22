@@ -68,6 +68,11 @@ const federationsRoute = createRoute({
   path: 'federations',
   component: FederationsPage,
 });
+const federationDetailRoute = createRoute({
+  getParentRoute: () => gameRoute,
+  path: 'federations/$fedId',
+  component: FederationPage,
+});
 const marketRoute = createRoute({
   getParentRoute: () => gameRoute,
   path: 'market',
@@ -127,6 +132,7 @@ const routeTree = rootRoute.addChildren([
     teamDetailRoute,
     federationRoute,
     federationsRoute,
+    federationDetailRoute,
     marketRoute,
     negotiationsRoute,
     structureRoute,

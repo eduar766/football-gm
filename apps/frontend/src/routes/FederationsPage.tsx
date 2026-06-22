@@ -1,6 +1,6 @@
 import { Box, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import { IconBuilding } from '@tabler/icons-react';
 import { api } from '../api';
 
@@ -118,9 +118,14 @@ export function FederationsPage() {
                         }}
                       />
                     )}
-                    <Text fw={f.isPlayer ? 700 : 400} style={{ fontFamily: '"DM Sans", sans-serif', color: f.isPlayer ? '#10B981' : '#F9FAFB' }}>
-                      {f.name}
-                    </Text>
+                    <Link
+                      to={f.isPlayer ? '/games/$gameId/federation' : '/games/$gameId/federations/$fedId'}
+                      params={f.isPlayer ? { gameId } : { gameId, fedId: String(f.id) }}
+                    >
+                      <Text fw={f.isPlayer ? 700 : 400} style={{ fontFamily: '"DM Sans", sans-serif', color: f.isPlayer ? '#10B981' : '#60A5FA', cursor: 'pointer' }}>
+                        {f.name}
+                      </Text>
+                    </Link>
                   </Group>
                 </Table.Td>
                 <Table.Td ta="right">

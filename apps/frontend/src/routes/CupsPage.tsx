@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Group,
   MultiSelect,
   Paper,
@@ -57,12 +58,14 @@ export function CupsPage() {
   const [formato, setFormato] = useState<CupFormat>('eliminatoria');
   const [categoria, setCategoria] = useState<CupCategory>('primer_equipo');
   const [participants, setParticipants] = useState<string[]>([]);
+  const [recurring, setRecurring] = useState(false);
 
   const create = useMutation({
     mutationFn: () =>
       api.createCup(id, {
         name, tipo, formato, categoria,
         participantTeamIds: participants.map(Number),
+        recurring,
       }),
     onSuccess: () => {
       notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Copa creada correctamente' });
@@ -202,6 +205,12 @@ export function CupsPage() {
               {participants.length} seleccionado(s)
             </Text>
           </Group>
+          <Checkbox
+            label="Recurrente (se recrea cada temporada automáticamente)"
+            checked={recurring}
+            onChange={(e) => setRecurring(e.currentTarget.checked)}
+            disabled={!isPreseason}
+          />
           <Group>
             <Button
               onClick={() => create.mutate()}
@@ -249,6 +258,20 @@ export function CupsPage() {
                   </Text>
                 </div>
                 <Group gap="xs">
+                  {c.recurring && (
+                    <Box
+                      style={{
+                        padding: '3px 12px',
+                        borderRadius: 14,
+                        background: 'rgba(139,92,246,0.15)',
+                        color: '#8B5CF6',
+                        fontWeight: 600,
+                        fontSize: '12px',
+                      }}
+                    >
+                      Recurrente
+                    </Box>
+                  )}
                   <Box
                     style={{
                       padding: '3px 12px',

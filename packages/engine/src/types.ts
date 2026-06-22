@@ -130,6 +130,8 @@ export interface Player {
   matchesSuspendedLeft: number;
   injuredMatchesLeft: number;
   age: number;
+  nationality: string;  // 'local' | 'extranjero' — used by tope_extrangeros norm
+  cantera: boolean;     // homegrown / youth academy — used by minimo_cantera norm
 }
 
 // Cups / tournaments (§4.4): elimination brackets that run alongside the
@@ -171,6 +173,16 @@ export interface Cup {
   participantTeamIds: number[];
   rounds: CupRound[];
   championTeamId: number | null;
+  recurring: boolean;
+}
+
+// Template for a recurring cup — saved at season close and recreated each pretemporada.
+export interface CupTemplate {
+  name: string;
+  tipo: CupType;
+  formato: CupFormat;
+  categoria: CupCategory;
+  participantTeamIds: number[];
 }
 
 // Calendar slot for a cup round (§4.4 + Fase 6.2 calendario unificado): one
@@ -233,11 +245,13 @@ export interface PlayerSeed {
   name: string;
   posicion: PlayerPosition;
   calidad: number;
+  nationality?: string; // defaults to 'local'
+  cantera?: boolean;    // defaults to false
 }
 
 // Norms & sanctions (§4.7). The commissioner defines rules; autonomous teams
 // may breach them; the commissioner sanctions the offenders.
-export type NormType = 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial';
+export type NormType = 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media';
 
 export interface Norm {
   id: number;
@@ -322,6 +336,7 @@ export interface LastEconomy {
   year: number;
   income: number;
   operatingCost: number;
+  normCost: number;
   prizes: number;
   talent: number;
   net: number;
@@ -348,7 +363,7 @@ export interface TransferEntry {
 }
 
 // Mid-season commissioner actions (Proposal 1: Mid-Season Agency).
-export type CommissionerAction = 'call_review' | 'emergency_meeting' | 'postpone_matchday';
+export type CommissionerAction = 'call_review' | 'emergency_meeting' | 'postpone_matchday' | 'cultivate_arraigo';
 
 export interface ActionRecord {
   id: number;
@@ -433,6 +448,7 @@ export interface GameState {
   cupsRng: RngState;
   nextCupId: number;
   cupSchedule: CupScheduleEntry[];
+  cupTemplates: CupTemplate[];
   // Transfer window (Fase 6.4): independent rng + append-only log.
   transfersRng: RngState;
   transfers: TransferEntry[];
@@ -455,6 +471,13 @@ export interface GameState {
   globalRankings: GlobalRanking[];
   history: SeasonRecord[];
   seasonOver: boolean;
+  // Event-driven temporary effects (reset each season close).
+  eventStrengthPenalty: number;
+  eventCapacityPenaltyPct: number;
+  eventImpulseLoss: number;
+  eventTreasuryInjection: number;
+  // Poach cooldown: teamId → year until which poaching is blocked.
+  poachCooldowns: Record<number, number>;
 }
 
 export interface CreateGameOptions {

@@ -67,6 +67,8 @@ export const api = {
   federation: (id: number) => req<FederationOverview>(`/games/${id}/federation`),
   history: (id: number) => req<HistoryResponse>(`/games/${id}/history`),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
+  federationById: (id: number, fedId: number) =>
+    req<FederationOverview>(`/games/${id}/federations/${fedId}`),
   market: (id: number) => req<MarketResponse>(`/games/${id}/market`),
   negotiations: (id: number) => req<NegotiationDto[]>(`/games/${id}/negotiations`),
   startNegotiation: (id: number, targetTeamId: number) =>
@@ -169,4 +171,9 @@ export const api = {
     }),
   postponeMatchday: (id: number) =>
     req<GameSummary>(`/games/${id}/postpone-matchday`, { method: 'POST' }),
+  cultivateArraigo: (id: number, teamId: number) =>
+    req<GameSummary>(`/games/${id}/cultivate-arraigo`, {
+      method: 'POST',
+      body: JSON.stringify({ teamId }),
+    }),
 };

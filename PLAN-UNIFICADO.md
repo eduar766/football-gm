@@ -6,8 +6,8 @@
 
 ## Estado de Sesión
 
-> **Última sesión:** Junio 2026 — Batch de mejoras Baja/Media/Alta
-> **Siguiente sesión:** Implementar #11 (Tipos de sanciones) y #1 (Copa ida y vuelta ya completada)
+> **Última sesión:** Junio 2026 — Fase 8 Batch 1 + #11: Tipos de sanciones
+> **Siguiente sesión:** Fase 8 Batch 2 (narrativa: form streaks, event chains, title tension)
 
 ### Completado en esta sesión
 
@@ -28,9 +28,10 @@
 
 | # | Feature | Prioridad | Notas |
 |---|---------|-----------|-------|
-| #11 | Tipos de sanciones (tope extranjeros, mín. cantera, tope edad media) | Alta | Agregar `NormType` en engine + contracts + NormsPage UI |
+| Fase 8 Batch 2 | Narrativa (form streaks, event chains, title tension) | Alta | Ver tabla arriba |
 | — | Tests de ida y vuelta | Alta | Agregar test cases para `eliminatoria_ida_vuelta` |
-| — | Snapshot golden test | Media | Actualizar con cambios de cups.ts |
+| — | Tests de nuevos tipos de normas | Alta | Agregar test cases para `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` |
+| — | Snapshot golden test | Media | Actualizar con cambios de cups.ts + events
 
 ### Estado de verificación
 
@@ -58,6 +59,8 @@ El próximo paso es implementar #11 (tipos de sanciones) y agregar tests para id
 | **4. Remaining** | ✅ COMPLETADA | 12 pages redesigned + UI↔mechanics integration |
 | **5. Polish** | ✅ COMPLETADA | Stagger animations, skeleton shimmer, a11y focus rings, matchday revenue, merchandise, youth academy |
 | **6. Batch Mejoras** | ✅ COMPLETADA | 10 features: #13, #8, #2, #3, #7, #9, #10, #5, #12, #1 |
+| **7. Consecuencias Eventos** | ✅ COMPLETADA | Consecuencias diferenciadas por tipo de evento |
+| **8. Estrategia/Dificultad** | 🔄 EN PROGRESO | Batch 1 completo, Batch 2-3 pendientes |
 
 ### Fase 1 — Cambios realizados
 
@@ -396,6 +399,147 @@ Feature batch organizado por prioridad (Baja → Media → Alta). 34 archivos mo
 ### Bug fix incluido
 
 - `game.service.ts:1700` — `createCup()` usaba formato hardcodeado `'single_elimination'` → corregido a usar `input.formato`
+
+---
+
+## Fase 7: Consecuencias Reales en Eventos (Diseño)
+
+### Problema actual
+
+Los 8 tipos de evento tienen **las mismas consecuencias** excepto `manipulacion_resultados`:
+- `actuar`: -1M€ + -3 arraigo (siempre igual)
+- `ignorar`: -N prestige + +1 arraigo (varía solo por severidad)
+
+El sabor del evento es solo texto cosmético. No hay diferencia mecánica entre un doping positivo y un escándalo de directiva.
+
+### Solución: consecuencias diferenciadas por tipo
+
+Cada tipo de evento obtiene una consecuencia mecánica única al **actuar** (investigar). El `ignorar` mantiene el patrón actual (prestige loss por severidad).
+
+#### Nuevos campos en GameState (temporada)
+
+```typescript
+// Consecuencias temporales de eventos (se resetean al cerrar temporada)
+eventStrengthPenalty: number;    // -N strength a todos los equipos del jugador
+eventCapacityPenaltyPct: number; // -N% capacidad de estadios del jugador
+eventImpulseLoss: number;        // -N impulsos consumidos
+eventTreasuryInjection: number;  // +N€ inyectados por bailout
+```
+
+#### Consecuencias por tipo de evento
+
+| Tipo | Severidad | `actuar` (investigar) | `ignorar` |
+|------|-----------|----------------------|-----------|
+| `arbitraje_dudoso` | media | -1M€, -3 arraigo, **-1 impulse** | -2 prestige, +1 arraigo |
+| `incidente_aficion` | media | -1M€, -3 arraigo, **-10% capacidad estadio** 1 temporada | -2 prestige, +1 arraigo |
+| `declaraciones_polemicas` | baja | -1M€, -3 arraigo, **-1 prestige** (multa) | -1 prestige, +1 arraigo |
+| `doping_positivo` | alta | -1M€, -3 arraigo, **-10 strength equipo** 1 temporada | -4 prestige, +1 arraigo |
+| `conflicto_jugadores` | media | -1M€, -3 arraigo, **-5 strength equipo** 1 temporada | -2 prestige, +1 arraigo |
+| `crisis_economica_club` | alta | -1M€, -3 arraigo, **+2M€ bailout** al club | -4 prestige, +1 arraigo |
+| `escandalo_directiva` | alta | -1M€, -3 arraigo, **-2 impulses** | -4 prestige, +1 arraigo |
+| `manipulacion_resultados` | alta | -1M€, -3 arraigo, **descenso 1 división** (ya existe) | -4 prestige, +1 arraigo |
+
+### Efectos en cascada
+
+| Efecto | Cómo impacta | Dónde se aplica |
+|--------|-------------|-----------------|
+| `-10 strength` | Equipo más débil en partidos, pierde posiciones | `simulateMatch()` usa `team.strength` |
+| `-10% capacidad` | Menos ingresos por matchday | `economy.ts:128` — `homeMatches * stadiumCapacity * 15 * 0.7` |
+| `-1 impulse` | Menos "thumb on the scale" disponibles | `engine.ts` — `impulsesRemaining` |
+| `-2 impulses` | Idem, más severo | Idem |
+| `+2M€ bailout` | Club evita bancarrota temporal | `s.treasury += 2_000_000` |
+
+### Archivos a modificar
+
+| Archivo | Cambios |
+|---------|---------|
+| `types.ts` | 4 nuevos campos en `GameState` |
+| `engine.ts` | `createGame()` inicializa campos; `closeSeason()` resetea a 0 |
+| `events.ts` | `resolveEvent()` case-switch por tipo; aplica efectos al state |
+| `economy.ts` | `matchdayRevenue()` descuenta `eventCapacityPenaltyPct` |
+| `contracts/index.ts` | `EventDto` agrega `effectDescription: string` (para UI) |
+| `game.service.ts` | `eventsResponse()` genera `effectDescription` legible |
+| `EventsPage.tsx` | Muestra descripción del efecto en card del evento |
+
+### Cambios en frontend (EventsPage)
+
+Cada evento mostrará una **descripción del efecto** en lugar de solo "costará 1 M€":
+
+```
+┌─────────────────────────────────────────────┐
+│ 🔴 Dopaje positivo                          │
+│ Resultado positivo de doping en un jugador  │
+│ de Atlético de Madrid: escándalo mediático. │
+│                                             │
+│ ⚠️  Si actúas: -1M€, -3 arraigo,           │
+│    el equipo pierde -10 strength 1 temporada│
+│ ✅ Si ignoras: -4 prestige, +1 arraigo      │
+│                                             │
+│ [Actuar]  [Ignorar]                         │
+└─────────────────────────────────────────────┘
+```
+
+### Orden de implementación
+
+1. `types.ts` — Agregar 4 campos a GameState
+2. `engine.ts` — Inicializar en `createGame()`, resetear en `closeSeason()`
+3. `events.ts` — Lógica de consecuencias por tipo
+4. `economy.ts` — Aplicar capacity penalty en revenue
+5. `contracts` — Agregar `effectDescription` a EventDto
+6. `game.service.ts` — Generar descripción legible
+7. `EventsPage.tsx` — Mostrar descripción + consequence badge
+8. Tests — Actualizar events.test.ts
+
+---
+
+## Fase 8: Estrategia y Dificultad (Batch 1 — Completado)
+
+Feature batch para hacer el juego más estratégico con consecuencias reales. Sin ruta "correcta" de jugar.
+
+### Batch 1 — Quick wins (Alto impacto, bajo riesgo)
+
+| # | Feature | Archivos | Estado |
+|---|---------|----------|--------|
+| 1 | Fix `crisis_economica_club` exploit (+3M€ pero -5 strength) | `events.ts`, `game.service.ts` | ✅ |
+| 2 | Costo de normas activas (500K€/norma/año) | `economy.ts`, `types.ts` (LastEconomy), `contracts` | ✅ |
+| 3 | Acción `cultivateArraigo` (2M€, +5-10 arraigo, máx 2 equipos/temporada) | `engine.ts`, `game.service.ts`, `game.controller.ts`, `api.ts`, `TeamDetailPage.tsx` | ✅ |
+| 4 | Decay de arraigo (-2/temporada para equipos del jugador) | `engine.ts` closeSeason | ✅ |
+| 5 | Cooldown de poaching (2 temporadas tras fallo) | `negotiation.ts`, `types.ts` (poachCooldowns) | ✅ |
+| 6 | Base prestige decay -1 → -2 | `engine.ts` closeSeason | ✅ |
+| 7 | Costo de creación de copa (2M€) | `cups.ts` | ✅ |
+| 8 | Tipos de sanciones (#11) | `types.ts`, `norms.ts`, `contracts`, `NormsPage.tsx` | ✅ |
+
+### Batch 2 — Narrativa (Pendiente)
+
+| # | Feature | Prioridad | Notas |
+|---|---------|-----------|-------|
+| 8 | Congestión por copas (-1 strength/partido, máx -3) | Alta | Cups |
+| 9 | Cadenas de eventos (doping → declaraciones polémicas) | Alta | Events |
+| 10 | Resultados positivos en resolución (+prestige chance) | Media | Events |
+| 11 | Form streaks (+2/-1 strength) | Alta | Engine |
+| 12 | Tensión de lucha por título (+1 strength si gap ≤3) | Media | Engine |
+| 13 | Pánico por descenso (-2 strength en puestos de descenso) | Media | Engine |
+
+### Batch 3 — Profundidad estratégica (Pendiente)
+
+| # | Feature | Prioridad | Notas |
+|---|---------|-----------|-------|
+| 14 | Multiplicador de contratos por tier (+/-20%) | Alta | Economy |
+| 15 | Veto de transferencia (1M€, bloquear salida) | Media | Transfers |
+| 16 | Treasury por club (cambio arquitectónico grande) | Media | Transfers |
+
+### Efectos en cascada
+
+| Efecto | Cómo impacta | Dónde se aplica |
+|--------|-------------|-----------------|
+| `-10 strength` (doping) | Equipo más débil en partidos | `simulateMatch()` |
+| `-10% capacidad` (incidente) | Menos ingresos matchday | `economy.ts:129` |
+| `-1 impulse` (arbitraje) | Menos "thumb on the scale" | `engine.ts` impulsesRemaining |
+| `+3M€ bailout` (crisis) pero `-5 strength` | Club sobrevive pero más débil | `events.ts` |
+| `500K€/norma` | Costo real de gobernanza | `economy.ts` processEconomy |
+| `2M€ cultivateArraigo` | Inversión en lealtad de equipos | `engine.ts` |
+| `-2 arraigo/season` | Arraigo es inversión, no permanent | `engine.ts` closeSeason |
+| `2M€ crear copa` | Decisión real de competir | `cups.ts` |
 
 ---
 

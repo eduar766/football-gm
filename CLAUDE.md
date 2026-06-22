@@ -109,11 +109,13 @@ If you ever see that error, the dist types are missing — run `pnpm build` once
 
 ## Current Session State
 
-> **Last updated:** Junio 2026 — After Fase 6 (batch de mejoras)
+> **Last updated:** Junio 2026 — After Fase 8 Batch 1 + #11 (tipos de sanciones) + UI improvements batch
 
 ### What was done
 
-10 features implemented in a batch (Baja/Media/Alta priority):
+12 features implemented across 3 batches:
+
+**Fase 6 — Batch de mejoras (Baja/Media/Alta):**
 
 | # | Feature | Key files |
 |---|---------|-----------|
@@ -128,13 +130,45 @@ If you ever see that error, the dist types are missing — run `pnpm build` once
 | #12 | Requisitos de equipos | `TeamDetailPage.tsx`, `game.service.ts` |
 | #1 | Copa ida y vuelta | `cups.ts`, `types.ts`, `CupsPage.tsx` (full 2-leg implementation) |
 
+**Fase 7 — Consecuencias reales en eventos:**
+
+| Feature | Key files |
+|---------|-----------|
+| Type-specific event consequences | `events.ts` (switch-case por tipo) |
+| 4 new GameState fields | `types.ts`, `engine.ts` (init + reset) |
+| Capacity penalty in revenue | `economy.ts` |
+| Effect descriptions | `contracts/index.ts`, `game.service.ts`, `EventsPage.tsx` |
+
+**Fase 8 Batch 1 — Estrategia y dificultad:**
+
+| Feature | Key files |
+|---------|-----------|
+| Fix crisis_economica_club exploit | `events.ts` (+3M€ but -5 strength) |
+| Norm enforcement cost (500K€/norm) | `economy.ts`, `types.ts`, `contracts` |
+| cultivateArraigo action (2M€, +5-10) | `engine.ts`, `game.service.ts`, `game.controller.ts`, `TeamDetailPage.tsx` |
+| Arraigo decay (-2/season) | `engine.ts` closeSeason |
+| Poach cooldown (2 seasons) | `negotiation.ts`, `types.ts` (poachCooldowns) |
+| Base prestige decay -1 → -2 | `engine.ts` closeSeason |
+| Cup creation cost (2M€) | `cups.ts` |
+| Tipos de sanciones (#11) | `types.ts`, `norms.ts`, `contracts`, `NormsPage.tsx` |
+
+**UI improvements batch:**
+
+| Feature | Key files |
+|---------|-----------|
+| Negotiations: active/history tabs + retry | `NegotiationsPage.tsx` (Tabs, retry button for rejected) |
+| Palmarés in team detail | `TeamDetailPage.tsx`, `game.service.ts` (palmares section) |
+| Teams page: my league vs other federations tabs | `TeamsPage.tsx` (Tabs, group by federation) |
+| Rival federation structures | `FederationPage.tsx`, `game.service.ts`, `game.controller.ts` |
+| Recurring cups | `cups.ts`, `types.ts`, `CupDto`, `CupsPage.tsx` (checkbox, badge) |
+
 ### What's pending
 
 | # | Feature | Priority | Notes |
 |---|---------|----------|-------|
-| #11 | Tipos de sanciones | Alta | Add `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` to NormType. Engine + contracts + NormsPage |
+| Fase 8 Batch 2 | Narrativa (form streaks, event chains, title tension) | Alta | see PLAN-UNIFICADO.md |
 | — | Tests for ida y vuelta | Alta | Add test cases for `eliminatoria_ida_vuelta` in `cups.test.ts` |
-| — | Golden snapshot update | Media | `golden.test.ts.snap` needs regeneration |
+| — | Tests for new norm types | Alta | Add test cases for `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` in `norms.test.ts` |
 
 ### Verification status
 
@@ -152,4 +186,11 @@ pnpm test               # engine 99/99 pass (14 files)
 - **`computeTwoLegWinner()`**: aggregate → away goals → penalties
 - **`scheduleCups()`**: ida/vuelta on consecutive matchdays
 - **Contracts `CupMatchDto.leg`** and **`CupRoundDto.leg`**: optional, passed through backend `cupsResponse()`
-- **`NormType`** in engine is `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial'` — #11 will add 3 more values
+- **`NormType`** in engine is `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'` — all 6 values
+- **Player model** now has `nationality: string` ('local'/'extranjero') and `cantera: boolean` — seeded in world-generator, stored in DB, passed through contracts
+- **Norm breach logic** in `norms.ts`: `valorActual()` computes count-based values for new norm types (foreign count, cantera count, avg age)
+- **Recurring cups**: `Cup.recurring: boolean` flag; `CupTemplate` type in engine; templates saved in `closeSeason()` and recreated in pretemporada
+- **Federation detail**: `GET /games/:id/federations/:fedId` returns full structure (teams, divisions) for any federation
+- **Negotiations**: Tabs split active/history; retry button on rejected negotiations calls `startNegotiation` directly
+- **Palmarés**: computed from `seasonRecords` (league + cup champions) in `getTeam()`, displayed as trophy cards
+- **TeamsPage**: Tabs split "Mi federación" (grouped by division) vs "Otras federaciones" (grouped by federation)
