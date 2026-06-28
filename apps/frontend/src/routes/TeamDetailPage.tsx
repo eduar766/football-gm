@@ -540,6 +540,38 @@ export function TeamDetailPage() {
           )}
         </Paper>
 
+        {/* Rivalidades */}
+        {t.rivalries && t.rivalries.length > 0 && (
+          <Paper withBorder p="md" mb="md">
+            <Group gap="sm" mb="sm">
+              <IconHeart size={16} color="#EF4444" />
+              <Text fw={700}>Rivalidades</Text>
+            </Group>
+            <Stack gap="xs">
+              {t.rivalries.map((r) => {
+                const isA = r.teamAId !== undefined;
+                const rival = isA ? r.teamBName : r.teamAName;
+                const { wins, draws, losses } = r.headToHead;
+                return (
+                  <Paper key={`${r.teamAId}-${r.teamBId}`} withBorder p="sm" radius="sm" style={{ background: 'rgba(239,68,68,0.04)', borderColor: 'rgba(239,68,68,0.15)' }}>
+                    <Group justify="space-between">
+                      <div>
+                        <Text size="sm" fw={600}>{rival}</Text>
+                        <Text size="xs" c="dimmed">{r.seasons} temporada{r.seasons !== 1 ? 's' : ''} en posiciones adyacentes</Text>
+                      </div>
+                      <Group gap={4}>
+                        <Badge size="xs" color="green" variant="light">{wins}V</Badge>
+                        <Badge size="xs" color="gray" variant="light">{draws}E</Badge>
+                        <Badge size="xs" color="red" variant="light">{losses}D</Badge>
+                      </Group>
+                    </Group>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          </Paper>
+        )}
+
         {/* Club Structure */}
         <Paper withBorder p="md">
           <Text fw={700} mb="sm">

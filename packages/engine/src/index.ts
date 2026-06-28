@@ -1,5 +1,6 @@
 export * from './rng';
 export * from './types';
+export * from './headlines';
 export * from './fixtures';
 export * from './match';
 export * from './standings';

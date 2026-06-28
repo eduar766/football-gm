@@ -25,7 +25,8 @@ import {
   settleSeasonAwards,
   tickAvailability,
 } from './awards';
-import { expireStaleEvents, maybeSpawnEvent, pendingEvents } from './events';
+import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
+import { buildChronicle } from './headlines';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -298,6 +299,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextMandateId: 1,
     consecutiveMandateFails: 0,
     mandatesRng: makeRng((seed ^ 0xb4a4d3c2) >>> 0),
+    seasonChronicles: [],
+    teamSeasonHistory: [],
   };
 }
 
@@ -386,6 +389,9 @@ export function startSeason(prev: GameState): GameState {
     s.mandates.push(generateMandate(s));
     s.nextMandateId++;
   }
+
+  // 5.4 — Chain events from the previous season (uses independent eventsRng).
+  maybeChainEvents(s, s.year - 1);
 
   return s;
 }
@@ -728,6 +734,27 @@ export function closeSeason(prev: GameState): GameState {
 
   // §6 awards from the just-closed year (no-op if no players are loaded).
   settleSeasonAwards(s);
+
+  // 5.2 — Season chronicle for the top flight (written after awards settle).
+  const chronicle = buildChronicle(s, top);
+  if (chronicle) s.seasonChronicles.push(chronicle);
+
+  // 5.3 — Team position snapshots for rivalry detection (all player divisions).
+  for (const d of s.divisions.filter((div) => div.federationId === s.playerFederationId)) {
+    const table = standingsByOrden.get(d.orden) ?? [];
+    for (let pos = 0; pos < table.length; pos++) {
+      const row = table[pos];
+      s.teamSeasonHistory.push({
+        teamId: row.teamId,
+        year: s.year,
+        divisionOrden: d.orden,
+        position: pos + 1,
+        points: row.points,
+        won: row.won,
+        lost: row.lost,
+      });
+    }
+  }
 
   // Unresolved polémicas from the closed year expire and cost prestige (§1).
   expireStaleEvents(s, s.year);

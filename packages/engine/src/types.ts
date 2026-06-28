@@ -280,6 +280,57 @@ export interface Award {
   valor: number;
 }
 
+// ── Batch 5: Narrativa emergente ────────────────────────────────────────────
+
+export type HeadlineType =
+  | 'goleada'
+  | 'sorpresa'
+  | 'racha_victorias'
+  | 'racha_derrotas';
+
+export interface Headline {
+  type: HeadlineType;
+  text: string;
+  teamId: number | null;
+  importance: number; // 1-3 (3 = most prominent)
+}
+
+export interface SeasonChronicle {
+  year: number;
+  divisionOrden: number;
+  champion: { teamId: number; name: string; points: number };
+  revelation: { teamId: number; name: string; reason: string } | null;
+  disappointment: { teamId: number; name: string; reason: string } | null;
+  bestPlayer: {
+    playerId: number;
+    name: string;
+    teamId: number;
+    teamName: string;
+    goals: number;
+  } | null;
+  headline: string;
+}
+
+// Per-team position log appended at closeSeason — drives rivalry detection.
+export interface TeamSeasonSnapshot {
+  teamId: number;
+  year: number;
+  divisionOrden: number;
+  position: number;
+  points: number;
+  won: number;
+  lost: number;
+}
+
+export interface Rivalry {
+  teamAId: number;
+  teamAName: string;
+  teamBId: number;
+  teamBName: string;
+  seasons: number; // consecutive seasons in adjacent positions
+  headToHead: { wins: number; draws: number; losses: number }; // A's perspective
+}
+
 export interface PlayerSeed {
   name: string;
   posicion: PlayerPosition;
@@ -543,6 +594,9 @@ export interface GameState {
   nextMandateId: number;
   consecutiveMandateFails: number; // resets on success; 2 consecutive → -1 impulse/season
   mandatesRng: RngState;
+  // Narrative layer (Batch 5): season chronicles + team position history.
+  seasonChronicles: SeasonChronicle[];
+  teamSeasonHistory: TeamSeasonSnapshot[];
 }
 
 export interface CreateGameOptions {

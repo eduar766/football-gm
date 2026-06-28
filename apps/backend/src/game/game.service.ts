@@ -46,6 +46,8 @@ import {
   startSeason as engineStartSeason,
   tierOf,
   wageBill,
+  generateHeadlines,
+  detectRivalries,
   type GameState,
 } from '@football-gm/engine';
 import type {
@@ -113,6 +115,8 @@ export class GameService {
     if (state.nextMandateId === undefined) state.nextMandateId = 1;
     if (state.consecutiveMandateFails === undefined) state.consecutiveMandateFails = 0;
     if (!state.mandatesRng) state.mandatesRng = { s: state.seed ^ 0xb4a4d3c2 };
+    if (!state.seasonChronicles) state.seasonChronicles = [];
+    if (!state.teamSeasonHistory) state.teamSeasonHistory = [];
     // Ensure all divisions have federationId (migrate old saves)
     for (const d of state.divisions) {
       if ((d as any).federationId === undefined) {
@@ -316,6 +320,10 @@ export class GameService {
       },
       mandate: state.mandates.find((m) => m.year === state.year) ?? null,
       consecutiveMandateFails: state.consecutiveMandateFails,
+      headlines: generateHeadlines(state),
+      lastChronicle: state.seasonChronicles.length > 0
+        ? state.seasonChronicles[state.seasonChronicles.length - 1]
+        : null,
     };
   }
 
@@ -1193,6 +1201,17 @@ export class GameService {
     }
     const palmares = [...palmaresMap.values()].sort((a, b) => b.count - a.count);
 
+    // 5.3 — Rivalries: detect from engine state and filter to this team.
+    const allRivalries = detectRivalries(state);
+    const engTeamIdForRiv = [...(await this.engineToDbTeam(gameId)).entries()].find(
+      ([, db]) => db === teamId,
+    )?.[0];
+    const rivalries = engTeamIdForRiv != null
+      ? allRivalries.filter(
+          (r) => r.teamAId === engTeamIdForRiv || r.teamBId === engTeamIdForRiv,
+        )
+      : [];
+
     return {
       ...team,
       divisionName: team.divisionName ?? null,
@@ -1200,6 +1219,7 @@ export class GameService {
       squad,
       trajectory,
       palmares,
+      rivalries,
       requirements: {
         breaches: teamBreaches.map((b) => ({
           teamId: teamId,

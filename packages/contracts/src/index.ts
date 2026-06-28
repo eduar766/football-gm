@@ -89,6 +89,47 @@ export const BoardMandateDto = z.object({
 });
 export type BoardMandateDto = z.infer<typeof BoardMandateDto>;
 
+// ── Batch 5: Narrativa emergente ─────────────────────────────────────────────
+
+export const HeadlineDto = z.object({
+  type: z.string(),
+  text: z.string(),
+  teamId: Id.nullable(),
+  importance: z.number().int(),
+});
+export type HeadlineDto = z.infer<typeof HeadlineDto>;
+
+export const SeasonChronicleDto = z.object({
+  year: z.number().int(),
+  divisionOrden: z.number().int(),
+  champion: z.object({ teamId: Id, name: z.string(), points: z.number().int() }),
+  revelation: z.object({ teamId: Id, name: z.string(), reason: z.string() }).nullable(),
+  disappointment: z.object({ teamId: Id, name: z.string(), reason: z.string() }).nullable(),
+  bestPlayer: z.object({
+    playerId: Id,
+    name: z.string(),
+    teamId: Id,
+    teamName: z.string(),
+    goals: z.number().int(),
+  }).nullable(),
+  headline: z.string(),
+});
+export type SeasonChronicleDto = z.infer<typeof SeasonChronicleDto>;
+
+export const RivalryDto = z.object({
+  teamAId: Id,
+  teamAName: z.string(),
+  teamBId: Id,
+  teamBName: z.string(),
+  seasons: z.number().int(),
+  headToHead: z.object({
+    wins: z.number().int(),
+    draws: z.number().int(),
+    losses: z.number().int(),
+  }),
+});
+export type RivalryDto = z.infer<typeof RivalryDto>;
+
 // Everything the dashboard header needs to render the current loop state.
 export const GameSummary = z.object({
   id: Id,
@@ -108,6 +149,8 @@ export const GameSummary = z.object({
   federation: FederationBrief,
   mandate: BoardMandateDto.nullable().default(null),
   consecutiveMandateFails: z.number().int().default(0),
+  headlines: z.array(HeadlineDto).default([]),
+  lastChronicle: SeasonChronicleDto.nullable().default(null),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 
@@ -208,6 +251,7 @@ export const TeamDetail = z.object({
   squad: z.array(PlayerDto),
   trajectory: z.array(TrajectoryRow),
   palmares: z.array(PalmaresEntry),
+  rivalries: z.array(RivalryDto).default([]),
   requirements: z.object({
     breaches: z.array(z.object({
       teamId: Id,

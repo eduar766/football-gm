@@ -28,10 +28,12 @@ import {
   IconClipboardCheck,
   IconClipboardList,
   IconFlag,
+  IconNews,
   IconPlayerPlay,
   IconPlayerStop,
   IconScale,
   IconSparkles,
+  IconStar,
   IconTrophy,
   IconUsers,
   IconX,
@@ -322,6 +324,40 @@ export function DashboardPage() {
                 </Group>
               ))}
             </Stack>
+
+            {/* Last season chronicle */}
+            {summary.data?.lastChronicle && (() => {
+              const c = summary.data.lastChronicle!;
+              return (
+                <Paper p="md" mt="sm" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8 }}>
+                  <Group gap="xs" mb="xs">
+                    <IconTrophy size={16} color="#F59E0B" />
+                    <Text fw={700} size="sm">Temporada {c.year} — Crónica</Text>
+                  </Group>
+                  <Text size="sm" fw={600} mb={4}>{c.headline}</Text>
+                  <Stack gap={4}>
+                    {c.revelation && (
+                      <Group gap="xs">
+                        <IconStar size={13} color="#10B981" />
+                        <Text size="xs" c="dimmed">Revelación: <Text span fw={600} c="white">{c.revelation.name}</Text> — {c.revelation.reason}</Text>
+                      </Group>
+                    )}
+                    {c.disappointment && (
+                      <Group gap="xs">
+                        <IconAlertTriangle size={13} color="#EF4444" />
+                        <Text size="xs" c="dimmed">Decepción: <Text span fw={600} c="white">{c.disappointment.name}</Text> — {c.disappointment.reason}</Text>
+                      </Group>
+                    )}
+                    {c.bestPlayer && (
+                      <Group gap="xs">
+                        <IconStar size={13} color="#F59E0B" />
+                        <Text size="xs" c="dimmed">Máximo goleador: <Text span fw={600} c="white">{c.bestPlayer.name}</Text> ({c.bestPlayer.goals} goles, {c.bestPlayer.teamName})</Text>
+                      </Group>
+                    )}
+                  </Stack>
+                </Paper>
+              );
+            })()}
           </Stack>
         ) : (
           <Stack gap="xs">
@@ -623,6 +659,30 @@ export function DashboardPage() {
           {/* RIGHT: commissioner actions + match reports */}
           <Grid.Col span={{ base: 12, md: 5 }}>
             <Stack gap="md">
+              {/* Headlines feed */}
+              {summary.data?.headlines && summary.data.headlines.length > 0 && (
+                <Paper withBorder p="md">
+                  <Group gap="xs" mb="sm">
+                    <IconNews size={16} color="#94A3B8" />
+                    <Text fw={700} size="sm">Titulares</Text>
+                  </Group>
+                  <Stack gap={6}>
+                    {summary.data.headlines.map((h, i) => {
+                      const color = h.type === 'goleada' ? '#F59E0B'
+                        : h.type === 'sorpresa' ? '#10B981'
+                        : h.type === 'racha_victorias' ? '#3B82F6'
+                        : '#EF4444';
+                      return (
+                        <Group key={i} gap="xs" align="flex-start">
+                          <Box style={{ width: 6, height: 6, borderRadius: '50%', background: color, marginTop: 6, flexShrink: 0 }} />
+                          <Text size="xs">{h.text}</Text>
+                        </Group>
+                      );
+                    })}
+                  </Stack>
+                </Paper>
+              )}
+
               {/* Board mandate card */}
               {summary.data?.mandate && (() => {
                 const m = summary.data.mandate;

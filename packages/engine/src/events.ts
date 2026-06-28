@@ -201,3 +201,66 @@ export function expireStaleEvents(s: GameState, closedYear: number): void {
 export function pendingEvents(state: GameState): GameEvent[] {
   return state.events.filter((e) => e.status === 'pendiente');
 }
+
+// ── 5.4 Event arcs ──────────────────────────────────────────────────────────
+// Resolved events from the previous season can chain into new events this
+// season. Called at startSeason so chains appear early in the new campaign.
+
+const CHAIN_RULES: Array<{
+  from: EventType;
+  action: EventAction;
+  to: EventType;
+  prob: number;
+}> = [
+  { from: 'manipulacion_resultados', action: 'actuar', to: 'escandalo_directiva', prob: 0.7 },
+  { from: 'doping_positivo', action: 'ignorar', to: 'doping_positivo', prob: 0.6 },
+  { from: 'crisis_economica_club', action: 'ignorar', to: 'crisis_economica_club', prob: 0.5 },
+  { from: 'escandalo_directiva', action: 'actuar', to: 'declaraciones_polemicas', prob: 0.65 },
+];
+
+function chainMessage(to: EventType, teamName: string | null, fromType: EventType): string {
+  const club = teamName ?? 'la liga';
+  const origin = fromType.replace(/_/g, ' ');
+  switch (to) {
+    case 'escandalo_directiva':
+      return `Las investigaciones del caso de ${origin} destapan irregularidades en la directiva de ${club}.`;
+    case 'doping_positivo':
+      return `Nuevo control sorpresa en ${club} tras el escándalo del año pasado: otro positivo.`;
+    case 'crisis_economica_club':
+      return `La crisis económica de ${club} no remitió: la situación financiera es crítica de nuevo.`;
+    case 'declaraciones_polemicas':
+      return `${club} responde públicamente a las sanciones del año pasado con declaraciones explosivas.`;
+    default:
+      return buildMessage(to, teamName);
+  }
+}
+
+export function maybeChainEvents(s: GameState, prevYear: number): void {
+  if (s.players.length === 0) return; // no-op in engine-only tests
+  const resolved = s.events.filter(
+    (e) =>
+      e.year === prevYear &&
+      (e.status === 'resuelto_actuar' || e.status === 'resuelto_ignorar'),
+  );
+  for (const ev of resolved) {
+    for (const rule of CHAIN_RULES) {
+      if (ev.tipo !== rule.from || ev.resolvedAction !== rule.action) continue;
+      if (rngNext(s.eventsRng) >= rule.prob) continue;
+      const teamName = ev.teamId
+        ? (s.teams.find((t) => t.id === ev.teamId)?.name ?? null)
+        : null;
+      s.events.push({
+        id: s.nextEventId++,
+        year: s.year,
+        matchday: 1,
+        tipo: rule.to,
+        status: 'pendiente',
+        teamId: ev.teamId,
+        message: chainMessage(rule.to, teamName, ev.tipo),
+        resolvedAction: null,
+        severity: SEVERITY_MAP[rule.to],
+        chainedFromId: ev.id,
+      });
+    }
+  }
+}
