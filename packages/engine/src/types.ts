@@ -1,5 +1,17 @@
 import type { RngState } from './rng';
 
+// Board mandate: a seasonal objective issued by the federation's governing board.
+export type MandateType = 'prestige_min' | 'team_count' | 'positive_balance';
+
+export interface BoardMandate {
+  id: number;
+  type: MandateType;
+  description: string;
+  target: number;
+  year: number;
+  met: boolean | null; // null while the season is in progress
+}
+
 // Confederation (UEFA, CONMEBOL, etc.) — groups federations by region.
 export interface Confederation {
   id: number;
@@ -526,6 +538,11 @@ export interface GameState {
   rivalStandings: Record<string, RivalStandingRow[]>;
   // Rival champions per year (appended each closeSeason).
   rivalChampions: SeasonRecord[];
+  // Board mandates (Batch 4): one per season, issued at startSeason.
+  mandates: BoardMandate[];
+  nextMandateId: number;
+  consecutiveMandateFails: number; // resets on success; 2 consecutive → -1 impulse/season
+  mandatesRng: RngState;
 }
 
 export interface CreateGameOptions {

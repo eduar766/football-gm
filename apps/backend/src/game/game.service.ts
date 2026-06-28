@@ -109,6 +109,10 @@ export class GameService {
     if (!state.rivalRng) state.rivalRng = { s: 0 };
     if (!state.rivalStandings) state.rivalStandings = {};
     if (!state.rivalChampions) state.rivalChampions = [];
+    if (!state.mandates) state.mandates = [];
+    if (state.nextMandateId === undefined) state.nextMandateId = 1;
+    if (state.consecutiveMandateFails === undefined) state.consecutiveMandateFails = 0;
+    if (!state.mandatesRng) state.mandatesRng = { s: state.seed ^ 0xb4a4d3c2 };
     // Ensure all divisions have federationId (migrate old saves)
     for (const d of state.divisions) {
       if ((d as any).federationId === undefined) {
@@ -266,8 +270,9 @@ export class GameService {
     const [row] = await db
       .select({ id: s.leagues.id })
       .from(s.leagues)
-      .where(eq(s.leagues.gameId, gameId));
-    if (!row) throw new NotFoundException(`Game ${gameId} has no league`);
+      .innerJoin(s.federations, eq(s.leagues.federationId, s.federations.id))
+      .where(and(eq(s.leagues.gameId, gameId), eq(s.federations.isPlayer, true)));
+    if (!row) throw new NotFoundException(`Game ${gameId} has no player league`);
     return row.id;
   }
 
@@ -309,6 +314,8 @@ export class GameService {
         tier: tierOf(state.prestige),
         isPlayer: fed.isPlayer,
       },
+      mandate: state.mandates.find((m) => m.year === state.year) ?? null,
+      consecutiveMandateFails: state.consecutiveMandateFails,
     };
   }
 
@@ -686,19 +693,30 @@ export class GameService {
       const fedMap = await this.engineToDbFederation(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       // Cover both the finished structure (for history) and the next one
-      // (for reprojection after promotion/relegation).
+      // (for reprojection after promotion/relegation). Only player-federation
+      // divisions — rival divisions are managed by the engine, not the DB.
+      const playerDivisionsFinished = finished.divisions.filter(
+        (d) => d.federationId === finished.playerFederationId,
+      );
+      const playerDivisionsNext = next.divisions.filter(
+        (d) => d.federationId === next.playerFederationId,
+      );
       const divMap = await this.ensureDivisions(
         tx,
         gameId,
         leagueId,
-        [...finished.divisions, ...next.divisions],
+        [...playerDivisionsFinished, ...playerDivisionsNext],
         next.teams,
       );
 
       // Append-only history (§6): one acta per division of the finished
       // season — with sanction point penalties applied (matches the engine).
+      // Only write history for the player's own federation divisions; rival
+      // leagues are tracked via rivalChampions/rivalStandings in the engine.
       const closedPenalties = pointPenaltiesForYear(finished, closedYear);
-      for (const d of finished.divisions) {
+      for (const d of finished.divisions.filter(
+        (d) => d.federationId === finished.playerFederationId,
+      )) {
         const dTeams = finished.teams.filter((t) => t.divisionOrden === d.orden);
         const dResults = finished.results.filter(
           (r) => r.divisionOrden === d.orden,

@@ -76,6 +76,19 @@ export type FederationBrief = z.infer<typeof FederationBrief>;
 export const SeasonPhase = z.enum(['pretemporada', 'temporada']);
 export type SeasonPhase = z.infer<typeof SeasonPhase>;
 
+export const MandateType = z.enum(['prestige_min', 'team_count', 'positive_balance']);
+export type MandateType = z.infer<typeof MandateType>;
+
+export const BoardMandateDto = z.object({
+  id: Id,
+  type: MandateType,
+  description: z.string(),
+  target: z.number().int(),
+  year: z.number().int(),
+  met: z.boolean().nullable(),
+});
+export type BoardMandateDto = z.infer<typeof BoardMandateDto>;
+
 // Everything the dashboard header needs to render the current loop state.
 export const GameSummary = z.object({
   id: Id,
@@ -93,6 +106,8 @@ export const GameSummary = z.object({
   reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
+  mandate: BoardMandateDto.nullable().default(null),
+  consecutiveMandateFails: z.number().int().default(0),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 

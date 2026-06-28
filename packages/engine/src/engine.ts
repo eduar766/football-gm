@@ -31,6 +31,7 @@ import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import { simulateRivalLeagues, driftRivalStrengths, updateRivalPrestige } from './rival-sim';
 import type {
+  BoardMandate,
   CreateGameOptions,
   Division,
   Federation,
@@ -293,7 +294,66 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     rivalRng: makeRng((seed ^ 0xabcd1234) >>> 0),
     rivalStandings: {},
     rivalChampions: [],
+    mandates: [],
+    nextMandateId: 1,
+    consecutiveMandateFails: 0,
+    mandatesRng: makeRng((seed ^ 0xb4a4d3c2) >>> 0),
   };
+}
+
+// ─── Board mandates (Batch 4) ────────────────────────────────────────────────
+
+function playerLeagueTeamCount(s: GameState): number {
+  return s.teams.filter(
+    (t) => t.federationId === s.playerFederationId && t.divisionOrden !== null,
+  ).length;
+}
+
+function generateMandate(s: GameState): BoardMandate {
+  const roll = randInt(s.mandatesRng, 0, 2);
+  if (roll === 0) {
+    const target = Math.max(1, s.prestige - 5);
+    return {
+      id: s.nextMandateId,
+      type: 'prestige_min',
+      description: `Mantener el prestigio por encima de ${target}`,
+      target,
+      year: s.year,
+      met: null,
+    };
+  } else if (roll === 1) {
+    const target = Math.max(2, playerLeagueTeamCount(s));
+    return {
+      id: s.nextMandateId,
+      type: 'team_count',
+      description: `Mantener al menos ${target} equipos en la liga`,
+      target,
+      year: s.year,
+      met: null,
+    };
+  } else {
+    return {
+      id: s.nextMandateId,
+      type: 'positive_balance',
+      description: 'Cerrar la temporada con tesorería positiva',
+      target: 0,
+      year: s.year,
+      met: null,
+    };
+  }
+}
+
+function checkMandate(mandate: BoardMandate, s: GameState): boolean {
+  switch (mandate.type) {
+    case 'prestige_min':
+      return s.prestige >= mandate.target;
+    case 'team_count':
+      return playerLeagueTeamCount(s) >= mandate.target;
+    case 'positive_balance':
+      return s.treasury >= 0;
+    default:
+      return true;
+  }
 }
 
 // Build the season's calendar and switch to temporada. Called once per year
@@ -319,6 +379,14 @@ export function startSeason(prev: GameState): GameState {
   s.cupSchedule = scheduleCups(s, total);
   s.seasonOver = total === 0; // no fixtures => trivially "over"
   s.phase = 'temporada';
+
+  // Issue board mandate for this season (uses independent mandatesRng).
+  const alreadyHasMandate = s.mandates.some((m) => m.year === s.year);
+  if (!alreadyHasMandate) {
+    s.mandates.push(generateMandate(s));
+    s.nextMandateId++;
+  }
+
   return s;
 }
 
@@ -733,6 +801,21 @@ export function closeSeason(prev: GameState): GameState {
     s.rivalChampions.push(...rivalResult.champions);
     driftRivalStrengths(s, rivalResult.standings);
     updateRivalPrestige(s);
+  }
+
+  // Evaluate board mandate for the just-closed season (after prestige + economy settled).
+  const currentMandate = s.mandates.find((m) => m.year === s.year && m.met === null);
+  if (currentMandate) {
+    currentMandate.met = checkMandate(currentMandate, s);
+    if (!currentMandate.met) {
+      s.consecutiveMandateFails++;
+      if (s.consecutiveMandateFails >= 2) {
+        s.impulsesPerSeason = Math.max(1, s.impulsesPerSeason - 1);
+        s.consecutiveMandateFails = 0;
+      }
+    } else {
+      s.consecutiveMandateFails = 0;
+    }
   }
 
   s.year += 1;

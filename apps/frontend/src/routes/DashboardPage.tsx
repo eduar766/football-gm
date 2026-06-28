@@ -7,6 +7,7 @@ import {
   Grid,
   Group,
   Paper,
+  Progress,
   SegmentedControl,
   Select,
   Skeleton,
@@ -24,6 +25,7 @@ import {
   IconCalendarOff,
   IconCheck,
   IconCircleCheck,
+  IconClipboardCheck,
   IconClipboardList,
   IconFlag,
   IconPlayerPlay,
@@ -621,6 +623,61 @@ export function DashboardPage() {
           {/* RIGHT: commissioner actions + match reports */}
           <Grid.Col span={{ base: 12, md: 5 }}>
             <Stack gap="md">
+              {/* Board mandate card */}
+              {summary.data?.mandate && (() => {
+                const m = summary.data.mandate;
+                const fails = summary.data.consecutiveMandateFails ?? 0;
+                const statusColor = m.met === true ? '#10B981' : m.met === false ? '#EF4444' : '#F59E0B';
+                const statusLabel = m.met === true ? 'Cumplido' : m.met === false ? 'Fallido' : 'En curso';
+
+                // Compute progress value
+                let progress = 0;
+                let progressLabel = '';
+                if (m.type === 'prestige_min') {
+                  const cur = summary.data.federation.prestige;
+                  progress = m.target > 0 ? Math.min(100, Math.round((cur / m.target) * 100)) : 100;
+                  progressLabel = `${cur} / ${m.target} prestigio`;
+                } else if (m.type === 'team_count') {
+                  // We don't have current count here without structure query; show target
+                  progressLabel = `Objetivo: ${m.target} equipos`;
+                  progress = 50;
+                } else if (m.type === 'positive_balance') {
+                  progressLabel = 'Balance al cierre de temporada';
+                  progress = m.met === true ? 100 : m.met === false ? 0 : 50;
+                }
+
+                return (
+                  <Paper withBorder p="md" style={{ borderColor: statusColor + '40', background: statusColor + '08' }}>
+                    <Group justify="space-between" mb="xs">
+                      <Group gap="xs">
+                        <IconClipboardCheck size={16} color={statusColor} />
+                        <Text fw={700} size="sm">Mandato del consejo</Text>
+                      </Group>
+                      <Badge size="xs" style={{ background: statusColor + '20', color: statusColor }}>
+                        {statusLabel}
+                      </Badge>
+                    </Group>
+                    <Text size="sm" mb="xs" c="dimmed">{m.description}</Text>
+                    {m.met === null && (
+                      <Progress value={progress} color={progress >= 100 ? 'green' : 'yellow'} size="sm" mb="xs" />
+                    )}
+                    {progressLabel && m.met === null && (
+                      <Text size="xs" c="dimmed">{progressLabel}</Text>
+                    )}
+                    {fails === 1 && m.met === null && (
+                      <Alert color="orange" variant="light" p="xs" mt="xs" icon={<IconAlertTriangle size={14} />}>
+                        <Text size="xs">1 fallo consecutivo — el próximo fallo reducirá los impulsos permanentemente</Text>
+                      </Alert>
+                    )}
+                    {m.met === false && fails === 0 && summary.data.impulsesPerSeason < 3 && (
+                      <Alert color="red" variant="light" p="xs" mt="xs" icon={<IconAlertTriangle size={14} />}>
+                        <Text size="xs">Mandato fallido. Impulsos reducidos a {summary.data.impulsesPerSeason}/temporada</Text>
+                      </Alert>
+                    )}
+                  </Paper>
+                );
+              })()}
+
               {/* Commissioner actions panel */}
               <Paper withBorder p="md">
                 <Text fw={700} mb="sm">Acciones del comisionario</Text>
