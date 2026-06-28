@@ -320,6 +320,62 @@ export function EconomyPage() {
               </Text>
             )}
           </Paper>
+          {/* Next-season treasury projection */}
+          {(() => {
+            const projectedIncome = e.contracts
+              .filter((c) => c.yearsLeft > 0)
+              .reduce((sum, c) => sum + c.valorAnual, 0);
+            const projectedCosts = e.operatingCostNow + e.policy.talentInvestment;
+            const projectedNet = projectedIncome - projectedCosts;
+            const projectedTreasury = e.treasury + projectedNet;
+            return (
+              <Paper withBorder p="md" mt="md">
+                <Text fw={700} mb="sm">Proyección próxima temporada</Text>
+                <Table>
+                  <Table.Tbody>
+                    <Table.Tr>
+                      <Table.Td><Group gap="xs"><IconArrowUp size={14} color="#10B981" />Ingresos (contratos activos)</Group></Table.Td>
+                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>+{money(projectedIncome)}</Text></Table.Td>
+                    </Table.Tr>
+                    <Table.Tr>
+                      <Table.Td><Group gap="xs"><IconArrowDown size={14} color="#EF4444" />Coste operativo</Group></Table.Td>
+                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>−{money(e.operatingCostNow)}</Text></Table.Td>
+                    </Table.Tr>
+                    {e.policy.talentInvestment > 0 && (
+                      <Table.Tr>
+                        <Table.Td><Group gap="xs"><IconArrowDown size={14} color="#EF4444" />Inversión talento</Group></Table.Td>
+                        <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>−{money(e.policy.talentInvestment)}</Text></Table.Td>
+                      </Table.Tr>
+                    )}
+                    <Table.Tr>
+                      <Table.Td fw={700} style={{ background: projectedNet >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
+                        <Group gap="xs">
+                          {projectedNet >= 0
+                            ? <IconArrowRight size={14} color="#10B981" />
+                            : <IconArrowRight size={14} color="#EF4444" />}
+                          Neto estimado
+                        </Group>
+                      </Table.Td>
+                      <Table.Td ta="right" fw={700} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '15px', color: projectedNet >= 0 ? '#10B981' : '#EF4444', background: projectedNet >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
+                        {projectedNet >= 0 ? '+' : '−'}{money(Math.abs(projectedNet))}
+                      </Table.Td>
+                    </Table.Tr>
+                    <Table.Tr>
+                      <Table.Td fw={700}>Tesorería estimada</Table.Td>
+                      <Table.Td ta="right" fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '15px', color: projectedTreasury >= 0 ? '#10B981' : '#EF4444' }}>
+                        {projectedTreasury >= 0 ? '+' : '−'}{money(Math.abs(projectedTreasury))}
+                      </Table.Td>
+                    </Table.Tr>
+                  </Table.Tbody>
+                </Table>
+                {projectedTreasury < 0 && (
+                  <Alert color="red" mt="sm" icon={<IconArrowDown size={14} />}>
+                    Proyección negativa. Firma nuevos contratos o reduce la inversión en talento para evitar quiebra.
+                  </Alert>
+                )}
+              </Paper>
+            );
+          })()}
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 7 }}>

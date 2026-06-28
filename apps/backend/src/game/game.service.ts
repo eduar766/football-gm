@@ -290,6 +290,10 @@ export class GameService {
       impulsesRemaining: state.impulsesRemaining,
       impulsesPerSeason: state.impulsesPerSeason,
       pendingEventsCount: pendingEvents(state).length,
+      normBreachCount: normBreaches(state).length,
+      reviewsUsedThisSeason: state.actionHistory.filter(
+        (a) => a.year === state.year && a.type === 'call_review',
+      ).length,
       leagueFormat: state.leagueFormat,
       federation: {
         id: fed.id,

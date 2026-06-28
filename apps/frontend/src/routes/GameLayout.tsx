@@ -157,6 +157,39 @@ export function GameLayout() {
   };
 
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
+  const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
+
+  const phaseChip = summary.data ? (
+    <Box
+      py={6}
+      px={10}
+      mb="sm"
+      style={{
+        borderRadius: 8,
+        background: summary.data.phase === 'pretemporada'
+          ? 'rgba(245,158,11,0.12)'
+          : 'rgba(16,185,129,0.10)',
+        border: `1px solid ${summary.data.phase === 'pretemporada' ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.25)'}`,
+      }}
+    >
+      <Text
+        size="xs"
+        fw={700}
+        tt="uppercase"
+        style={{
+          color: summary.data.phase === 'pretemporada' ? '#F59E0B' : '#10B981',
+          letterSpacing: '0.04em',
+          fontFamily: '"Geist Mono", monospace',
+        }}
+      >
+        {summary.data.phase === 'pretemporada'
+          ? `Pretemporada · Año ${summary.data.year}`
+          : summary.data.seasonOver
+            ? `Temporada ${summary.data.year} · Final`
+            : `Temporada · J${summary.data.currentMatchday}/${summary.data.totalMatchdays}`}
+      </Text>
+    </Box>
+  ) : null;
 
   const headerContent = (
     <div>
@@ -330,6 +363,11 @@ export function GameLayout() {
           ) : (
             headerContent
           )}
+          {summary.isLoading ? (
+            <Skeleton height={28} mt={8} radius="md" />
+          ) : (
+            phaseChip
+          )}
         </Box>
 
         <Box style={{ flex: 1 }}>
@@ -349,6 +387,7 @@ export function GameLayout() {
                 const Icon = TAB_ICONS[item.value as keyof typeof TAB_ICONS];
                 const isActive = active === item.value;
                 const isEvents = item.value === 'events';
+                const isNorms = item.value === 'norms';
                 return (
                   <Box
                     key={item.value}
@@ -404,6 +443,17 @@ export function GameLayout() {
                         ml="auto"
                       >
                         {summary.data!.pendingEventsCount}
+                      </Badge>
+                    )}
+                    {isNorms && hasNormBreaches && !hasPending && (
+                      <Badge
+                        size="xs"
+                        color="red"
+                        variant="filled"
+                        circle
+                        ml="auto"
+                      >
+                        {summary.data!.normBreachCount}
                       </Badge>
                     )}
                   </Box>

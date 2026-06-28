@@ -89,6 +89,8 @@ export const GameSummary = z.object({
   impulsesRemaining: z.number().int(),
   impulsesPerSeason: z.number().int(),
   pendingEventsCount: z.number().int(),
+  normBreachCount: z.number().int().default(0),
+  reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
 });

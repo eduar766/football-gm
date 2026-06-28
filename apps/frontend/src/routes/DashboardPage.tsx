@@ -4,6 +4,7 @@ import {
   Badge,
   Box,
   Button,
+  Grid,
   Group,
   Paper,
   SegmentedControl,
@@ -321,7 +322,8 @@ export function DashboardPage() {
             </Stack>
           </Stack>
         ) : (
-          <>
+          <Stack gap="xs">
+            {/* Primary actions row */}
             <Group>
               <Button
                 size="lg"
@@ -369,395 +371,394 @@ export function DashboardPage() {
                 Cerrar temporada
               </Button>
             </Group>
-            <Stack gap="xs" mt="md">
-              <Group gap="xs" align="flex-end">
-                <Select
-                  label="Revisar partido"
-                  placeholder="Selecciona un partido"
-                  data={(() => {
-                    const ext = summary.data as unknown as ExtendedSummary;
-                    const reports = ext?.matchReports;
-                    if (!reports || reports.length === 0) return [];
-                    return reports.map((r) => ({
-                      value: `${r.matchday}:${r.homeTeamName}:${r.awayTeamName}`,
-                      label: `J${r.matchday} · ${r.homeTeamName} vs ${r.awayTeamName} (${r.homeGoals}-${r.awayGoals})`,
-                    }));
-                  })()}
-                  value={reviewMatchKey}
-                  onChange={setReviewMatchKey}
-                  size="xs"
-                  style={{ minWidth: 280 }}
-                  disabled={over || busy || blocked || (nextFixtures.data?.impulsesRemaining ?? 0) <= 0 || phase !== 'temporada'}
-                />
-                <Button
-                  variant="outline"
-                  size="xs"
-                  leftSection={<IconScale size={14} />}
-                  onClick={() => {
-                    if (!reviewMatchKey) return;
-                    const ext = summary.data as unknown as ExtendedSummary;
-                    const reports = ext?.matchReports ?? [];
-                    const [mdStr, homeName, awayName] = reviewMatchKey.split(':');
-                    const matchday = Number(mdStr);
-                    const report = reports.find(
-                      (r) => r.matchday === matchday && r.homeTeamName === homeName && r.awayTeamName === awayName,
-                    );
-                    if (!report) return;
-                    const allTeams = (structure.data?.divisions ?? []).flatMap((d) => d.teams);
-                    const homeTeam = allTeams.find((t) => t.name === report.homeTeamName);
-                    const awayTeam = allTeams.find((t) => t.name === report.awayTeamName);
-                    if (!homeTeam || !awayTeam) return;
-                    mCallReview.mutate({ matchday, homeTeamId: homeTeam.teamId, awayTeamId: awayTeam.teamId });
-                  }}
-                  disabled={over || busy || blocked || !reviewMatchKey || (nextFixtures.data?.impulsesRemaining ?? 0) <= 0 || phase !== 'temporada'}
-                  loading={mCallReview.isPending}
-                  style={{ borderColor: '#F59E0B', color: '#F59E0B' }}
-                >
-                  Llamar a revisión
-                </Button>
-              </Group>
-              <Group gap="xs" align="flex-end">
-                <Select
-                  label="Reunión de emergencia"
-                  placeholder="Selecciona un equipo"
-                  data={(structure.data?.divisions ?? []).flatMap((d) => d.teams).map((t) => ({
-                    value: String(t.teamId),
-                    label: t.name,
-                  }))}
-                  value={emergencyTeamId}
-                  onChange={setEmergencyTeamId}
-                  size="xs"
-                  searchable
-                  style={{ minWidth: 280 }}
-                  disabled={over || busy || blocked || (nextFixtures.data?.impulsesRemaining ?? 0) <= 0 || phase !== 'temporada'}
-                />
-                <Button
-                  variant="outline"
-                  size="xs"
-                  leftSection={<IconUsers size={14} />}
-                  onClick={() => {
-                    if (!emergencyTeamId) return;
-                    mEmergencyMeeting.mutate(Number(emergencyTeamId));
-                  }}
-                  disabled={over || busy || blocked || !emergencyTeamId || (nextFixtures.data?.impulsesRemaining ?? 0) <= 0 || phase !== 'temporada'}
-                  loading={mEmergencyMeeting.isPending}
-                  style={{ borderColor: '#3B82F6', color: '#3B82F6' }}
-                >
-                  Reunión de emergencia
-                </Button>
-              </Group>
-              <Button
-                variant="outline"
-                size="sm"
-                leftSection={<IconCalendarOff size={14} />}
-                onClick={() => mPostponeMatchday.mutate()}
-                disabled={over || busy || blocked || (nextFixtures.data?.impulsesRemaining ?? 0) <= 0 || phase !== 'temporada'}
-                loading={mPostponeMatchday.isPending}
-                style={{ borderColor: '#8B5CF6', color: '#8B5CF6', alignSelf: 'flex-start' }}
-              >
-                Posponer jornada
-              </Button>
-            </Stack>
+
+            {/* Blocking alert: events must be resolved before advancing */}
             {blocked && (
-              <Alert color="orange" mt="md" icon={<IconAlertTriangle size={18} />} title="Polémica sin resolver">
+              <Alert color="orange" icon={<IconAlertTriangle size={18} />} title="Polémica sin resolver">
                 Hay {summary.data?.pendingEventsCount} evento(s) pendiente(s). Ve
-                a la pestaña <strong>Eventos</strong> y resuélvelos para poder
-                avanzar.
+                a <strong>Eventos</strong> y resuélvelos para poder avanzar.
               </Alert>
             )}
-            {!isPreseason && !over && standings.data && standings.data.rows.length >= 2 && (() => {
+
+            {/* Mathematical champion alert */}
+            {!over && standings.data && standings.data.rows.length >= 2 && (() => {
               const rows = standings.data!.rows;
               const leader = rows[0];
               const runnerUp = rows[1];
               const matchdaysLeft = (summary.data?.totalMatchdays ?? 0) - (summary.data?.currentMatchday ?? 0);
-              const maxPointsLeft = matchdaysLeft * 3;
               const gap = leader.points - runnerUp.points;
-              if (gap > maxPointsLeft) {
+              if (gap > matchdaysLeft * 3) {
                 return (
                   <Alert
-                    color="gold"
-                    mt="md"
+                    color="yellow"
                     icon={<IconTrophy size={18} />}
                     title="Campeón matemático"
                     styles={{ title: { color: '#F59E0B', fontWeight: 800 } }}
                   >
-                    <Text size="sm">
-                      <strong>{leader.name}</strong> es campeón matemático de la liga con {gap} puntos de ventaja.
-                    </Text>
+                    <strong>{leader.name}</strong> es campeón matemático con {gap} puntos de ventaja.
                   </Alert>
                 );
               }
               return null;
             })()}
+
+            {/* Season-over alert */}
             {over && (
-              <Alert color="yellow" mt="md" icon={<IconTrophy size={18} />} title="Temporada terminada">
-                Revisa la clasificación final y cierra la temporada para escribir
-                el historial y empezar el año siguiente (entrarás en
-                pretemporada).
+              <Alert color="yellow" icon={<IconTrophy size={18} />} title="Temporada terminada">
+                Revisa la clasificación final y cierra la temporada para escribir el historial.
               </Alert>
             )}
-          </>
+          </Stack>
         )}
       </Paper>
 
-      {!isPreseason && !over && nextFixtures.data && (nextFixtures.data.fixtures.length > 0 || nextFixtures.data.cupRounds.length > 0) && (
-        <Paper withBorder p="md" mb="md">
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>
-              Próxima jornada · {nextFixtures.data.matchday}
-            </Text>
-            <Badge variant="light" color="grape" leftSection={<IconFlag size={12} />}>
-              Impulsos {nextFixtures.data.impulsesRemaining}/{nextFixtures.data.impulsesPerSeason}
-            </Badge>
-          </Group>
-          <Text size="xs" c="dimmed" mb="sm">
-            El "dedo en la balanza" del comisionado: beneficia a un equipo en un
-            partido concreto (§4.6).
-          </Text>
+      {/* ── Two-column layout for in-season view ── */}
+      {!isPreseason && (
+        <Grid gutter="md">
+          {/* LEFT: standings + next fixtures */}
+          <Grid.Col span={{ base: 12, md: 7 }}>
+            <Stack gap="md">
+              {/* Standings table */}
+              <Paper withBorder p="md">
+                <Group justify="space-between" mb="sm">
+                  <Text fw={700}>
+                    {standings.data?.divisionName ?? 'Clasificación'} · Temporada{' '}
+                    {standings.data?.year ?? summary.data?.year ?? '—'}
+                  </Text>
+                  {standings.data && standings.data.availableDivisions.length > 1 && (
+                    <SegmentedControl
+                      size="xs"
+                      value={String(division)}
+                      onChange={(v) => setDivision(Number(v))}
+                      data={standings.data.availableDivisions.map((d) => ({
+                        label: d.name,
+                        value: String(d.orden),
+                      }))}
+                    />
+                  )}
+                </Group>
+                {isPreseason ? (
+                  <Text size="sm" c="dimmed">
+                    Estás en pretemporada. La tabla aparecerá al comenzar la temporada.
+                  </Text>
+                ) : standings.isLoading ? (
+                  <Stack>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} height={32} />
+                    ))}
+                  </Stack>
+                ) : (
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>#</Table.Th>
+                        <Table.Th>Equipo</Table.Th>
+                        <Tooltip label="Partidos Jugados" position="bottom" withArrow>
+                          <Table.Th ta="right">PJ</Table.Th>
+                        </Tooltip>
+                        <Tooltip label="Ganados" position="bottom" withArrow>
+                          <Table.Th ta="right">G</Table.Th>
+                        </Tooltip>
+                        <Tooltip label="Empatados" position="bottom" withArrow>
+                          <Table.Th ta="right">E</Table.Th>
+                        </Tooltip>
+                        <Tooltip label="Perdidos" position="bottom" withArrow>
+                          <Table.Th ta="right">P</Table.Th>
+                        </Tooltip>
+                        <Tooltip label="Diferencia de Goles" position="bottom" withArrow>
+                          <Table.Th ta="right">DG</Table.Th>
+                        </Tooltip>
+                        <Tooltip label="Puntos" position="bottom" withArrow>
+                          <Table.Th ta="right">Pts</Table.Th>
+                        </Tooltip>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {standings.data?.rows.map((r, i) => {
+                        const pos = i + 1;
+                        const isTop3 = pos <= 3;
+                        const posColors: Record<number, { bg: string; text: string }> = {
+                          1: { bg: '#F59E0B', text: '#fff' },
+                          2: { bg: '#9CA3AF', text: '#fff' },
+                          3: { bg: '#D97706', text: '#fff' },
+                        };
+                        return (
+                          <Table.Tr
+                            key={r.teamId}
+                            className="stagger-item"
+                            style={{
+                              borderLeft: isTop3 ? '3px solid #10B981' : '3px solid transparent',
+                              animationDelay: `${i * 40}ms`,
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderLeftColor = '#10B981'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderLeftColor = isTop3 ? '#10B981' : 'transparent'; }}
+                          >
+                            <Table.Td>
+                              {isTop3 ? (
+                                <Box style={{ width: 20, height: 20, borderRadius: '50%', background: posColors[pos].bg, color: posColors[pos].text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                                  {pos}
+                                </Box>
+                              ) : pos}
+                            </Table.Td>
+                            <Table.Td>
+                              <Link to="/games/$gameId/teams/$teamId" params={{ gameId, teamId: String(r.teamId) }}>
+                                <Text fw={isTop3 ? 600 : 400}>{r.name}</Text>
+                              </Link>
+                            </Table.Td>
+                            <Table.Td ta="right">{r.played}</Table.Td>
+                            <Table.Td ta="right">{r.won}</Table.Td>
+                            <Table.Td ta="right">{r.drawn}</Table.Td>
+                            <Table.Td ta="right">{r.lost}</Table.Td>
+                            <Table.Td ta="right" style={{ color: r.goalDiff > 0 ? '#10B981' : r.goalDiff < 0 ? '#EF4444' : undefined }}>
+                              {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                            </Table.Td>
+                            <Table.Td ta="right" style={{ fontWeight: 800, fontSize: '1.05em' }}>
+                              {r.points}
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
+                )}
+              </Paper>
 
-          <Stack gap={6}>
-            {nextFixtures.data.fixtures.map((f, i) => {
-              const noImpulses = nextFixtures.data!.impulsesRemaining <= 0 && f.favoredTeamId == null;
-              return (
-                <Paper
-                  key={`${f.homeTeamId}-${f.awayTeamId}`}
-                  withBorder
-                  p="sm"
-                  radius="sm"
-                  className="stagger-item"
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    animationDelay: `${i * 50}ms`,
-                  }}
-                >
-                  <Group justify="space-between" align="center">
-                    <Group gap="md" style={{ flex: 1 }}>
-                      <Text fw={600} size="sm" style={{ minWidth: 120, textAlign: 'right' }}>
-                        {f.homeTeamName}
-                      </Text>
-                      <Text
-                        size="xs"
-                        c="dimmed"
-                        style={{ fontFamily: '"Geist Mono", monospace' }}
-                      >
-                        vs
-                      </Text>
-                      <Text fw={600} size="sm" style={{ minWidth: 120 }}>
-                        {f.awayTeamName}
-                      </Text>
-                    </Group>
-                    <Group gap="xs">
-                      <Tooltip label={`Impulsar a ${f.homeTeamName}`}>
-                        <Button
-                          size="compact-xs"
-                          variant={f.favoredTeamId === f.homeTeamId ? 'filled' : 'light'}
-                          color="grape"
-                          leftSection={<IconFlag size={12} />}
-                          disabled={busy || noImpulses || f.favoredTeamId != null}
-                          onClick={() =>
-                            mImpulse.mutate({
-                              home: f.homeTeamId,
-                              away: f.awayTeamId,
-                              fav: f.homeTeamId,
-                            })
-                          }
-                        >
-                          {f.homeTeamName}
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label={`Impulsar a ${f.awayTeamName}`}>
-                        <Button
-                          size="compact-xs"
-                          variant={f.favoredTeamId === f.awayTeamId ? 'filled' : 'light'}
-                          color="grape"
-                          leftSection={<IconFlag size={12} />}
-                          disabled={busy || noImpulses || f.favoredTeamId != null}
-                          onClick={() =>
-                            mImpulse.mutate({
-                              home: f.homeTeamId,
-                              away: f.awayTeamId,
-                              fav: f.awayTeamId,
-                            })
-                          }
-                        >
-                          {f.awayTeamName}
-                        </Button>
-                      </Tooltip>
-                    </Group>
-                  </Group>
-                </Paper>
-              );
-            })}
-          </Stack>
-
-          {nextFixtures.data.cupRounds.length > 0 && (
-            <Stack gap="xs" mt="md">
-              <Text fw={600} size="sm" c="dimmed">
-                Copas en esta jornada
-              </Text>
-              {nextFixtures.data.cupRounds.map((cr, i) => {
-                const fullCup = (cups.data?.cups ?? []).find((c) => c.id === cr.cupId);
-                return (
-                <Paper key={cr.cupId} withBorder p="xs" radius="sm" className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                  <Group justify="space-between" mb={6}>
-                    <Text fw={600} size="sm">
-                      {cr.cupName}
-                    </Text>
-                    <Badge variant="light" color="orange" size="sm" leftSection={<IconTrophy size={10} />}>
-                      {cr.cupFormato === 'liga' ? 'Liga' : `Ronda ${cr.roundNumero}`}
+              {/* Next fixtures + cup rounds */}
+              {!over && nextFixtures.data && (nextFixtures.data.fixtures.length > 0 || nextFixtures.data.cupRounds.length > 0) && (
+                <Paper withBorder p="md">
+                  <Group justify="space-between" mb="sm">
+                    <Text fw={700}>Próxima jornada · {nextFixtures.data.matchday}</Text>
+                    <Badge variant="light" color="grape" leftSection={<IconFlag size={12} />}>
+                      Impulsos {nextFixtures.data.impulsesRemaining}/{nextFixtures.data.impulsesPerSeason}
                     </Badge>
                   </Group>
-                  {/* Mini-bracket: show all played rounds */}
-                  {fullCup && fullCup.rounds.length > 1 && (
-                    <Stack gap={4} mb={6}>
-                      {fullCup.rounds.filter((r) => r.numero < cr.roundNumero).map((r) => {
-                        const realMatches = r.matches.filter(
-                          (m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE',
-                        );
-                        if (realMatches.length === 0) return null;
-                        return (
-                          <Group key={r.numero} gap={4}>
-                            <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 48 }}>
-                              R{r.numero}
-                            </Text>
-                            {realMatches.map((m, j) => (
-                              <Group key={j} gap={4}>
-                                <Text
-                                  size="xs"
-                                  fw={m.winnerTeamId === m.homeTeamId ? 700 : 400}
-                                  style={{
-                                    color: m.winnerTeamId === m.homeTeamId ? '#10B981' : undefined,
-                                    textDecoration: m.winnerTeamId === m.awayTeamId ? 'line-through' : undefined,
-                                    opacity: m.winnerTeamId === m.awayTeamId ? 0.5 : 1,
-                                  }}
-                                >
-                                  {m.homeTeamName}
-                                </Text>
-                                <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
-                                  {m.homeGoals}-{m.awayGoals}
-                                </Text>
-                                <Text
-                                  size="xs"
-                                  fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}
-                                  style={{
-                                    color: m.winnerTeamId === m.awayTeamId ? '#10B981' : undefined,
-                                    textDecoration: m.winnerTeamId === m.homeTeamId ? 'line-through' : undefined,
-                                    opacity: m.winnerTeamId === m.homeTeamId ? 0.5 : 1,
-                                  }}
-                                >
-                                  {m.awayTeamName}
-                                </Text>
-                              </Group>
-                            ))}
+                  <Stack gap={6}>
+                    {nextFixtures.data.fixtures.map((f, i) => {
+                      const noImpulses = nextFixtures.data!.impulsesRemaining <= 0 && f.favoredTeamId == null;
+                      return (
+                        <Paper key={`${f.homeTeamId}-${f.awayTeamId}`} withBorder p="sm" radius="sm" className="stagger-item" style={{ background: 'rgba(255,255,255,0.02)', animationDelay: `${i * 40}ms` }}>
+                          <Group justify="space-between" align="center">
+                            <Group gap="sm" style={{ flex: 1 }}>
+                              <Text fw={600} size="sm" style={{ minWidth: 100, textAlign: 'right' }}>{f.homeTeamName}</Text>
+                              <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>vs</Text>
+                              <Text fw={600} size="sm" style={{ minWidth: 100 }}>{f.awayTeamName}</Text>
+                            </Group>
+                            <Group gap={4}>
+                              <Tooltip label={`Impulsar a ${f.homeTeamName}`}>
+                                <Button size="compact-xs" variant={f.favoredTeamId === f.homeTeamId ? 'filled' : 'light'} color="grape" leftSection={<IconFlag size={12} />} disabled={busy || noImpulses || f.favoredTeamId != null} onClick={() => mImpulse.mutate({ home: f.homeTeamId, away: f.awayTeamId, fav: f.homeTeamId })}>
+                                  Local
+                                </Button>
+                              </Tooltip>
+                              <Tooltip label={`Impulsar a ${f.awayTeamName}`}>
+                                <Button size="compact-xs" variant={f.favoredTeamId === f.awayTeamId ? 'filled' : 'light'} color="grape" leftSection={<IconFlag size={12} />} disabled={busy || noImpulses || f.favoredTeamId != null} onClick={() => mImpulse.mutate({ home: f.homeTeamId, away: f.awayTeamId, fav: f.awayTeamId })}>
+                                  Visitante
+                                </Button>
+                              </Tooltip>
+                            </Group>
                           </Group>
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                  {nextFixtures.data.cupRounds.length > 0 && (
+                    <Stack gap="xs" mt="md">
+                      <Text fw={600} size="sm" c="dimmed">Copas en esta jornada</Text>
+                      {nextFixtures.data.cupRounds.map((cr, i) => {
+                        const fullCup = (cups.data?.cups ?? []).find((c) => c.id === cr.cupId);
+                        return (
+                          <Paper key={cr.cupId} withBorder p="xs" radius="sm" className="stagger-item" style={{ animationDelay: `${i * 40}ms` }}>
+                            <Group justify="space-between" mb={6}>
+                              <Text fw={600} size="sm">{cr.cupName}</Text>
+                              <Badge variant="light" color="orange" size="sm" leftSection={<IconTrophy size={10} />}>
+                                {cr.cupFormato === 'liga' ? 'Liga' : `Ronda ${cr.roundNumero}`}
+                              </Badge>
+                            </Group>
+                            {fullCup && fullCup.rounds.length > 1 && (
+                              <Stack gap={4} mb={6}>
+                                {fullCup.rounds.filter((r) => r.numero < cr.roundNumero).map((r) => {
+                                  const realMatches = r.matches.filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE');
+                                  if (realMatches.length === 0) return null;
+                                  return (
+                                    <Group key={r.numero} gap={4}>
+                                      <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 40 }}>R{r.numero}</Text>
+                                      {realMatches.map((m, j) => (
+                                        <Group key={j} gap={4}>
+                                          <Text size="xs" fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} style={{ color: m.winnerTeamId === m.homeTeamId ? '#10B981' : undefined, textDecoration: m.winnerTeamId === m.awayTeamId ? 'line-through' : undefined, opacity: m.winnerTeamId === m.awayTeamId ? 0.5 : 1 }}>{m.homeTeamName}</Text>
+                                          <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>{m.homeGoals}-{m.awayGoals}</Text>
+                                          <Text size="xs" fw={m.winnerTeamId === m.awayTeamId ? 700 : 400} style={{ color: m.winnerTeamId === m.awayTeamId ? '#10B981' : undefined, textDecoration: m.winnerTeamId === m.homeTeamId ? 'line-through' : undefined, opacity: m.winnerTeamId === m.homeTeamId ? 0.5 : 1 }}>{m.awayTeamName}</Text>
+                                        </Group>
+                                      ))}
+                                    </Group>
+                                  );
+                                })}
+                              </Stack>
+                            )}
+                            {!cr.matchesKnown ? (
+                              <Text size="xs" c="dimmed">Emparejamientos pendientes hasta resolver la ronda previa.</Text>
+                            ) : (() => {
+                              const realMatches = cr.matches.filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE');
+                              if (realMatches.length === 0) return null;
+                              return (
+                                <Table><Table.Tbody>
+                                  {realMatches.map((m, j) => (
+                                    <Table.Tr key={`${cr.cupId}-${cr.roundNumero}-${j}`}>
+                                      <Table.Td>{m.homeTeamName} <Text span c="dimmed" size="xs">vs</Text> {m.awayTeamName}</Table.Td>
+                                    </Table.Tr>
+                                  ))}
+                                </Table.Tbody></Table>
+                              );
+                            })()}
+                          </Paper>
                         );
                       })}
                     </Stack>
                   )}
-                  {/* Current round matches */}
-                  {!cr.matchesKnown ? (
-                    <Text size="xs" c="dimmed">
-                      Emparejamientos pendientes hasta resolver la ronda previa.
-                    </Text>
-                  ) : (() => {
-                    const realMatches = cr.matches.filter(
-                      (m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE',
-                    );
-                    if (realMatches.length === 0) return null;
-                    return (
-                    <Table>
-                      <Table.Tbody>
-                        {realMatches.map((m, j) => (
-                          <Table.Tr key={`${cr.cupId}-${cr.roundNumero}-${j}`}>
-                            <Table.Td>
-                              {m.homeTeamName}{' '}
-                              <Text span c="dimmed" size="xs">
-                                vs
-                              </Text>{' '}
-                              {m.awayTeamName}
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                    );
-                  })()}
                 </Paper>
-                );
-              })}
+              )}
             </Stack>
-          )}
-        </Paper>
-      )}
+          </Grid.Col>
 
-      {!isPreseason && !over && summary.data && summary.data.currentMatchday > 0 && (() => {
-        const ext = summary.data as unknown as ExtendedSummary;
-        const reports = ext.matchReports;
-        if (!reports || !Array.isArray(reports)) return null;
-        const matchdayReports = reports.filter((r) => r.matchday === summary.data!.currentMatchday);
-        if (matchdayReports.length === 0) return null;
-        return (
-          <Paper withBorder p="md" mb="md">
-            <Text fw={700} mb="sm">
-              Informes de partido · Jornada {summary.data.currentMatchday}
-            </Text>
-            <Stack gap="xs">
-              {matchdayReports.map((report, i) => (
-                <Paper
-                  key={i}
-                  withBorder
-                  p="sm"
-                  radius="sm"
-                  style={{ background: 'rgba(255,255,255,0.02)' }}
-                >
-                  <Group justify="space-between" align="center" mb="xs">
-                    <Group gap="md" style={{ flex: 1 }}>
-                      <Text fw={600} size="sm" style={{ minWidth: 120, textAlign: 'right' }}>
-                        {report.homeTeamName ?? '—'}
-                      </Text>
-                      <Text
-                        fw={800}
-                        size="lg"
-                        style={{ fontFamily: '"Geist Mono", monospace', minWidth: 60, textAlign: 'center' }}
+          {/* RIGHT: commissioner actions + match reports */}
+          <Grid.Col span={{ base: 12, md: 5 }}>
+            <Stack gap="md">
+              {/* Commissioner actions panel */}
+              <Paper withBorder p="md">
+                <Text fw={700} mb="sm">Acciones del comisionario</Text>
+                <Stack gap="xs">
+                  <Group gap="xs" align="flex-end">
+                    <Select
+                      label="Revisar partido"
+                      placeholder="Selecciona un partido"
+                      data={(() => {
+                        const ext = summary.data as unknown as ExtendedSummary;
+                        const reports = ext?.matchReports;
+                        if (!reports || reports.length === 0) return [];
+                        return reports.map((r) => ({
+                          value: `${r.matchday}:${r.homeTeamName}:${r.awayTeamName}`,
+                          label: `J${r.matchday} · ${r.homeTeamName} vs ${r.awayTeamName} (${r.homeGoals}-${r.awayGoals})`,
+                        }));
+                      })()}
+                      value={reviewMatchKey}
+                      onChange={setReviewMatchKey}
+                      size="xs"
+                      style={{ flex: 1 }}
+                      disabled={over || busy || blocked || phase !== 'temporada'}
+                    />
+                    <Tooltip label={summary.data?.reviewsUsedThisSeason !== undefined ? `Usadas ${summary.data.reviewsUsedThisSeason}/2 esta temporada` : ''}>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        leftSection={<IconScale size={14} />}
+                        onClick={() => {
+                          if (!reviewMatchKey) return;
+                          const ext = summary.data as unknown as ExtendedSummary;
+                          const reports = ext?.matchReports ?? [];
+                          const [mdStr, homeName, awayName] = reviewMatchKey.split(':');
+                          const matchday = Number(mdStr);
+                          const report = reports.find((r) => r.matchday === matchday && r.homeTeamName === homeName && r.awayTeamName === awayName);
+                          if (!report) return;
+                          const allTeams = (structure.data?.divisions ?? []).flatMap((d) => d.teams);
+                          const homeTeam = allTeams.find((t) => t.name === report.homeTeamName);
+                          const awayTeam = allTeams.find((t) => t.name === report.awayTeamName);
+                          if (!homeTeam || !awayTeam) return;
+                          mCallReview.mutate({ matchday, homeTeamId: homeTeam.teamId, awayTeamId: awayTeam.teamId });
+                        }}
+                        disabled={over || busy || blocked || !reviewMatchKey || (summary.data?.reviewsUsedThisSeason ?? 0) >= 2 || phase !== 'temporada'}
+                        loading={mCallReview.isPending}
+                        style={{ borderColor: '#F59E0B', color: '#F59E0B' }}
                       >
-                        {report.homeGoals ?? 0} - {report.awayGoals ?? 0}
-                      </Text>
-                      <Text fw={600} size="sm" style={{ minWidth: 120 }}>
-                        {report.awayTeamName ?? '—'}
-                      </Text>
-                    </Group>
-                    <Group gap="xs">
-                      {report.yellowCount != null && report.yellowCount > 0 && (
-                        <Group gap={4} align="center">
-                          <Box style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#F59E0B' }} />
-                          <Text size="xs" style={{ fontFamily: '"Geist Mono", monospace' }}>{report.yellowCount}</Text>
-                        </Group>
-                      )}
-                      {report.redCount != null && report.redCount > 0 && (
-                        <Group gap={4} align="center">
-                          <Box style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#EF4444' }} />
-                          <Text size="xs" style={{ fontFamily: '"Geist Mono", monospace' }}>{report.redCount}</Text>
-                        </Group>
-                      )}
-                    </Group>
+                        Revisión {summary.data?.reviewsUsedThisSeason !== undefined ? `(${summary.data.reviewsUsedThisSeason}/2)` : ''}
+                      </Button>
+                    </Tooltip>
                   </Group>
-                  {report.goalscorers && report.goalscorers.length > 0 && (
-                    <Stack gap={2} ml="md">
-                      {report.goalscorers.map((g, j) => (
-                        <Text key={j} size="xs" c="dimmed">
-                          {g.minute}' {g.playerName} ({g.teamName})
-                        </Text>
+                  <Group gap="xs" align="flex-end">
+                    <Select
+                      label="Reunión de emergencia"
+                      placeholder="Selecciona un equipo"
+                      data={(structure.data?.divisions ?? []).flatMap((d) => d.teams).map((t) => ({ value: String(t.teamId), label: t.name }))}
+                      value={emergencyTeamId}
+                      onChange={setEmergencyTeamId}
+                      size="xs"
+                      searchable
+                      style={{ flex: 1 }}
+                      disabled={over || busy || blocked || phase !== 'temporada'}
+                    />
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      leftSection={<IconUsers size={14} />}
+                      onClick={() => { if (!emergencyTeamId) return; mEmergencyMeeting.mutate(Number(emergencyTeamId)); }}
+                      disabled={over || busy || blocked || !emergencyTeamId || phase !== 'temporada'}
+                      loading={mEmergencyMeeting.isPending}
+                      style={{ borderColor: '#3B82F6', color: '#3B82F6' }}
+                    >
+                      Convocar
+                    </Button>
+                  </Group>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftSection={<IconCalendarOff size={14} />}
+                    onClick={() => mPostponeMatchday.mutate()}
+                    disabled={over || busy || blocked || phase !== 'temporada'}
+                    loading={mPostponeMatchday.isPending}
+                    style={{ borderColor: '#8B5CF6', color: '#8B5CF6', alignSelf: 'flex-start' }}
+                  >
+                    Posponer jornada
+                  </Button>
+                </Stack>
+              </Paper>
+
+              {/* Last matchday match reports */}
+              {summary.data && summary.data.currentMatchday > 0 && (() => {
+                const ext = summary.data as unknown as ExtendedSummary;
+                const reports = ext.matchReports;
+                if (!reports || !Array.isArray(reports)) return null;
+                const matchdayReports = reports.filter((r) => r.matchday === summary.data!.currentMatchday);
+                if (matchdayReports.length === 0) return null;
+                return (
+                  <Paper withBorder p="md">
+                    <Text fw={700} mb="sm">Resultados · Jornada {summary.data.currentMatchday}</Text>
+                    <Stack gap="xs">
+                      {matchdayReports.map((report, i) => (
+                        <Paper key={i} withBorder p="sm" radius="sm" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                          <Group justify="space-between" align="center" mb={report.goalscorers?.length ? 'xs' : 0}>
+                            <Group gap="sm" style={{ flex: 1 }}>
+                              <Text fw={600} size="sm" style={{ minWidth: 90, textAlign: 'right' }}>{report.homeTeamName ?? '—'}</Text>
+                              <Text fw={800} size="lg" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 50, textAlign: 'center' }}>
+                                {report.homeGoals ?? 0}–{report.awayGoals ?? 0}
+                              </Text>
+                              <Text fw={600} size="sm" style={{ minWidth: 90 }}>{report.awayTeamName ?? '—'}</Text>
+                            </Group>
+                            <Group gap={4}>
+                              {(report.yellowCount ?? 0) > 0 && (
+                                <Group gap={2}><Box style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#F59E0B' }} /><Text size="xs">{report.yellowCount}</Text></Group>
+                              )}
+                              {(report.redCount ?? 0) > 0 && (
+                                <Group gap={2}><Box style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#EF4444' }} /><Text size="xs">{report.redCount}</Text></Group>
+                              )}
+                            </Group>
+                          </Group>
+                          {report.goalscorers && report.goalscorers.length > 0 && (
+                            <Stack gap={2} ml="sm">
+                              {report.goalscorers.map((g, j) => (
+                                <Text key={j} size="xs" c="dimmed">{g.minute}' {g.playerName} ({g.teamName})</Text>
+                              ))}
+                            </Stack>
+                          )}
+                        </Paper>
                       ))}
                     </Stack>
-                  )}
-                </Paper>
-              ))}
+                  </Paper>
+                );
+              })()}
             </Stack>
-          </Paper>
-        );
-      })()}
+          </Grid.Col>
+        </Grid>
+      )}
 
-      {isPreseason ? (
+      {/* Preseason: no standings */}
+      {isPreseason && (
         <Paper withBorder p="md">
           <Group gap="sm" mb={4}>
             <IconClipboardList size={20} color="var(--mantine-color-dimmed)" />
@@ -767,159 +768,6 @@ export function DashboardPage() {
             Estás en pretemporada. Al pulsar <strong>Comenzar temporada</strong>{' '}
             se construirá el calendario y aparecerá la tabla.
           </Text>
-        </Paper>
-      ) : (
-        <Paper withBorder p="md">
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>
-              {standings.data?.divisionName ?? 'Clasificación'} · Temporada{' '}
-              {standings.data?.year ?? summary.data?.year ?? '—'}
-            </Text>
-            {standings.data && standings.data.availableDivisions.length > 1 && (
-              <SegmentedControl
-                size="xs"
-                value={String(division)}
-                onChange={(v) => setDivision(Number(v))}
-                data={standings.data.availableDivisions.map((d) => ({
-                  label: d.name,
-                  value: String(d.orden),
-                }))}
-              />
-            )}
-          </Group>
-          {standings.isLoading ? (
-            <Stack>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} height={32} />
-              ))}
-            </Stack>
-          ) : (
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>#</Table.Th>
-                  <Table.Th>Equipo</Table.Th>
-                  <Tooltip label="Partidos Jugados" position="bottom" withArrow>
-                    <Table.Th ta="right">PJ</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Ganados" position="bottom" withArrow>
-                    <Table.Th ta="right">G</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Empatados" position="bottom" withArrow>
-                    <Table.Th ta="right">E</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Perdidos" position="bottom" withArrow>
-                    <Table.Th ta="right">P</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Goles a Favor" position="bottom" withArrow>
-                    <Table.Th ta="right">GF</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Goles en Contra" position="bottom" withArrow>
-                    <Table.Th ta="right">GC</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Diferencia de Goles" position="bottom" withArrow>
-                    <Table.Th ta="right">DG</Table.Th>
-                  </Tooltip>
-                  <Tooltip label="Puntos" position="bottom" withArrow>
-                    <Table.Th ta="right">Pts</Table.Th>
-                  </Tooltip>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {standings.data?.rows.map((r, i) => {
-                  const pos = i + 1;
-                  const isTop3 = pos <= 3;
-                  const posColors: Record<number, { bg: string; text: string }> = {
-                    1: { bg: '#F59E0B', text: '#fff' },
-                    2: { bg: '#9CA3AF', text: '#fff' },
-                    3: { bg: '#D97706', text: '#fff' },
-                  };
-                  return (
-                    <Table.Tr
-                      key={r.teamId}
-                      className="stagger-item"
-                      style={{
-                        borderLeft: isTop3 ? '3px solid #10B981' : '3px solid transparent',
-                        transition: 'border-color 0.15s',
-                        animationDelay: `${i * 50}ms`,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderLeftColor = '#10B981';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderLeftColor = isTop3
-                          ? '#10B981'
-                          : 'transparent';
-                      }}
-                    >
-                      <Table.Td>
-                        {isTop3 ? (
-                          <Box
-                            style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: '50%',
-                              background: posColors[pos].bg,
-                              color: posColors[pos].text,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 11,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {pos}
-                          </Box>
-                        ) : (
-                          pos
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <Link
-                          to="/games/$gameId/teams/$teamId"
-                          params={{ gameId, teamId: String(r.teamId) }}
-                        >
-                          <Text fw={isTop3 ? 600 : 400}>{r.name}</Text>
-                        </Link>
-                      </Table.Td>
-                      <Table.Td ta="right">{r.played}</Table.Td>
-                      <Table.Td ta="right">{r.won}</Table.Td>
-                      <Table.Td ta="right">{r.drawn}</Table.Td>
-                      <Table.Td ta="right">{r.lost}</Table.Td>
-                      <Table.Td ta="right">{r.goalsFor}</Table.Td>
-                      <Table.Td ta="right">{r.goalsAgainst}</Table.Td>
-                      <Table.Td
-                        ta="right"
-                        style={{
-                          color:
-                            r.goalDiff > 0
-                              ? '#10B981'
-                              : r.goalDiff < 0
-                                ? '#EF4444'
-                                : undefined,
-                        }}
-                      >
-                        {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
-                      </Table.Td>
-                      <Table.Td
-                        ta="right"
-                        style={{
-                          fontWeight: 800,
-                          fontSize: '1.05em',
-                          borderLeft: isTop3
-                            ? '3px solid rgba(16,185,129,0.3)'
-                            : '3px solid transparent',
-                          paddingLeft: isTop3 ? 10 : 13,
-                        }}
-                      >
-                        {r.points}
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          )}
         </Paper>
       )}
     </div>
