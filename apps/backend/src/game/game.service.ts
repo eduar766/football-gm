@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { NormType } from '@football-gm/engine';
 import { CONFEDERATIONS } from '@football-gm/engine';
 import {
@@ -73,6 +73,7 @@ import type {
   StructureResponse,
   TeamDetail,
   TeamListItem,
+  WorldRankingResponse,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -117,6 +118,8 @@ export class GameService {
     if (!state.mandatesRng) state.mandatesRng = { s: state.seed ^ 0xb4a4d3c2 };
     if (!state.seasonChronicles) state.seasonChronicles = [];
     if (!state.teamSeasonHistory) state.teamSeasonHistory = [];
+    if (state.recordBook === undefined) state.recordBook = null;
+    if (!state.federationCoefficients) state.federationCoefficients = [];
     // Ensure all divisions have federationId (migrate old saves)
     for (const d of state.divisions) {
       if ((d as any).federationId === undefined) {
@@ -1478,6 +1481,45 @@ export class GameService {
       points: rc.points,
     }));
 
+    // 7.1: Trajectory data for all player-federation teams
+    const playerTeamIds = state.teams
+      .filter(t => t.federationId === state.playerFederationId)
+      .map(t => t.id);
+
+    let trajectoryData: HistoryResponse['trajectoryData'] = [];
+    if (playerTeamIds.length > 0) {
+      const trajRows = await this.db
+        .select({
+          teamId: s.trajectories.teamId,
+          teamName: s.teams.name,
+          anio: s.trajectories.anio,
+          divisionOrden: s.trajectories.divisionOrden,
+          puestoFinal: s.trajectories.puestoFinal,
+        })
+        .from(s.trajectories)
+        .innerJoin(s.teams, eq(s.trajectories.teamId, s.teams.id))
+        .where(
+          and(
+            eq(s.trajectories.gameId, gameId),
+            inArray(s.trajectories.teamId, playerTeamIds),
+          ),
+        )
+        .orderBy(asc(s.trajectories.anio));
+
+      const byTeam = new Map<number, { teamId: number; teamName: string; rows: Array<{ anio: number; divisionOrden: number | null; puestoFinal: number }> }>();
+      for (const row of trajRows) {
+        if (!byTeam.has(row.teamId)) {
+          byTeam.set(row.teamId, { teamId: row.teamId, teamName: row.teamName ?? '—', rows: [] });
+        }
+        byTeam.get(row.teamId)!.rows.push({
+          anio: row.anio,
+          divisionOrden: row.divisionOrden,
+          puestoFinal: row.puestoFinal,
+        });
+      }
+      trajectoryData = [...byTeam.values()];
+    }
+
     return {
       records: records.map((r) => ({
         anio: r.anio,
@@ -1505,7 +1547,55 @@ export class GameService {
         totalGoles: r.totalGoles,
       })),
       rivalChampions,
+      trajectoryData,
+      recordBook: state.recordBook ?? null,
     };
+  }
+
+  /* ----------------------------- Batch 7: world ranking & export/import */
+
+  async getWorldRanking(gameId: number): Promise<WorldRankingResponse> {
+    const state = await this.loadState(gameId);
+    const isPlayer = new Map(state.federations.map(f => [f.id, f.isPlayer]));
+    const rows = state.federationCoefficients.map(c => ({
+      federationId: c.federationId,
+      name: c.name,
+      cumulativeScore: c.cumulativeScore,
+      lastRank: c.lastRank,
+      lastScore: c.lastScore,
+      seasonsRanked: c.seasonsRanked,
+      isPlayer: isPlayer.get(c.federationId) ?? false,
+    }));
+    return { rows };
+  }
+
+  async exportGame(gameId: number): Promise<{ name: string; state: unknown }> {
+    const [game] = await this.db
+      .select({ name: s.games.name })
+      .from(s.games)
+      .where(eq(s.games.id, gameId));
+    if (!game) throw new NotFoundException(`Game ${gameId} not found`);
+    const state = await this.loadState(gameId);
+    return { name: game.name, state };
+  }
+
+  async importGame(name: string, importedState: unknown): Promise<{ id: number }> {
+    return this.db.transaction(async (tx) => {
+      const state = importedState as GameState;
+      const [newGame] = await tx
+        .insert(s.games)
+        .values({
+          name,
+          seed: state.seed ?? 0,
+          currentYear: state.year ?? 1,
+        })
+        .returning({ id: s.games.id });
+      await tx.insert(s.gameEngineStates).values({
+        gameId: newGame.id,
+        state: state as any,
+      });
+      return { id: newGame.id };
+    });
   }
 
   /* ------------------------------- commissioner: federations & market */

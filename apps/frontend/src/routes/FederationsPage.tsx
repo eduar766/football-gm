@@ -1,7 +1,7 @@
-import { Box, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
+import { Box, Group, Paper, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconBuilding, IconWorld } from '@tabler/icons-react';
+import { IconBuilding, IconChartLine, IconWorld } from '@tabler/icons-react';
 import { api } from '../api';
 import type { FederationListItem } from '@football-gm/contracts';
 
@@ -131,6 +131,10 @@ export function FederationsPage() {
     queryKey: ['federations', id],
     queryFn: () => api.federations(id),
   });
+  const ranking = useQuery({
+    queryKey: ['world-ranking', id],
+    queryFn: () => api.worldRanking(id),
+  });
 
   if (feds.isLoading) {
     return (
@@ -183,57 +187,142 @@ export function FederationsPage() {
         </Text>
       </Paper>
 
-      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-        {/* Group federations by confederation */}
-        {(() => {
-          const allFeds = feds.data ?? [];
-          const playerFeds = allFeds.filter(f => f.isPlayer);
-          const byConf = new Map<string, FederationListItem[]>();
-          for (const f of allFeds) {
-            if (f.isPlayer) continue;
-            const conf = f.confederationName ?? 'Sin confederación';
-            const arr = byConf.get(conf) ?? [];
-            arr.push(f);
-            byConf.set(conf, arr);
-          }
-          let rowIdx = 0;
+      <Tabs defaultValue="federaciones" variant="pills" radius="md">
+        <Tabs.List
+          mb="md"
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            borderRadius: 10,
+            padding: 4,
+          }}
+        >
+          <Tabs.Tab value="federaciones" leftSection={<IconBuilding size={16} />} style={{ fontWeight: 600 }}>
+            Federaciones
+          </Tabs.Tab>
+          <Tabs.Tab value="ranking" leftSection={<IconChartLine size={16} />} style={{ fontWeight: 600 }}>
+            Ranking Mundial
+          </Tabs.Tab>
+        </Tabs.List>
 
-          return (
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Federación</Table.Th>
-                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Prestigio</Table.Th>
-                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Tier</Table.Th>
-                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Equipos</Table.Th>
-                  <Table.Th />
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {/* Player federation first */}
-                {playerFeds.map((f) => (
-                  <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
-                ))}
+        <Tabs.Panel value="federaciones">
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+            {(() => {
+              const allFeds = feds.data ?? [];
+              const playerFeds = allFeds.filter(f => f.isPlayer);
+              const byConf = new Map<string, FederationListItem[]>();
+              for (const f of allFeds) {
+                if (f.isPlayer) continue;
+                const conf = f.confederationName ?? 'Sin confederación';
+                const arr = byConf.get(conf) ?? [];
+                arr.push(f);
+                byConf.set(conf, arr);
+              }
+              let rowIdx = 0;
 
-                {/* Then grouped by confederation */}
-                {[...byConf.entries()].map(([confName, confFeds]) => [
-                  <Table.Tr key={`conf-${confName}`}>
-                    <Table.Td colSpan={5} style={{ padding: '8px 0 4px' }}>
-                      <Group gap="xs">
-                        <IconWorld size={14} color="#3B82F6" />
-                        <Text size="sm" fw={600} c="dimmed">{confName}</Text>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>,
-                  ...confFeds.sort((a, b) => b.prestige - a.prestige).map((f) => (
-                    <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
-                  )),
-                ])}
-              </Table.Tbody>
-            </Table>
-          );
-        })()}
-      </Paper>
+              return (
+                <Table>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Federación</Table.Th>
+                      <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Prestigio</Table.Th>
+                      <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Tier</Table.Th>
+                      <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Equipos</Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {playerFeds.map((f) => (
+                      <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
+                    ))}
+                    {[...byConf.entries()].map(([confName, confFeds]) => [
+                      <Table.Tr key={`conf-${confName}`}>
+                        <Table.Td colSpan={5} style={{ padding: '8px 0 4px' }}>
+                          <Group gap="xs">
+                            <IconWorld size={14} color="#3B82F6" />
+                            <Text size="sm" fw={600} c="dimmed">{confName}</Text>
+                          </Group>
+                        </Table.Td>
+                      </Table.Tr>,
+                      ...confFeds.sort((a, b) => b.prestige - a.prestige).map((f) => (
+                        <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
+                      )),
+                    ])}
+                  </Table.Tbody>
+                </Table>
+              );
+            })()}
+          </Paper>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="ranking">
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+            {(ranking.data?.rows ?? []).length === 0 ? (
+              <Box py="xl" style={{ textAlign: 'center' }}>
+                <IconChartLine size={40} color="rgba(255,255,255,0.15)" style={{ marginBottom: 12 }} />
+                <Text c="dimmed" fw={500}>Aún sin datos de coeficiente.</Text>
+                <Text size="sm" c="dimmed" mt={4}>El ranking se actualiza al cerrar cada temporada.</Text>
+              </Box>
+            ) : (
+              <Table>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>#</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Federación</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Coef. acum.</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Ult. ranking</Table.Th>
+                    <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Temporadas</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {(ranking.data?.rows ?? []).map((row, i) => (
+                    <Table.Tr
+                      key={row.federationId}
+                      className="stagger-item"
+                      style={{
+                        borderLeft: row.isPlayer ? '3px solid #10B981' : '3px solid transparent',
+                        background: row.isPlayer ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        animationDelay: `${i * 30}ms`,
+                      }}
+                    >
+                      <Table.Td>
+                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                          {i + 1}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          {row.isPlayer && (
+                            <Box style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} />
+                          )}
+                          <Text fw={row.isPlayer ? 700 : 400} style={{ color: row.isPlayer ? '#10B981' : undefined }}>
+                            {row.name}
+                          </Text>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                          {row.cumulativeScore.toFixed(1)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.6)' }}>
+                          #{row.lastRank}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.4)' }}>
+                          {row.seasonsRanked}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Paper>
+        </Tabs.Panel>
+      </Tabs>
     </div>
   );
 }

@@ -349,12 +349,65 @@ export const RivalChampionRow = z.object({
 });
 export type RivalChampionRow = z.infer<typeof RivalChampionRow>;
 
+// ── Batch 7: historical data ──────────────────────────────────────────────────
+
+export const RecordBookDto = z.object({
+  biggestWin: z.object({
+    margin: z.number().int(),
+    homeId: Id,
+    homeName: z.string(),
+    awayId: Id,
+    awayName: z.string(),
+    homeGoals: z.number().int(),
+    awayGoals: z.number().int(),
+    year: z.number().int(),
+  }).nullable(),
+  longestWinStreak: z.object({
+    teamId: Id,
+    teamName: z.string(),
+    count: z.number().int(),
+    year: z.number().int(),
+  }).nullable(),
+});
+export type RecordBookDto = z.infer<typeof RecordBookDto>;
+
+export const TeamTrajectoryData = z.object({
+  teamId: Id,
+  teamName: z.string(),
+  rows: z.array(TrajectoryRow),
+});
+export type TeamTrajectoryData = z.infer<typeof TeamTrajectoryData>;
+
+export const WorldRankingRow = z.object({
+  federationId: Id,
+  name: z.string(),
+  cumulativeScore: z.number(),
+  lastRank: z.number().int(),
+  lastScore: z.number(),
+  seasonsRanked: z.number().int(),
+  isPlayer: z.boolean(),
+});
+export type WorldRankingRow = z.infer<typeof WorldRankingRow>;
+
+export const WorldRankingResponse = z.object({
+  rows: z.array(WorldRankingRow),
+});
+export type WorldRankingResponse = z.infer<typeof WorldRankingResponse>;
+
+export const ImportGameRequest = z.object({
+  name: z.string().min(1).max(80),
+  state: z.any(),
+});
+export type ImportGameRequest = z.infer<typeof ImportGameRequest>;
+
 export const HistoryResponse = z.object({
   records: z.array(SeasonRecordDto),
   palmares: z.array(PalmaresRow),
   awards: z.array(AwardDto),
   topScorers: z.array(GoalScorerRankingRow),
   rivalChampions: z.array(RivalChampionRow),
+  trajectoryData: z.array(TeamTrajectoryData).default([]),
+  recordBook: RecordBookDto.nullable().default(null),
 });
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
 

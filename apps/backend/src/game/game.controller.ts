@@ -14,6 +14,7 @@ import {
   CreateCupRequest,
   CreateGameRequest,
   CreateOwnTeamRequest,
+  ImportGameRequest,
   ResolveEventRequest,
   SanctionRequest,
   SetCupPrizeRequest,
@@ -296,6 +297,23 @@ export class GameController {
   @Get(':id/history')
   history(@Param('id', ParseIntPipe) id: number) {
     return this.games.getHistory(id);
+  }
+
+  @Get(':id/world-ranking')
+  worldRanking(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getWorldRanking(id);
+  }
+
+  @Get(':id/export')
+  exportGame(@Param('id', ParseIntPipe) id: number) {
+    return this.games.exportGame(id);
+  }
+
+  @Post('import')
+  importGame(
+    @Body(new ZodValidationPipe(ImportGameRequest)) body: ImportGameRequest,
+  ) {
+    return this.games.importGame(body.name, body.state);
   }
 
   @Get(':id/federations')

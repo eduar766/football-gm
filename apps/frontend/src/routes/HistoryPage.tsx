@@ -1,8 +1,18 @@
 import { Box, Grid, Group, Paper, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconHistory, IconTrophy, IconWorld } from '@tabler/icons-react';
-import type { AwardType } from '@football-gm/contracts';
+import { IconHistory, IconMedal, IconTrophy, IconWorld } from '@tabler/icons-react';
+import type { AwardType, RecordBookDto, TeamTrajectoryData } from '@football-gm/contracts';
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { api } from '../api';
 import { PalmaresChart } from '../components/PalmaresChart';
 
@@ -45,6 +55,8 @@ export function HistoryPage() {
   const awards = hist.data?.awards ?? [];
   const topScorers = hist.data?.topScorers ?? [];
   const rivalChampions = hist.data?.rivalChampions ?? [];
+  const trajectoryData = hist.data?.trajectoryData ?? [];
+  const recordBook = hist.data?.recordBook ?? null;
 
   return (
     <div className="page-enter">
@@ -227,6 +239,14 @@ export function HistoryPage() {
 
           {palmares.length > 0 && <PalmaresChart data={palmares} />}
 
+          {trajectoryData.length > 0 && (
+            <TrajectoryChart data={trajectoryData} />
+          )}
+
+          {recordBook && (
+            <RecordBookPanel recordBook={recordBook} />
+          )}
+
           <Grid mt="md">
             <Grid.Col span={{ base: 12, md: 7 }}>
               <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
@@ -349,6 +369,138 @@ export function HistoryPage() {
         </Tabs.Panel>
       </Tabs>
     </div>
+  );
+}
+
+const LINE_COLORS = [
+  '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316', '#06B6D4', '#EC4899',
+];
+
+function TrajectoryChart({ data }: { data: TeamTrajectoryData[] }) {
+  // Build year-keyed data points. Only teams with ≥2 seasons, capped at 8.
+  const eligible = data
+    .filter(t => t.rows.length >= 2)
+    .slice(0, 8);
+  if (eligible.length === 0) return null;
+
+  const allYears = [...new Set(eligible.flatMap(t => t.rows.map(r => r.anio)))].sort((a, b) => a - b);
+
+  const chartData = allYears.map(year => {
+    const point: Record<string, number | string> = { year };
+    for (const team of eligible) {
+      const row = team.rows.find(r => r.anio === year);
+      if (row) point[team.teamName] = row.puestoFinal;
+    }
+    return point;
+  });
+
+  const maxPos = Math.max(...eligible.flatMap(t => t.rows.map(r => r.puestoFinal)));
+
+  return (
+    <Paper mt="md" p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #10B981' }}>
+      <Text fw={700} mb="sm">Trayectoria de equipos por temporada</Text>
+      <Text size="xs" c="dimmed" mb="md">Posición final en su división (1 = campeón). Abajo = mejor.</Text>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <XAxis
+            dataKey="year"
+            tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: '"Geist Mono", monospace' }}
+            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+            tickLine={false}
+          />
+          <YAxis
+            reversed
+            domain={[1, maxPos]}
+            tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+            width={24}
+          />
+          <Tooltip
+            contentStyle={{
+              background: '#111820',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            labelStyle={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}
+          />
+          <Legend
+            wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+            formatter={(value) => <span style={{ color: 'rgba(255,255,255,0.8)' }}>{value}</span>}
+          />
+          {eligible.map((team, i) => (
+            <Line
+              key={team.teamId}
+              type="monotone"
+              dataKey={team.teamName}
+              stroke={LINE_COLORS[i % LINE_COLORS.length]}
+              strokeWidth={2}
+              dot={{ r: 3, fill: LINE_COLORS[i % LINE_COLORS.length] }}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </Paper>
+  );
+}
+
+function RecordBookPanel({ recordBook }: { recordBook: RecordBookDto }) {
+  const hasBigWin = recordBook.biggestWin !== null;
+  const hasStreak = recordBook.longestWinStreak !== null;
+  if (!hasBigWin && !hasStreak) return null;
+
+  return (
+    <Paper mt="md" p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #8B5CF6' }}>
+      <Group gap="sm" mb="md">
+        <IconMedal size={18} color="#8B5CF6" />
+        <Text fw={700}>Libro de récords</Text>
+      </Group>
+      <Grid>
+        {hasBigWin && (
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Box
+              p="md"
+              style={{
+                background: 'rgba(139,92,246,0.08)',
+                borderRadius: 10,
+                border: '1px solid rgba(139,92,246,0.2)',
+              }}
+            >
+              <Text size="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>Mayor goleada</Text>
+              <Text fw={800} size="xl" style={{ fontFamily: '"Geist Mono", monospace', color: '#8B5CF6' }}>
+                {recordBook.biggestWin!.homeGoals} – {recordBook.biggestWin!.awayGoals}
+              </Text>
+              <Text size="sm" mt={2}>
+                {recordBook.biggestWin!.homeName} vs {recordBook.biggestWin!.awayName}
+              </Text>
+              <Text size="xs" c="dimmed" mt={2}>Temporada {recordBook.biggestWin!.year}</Text>
+            </Box>
+          </Grid.Col>
+        )}
+        {hasStreak && (
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Box
+              p="md"
+              style={{
+                background: 'rgba(16,185,129,0.08)',
+                borderRadius: 10,
+                border: '1px solid rgba(16,185,129,0.2)',
+              }}
+            >
+              <Text size="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>Racha ganadora más larga</Text>
+              <Text fw={800} size="xl" style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                {recordBook.longestWinStreak!.count} victorias
+              </Text>
+              <Text size="sm" mt={2}>{recordBook.longestWinStreak!.teamName}</Text>
+              <Text size="xs" c="dimmed" mt={2}>Temporada {recordBook.longestWinStreak!.year}</Text>
+            </Box>
+          </Grid.Col>
+        )}
+      </Grid>
+    </Paper>
   );
 }
 

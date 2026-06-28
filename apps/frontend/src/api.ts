@@ -22,6 +22,7 @@ import type {
   TransfersResponse,
   TeamDetail,
   TeamListItem,
+  WorldRankingResponse,
 } from '@football-gm/contracts';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
@@ -158,6 +159,14 @@ export const api = {
     req<CupsResponse>(`/games/${id}/cups`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  worldRanking: (id: number) => req<WorldRankingResponse>(`/games/${id}/world-ranking`),
+  exportGame: (id: number) =>
+    req<{ name: string; state: unknown }>(`/games/${id}/export`),
+  importGame: (name: string, state: unknown) =>
+    req<{ id: number }>('/games/import', {
+      method: 'POST',
+      body: JSON.stringify({ name, state }),
     }),
   setLeagueFormat: (id: number, format: 'ida' | 'ida_vuelta') =>
     req<GameSummary>(`/games/${id}/league-format`, {

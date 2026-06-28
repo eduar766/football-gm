@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -15,7 +15,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { IconCheck, IconPlus, IconX, IconTrophy } from '@tabler/icons-react';
+import { IconCheck, IconDownload, IconPlus, IconUpload, IconX, IconTrophy } from '@tabler/icons-react';
 import { api } from '../api';
 
 const ACCENT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316'];
@@ -25,6 +25,7 @@ export function GamesPage() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [seed, setSeed] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const games = useQuery({ queryKey: ['games'], queryFn: api.listGames });
 
@@ -53,6 +54,37 @@ export function GamesPage() {
       });
     },
   });
+
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const text = await file.text();
+      const payload = JSON.parse(text) as { name: string; state: unknown };
+      return api.importGame(payload.name, payload.state);
+    },
+    onSuccess: async ({ id }) => {
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Importado', message: 'Partida importada correctamente' });
+      await qc.invalidateQueries({ queryKey: ['games'] });
+      navigate({ to: '/games/$gameId', params: { gameId: String(id) } });
+    },
+    onError: (error: Error) => {
+      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error al importar', message: error.message });
+    },
+  });
+
+  const handleExport = async (gameId: number, gameName: string) => {
+    try {
+      const data = await api.exportGame(gameId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${gameName.replace(/[^a-z0-9]/gi, '_')}_save.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      notifications.show({ color: 'red', title: 'Error al exportar', message: String(e) });
+    }
+  };
 
   return (
     <Container size="md" py="xl" className="page-enter">
@@ -128,16 +160,38 @@ export function GamesPage() {
                 },
               }}
             />
-            <Button
-              onClick={() => create.mutate()}
-              loading={create.isPending}
-              leftSection={<IconPlus size={16} />}
-              variant="gradient"
-              gradient={{ from: '#10B981', to: '#059669' }}
-              size="md"
-            >
-              Crear
-            </Button>
+            <Group>
+              <Button
+                onClick={() => create.mutate()}
+                loading={create.isPending}
+                leftSection={<IconPlus size={16} />}
+                variant="gradient"
+                gradient={{ from: '#10B981', to: '#059669' }}
+                size="md"
+              >
+                Crear
+              </Button>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                loading={importMutation.isPending}
+                leftSection={<IconUpload size={16} />}
+                variant="outline"
+                size="md"
+              >
+                Importar
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) importMutation.mutate(file);
+                  e.target.value = '';
+                }}
+              />
+            </Group>
           </Group>
         </Card>
 
@@ -199,19 +253,32 @@ export function GamesPage() {
                           </Text>
                         </Group>
                       </Box>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate({
-                            to: '/games/$gameId',
-                            params: { gameId: String(g.id) },
-                          });
-                        }}
-                      >
-                        Abrir
-                      </Button>
+                      <Group gap="xs">
+                        <Button
+                          size="xs"
+                          variant="subtle"
+                          leftSection={<IconDownload size={14} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExport(g.id, g.name);
+                          }}
+                        >
+                          Exportar
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate({
+                              to: '/games/$gameId',
+                              params: { gameId: String(g.id) },
+                            });
+                          }}
+                        >
+                          Abrir
+                        </Button>
+                      </Group>
                     </Group>
                   </Paper>
                 );

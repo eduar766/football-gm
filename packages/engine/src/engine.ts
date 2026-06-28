@@ -307,7 +307,86 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     mandatesRng: makeRng((seed ^ 0xb4a4d3c2) >>> 0),
     seasonChronicles: [],
     teamSeasonHistory: [],
+    recordBook: null,
+    federationCoefficients: [],
   };
+}
+
+function updateRecordBook(s: GameState): void {
+  if (!s.recordBook) s.recordBook = { biggestWin: null, longestWinStreak: null };
+  const byId = new Map(s.teams.map(t => [t.id, t]));
+
+  for (const r of s.results) {
+    const margin = Math.abs(r.homeGoals - r.awayGoals);
+    if (margin > (s.recordBook.biggestWin?.margin ?? 0)) {
+      s.recordBook.biggestWin = {
+        margin,
+        homeId: r.homeId,
+        homeName: byId.get(r.homeId)?.name ?? 'Desconocido',
+        awayId: r.awayId,
+        awayName: byId.get(r.awayId)?.name ?? 'Desconocido',
+        homeGoals: r.homeGoals,
+        awayGoals: r.awayGoals,
+        year: s.year,
+      };
+    }
+  }
+
+  const playerFedTeams = new Set(
+    s.teams.filter(t => t.federationId === s.playerFederationId).map(t => t.id),
+  );
+  const sorted = [...s.results].sort((a, b) => a.matchday - b.matchday);
+  const streaks = new Map<number, number>();
+  for (const id of playerFedTeams) streaks.set(id, 0);
+
+  for (const r of sorted) {
+    const homeWin = r.homeGoals > r.awayGoals;
+    const awayWin = r.awayGoals > r.homeGoals;
+
+    if (playerFedTeams.has(r.homeId)) {
+      const cur = homeWin ? (streaks.get(r.homeId) ?? 0) + 1 : 0;
+      streaks.set(r.homeId, cur);
+      if (cur > (s.recordBook.longestWinStreak?.count ?? 0)) {
+        s.recordBook.longestWinStreak = {
+          teamId: r.homeId, teamName: byId.get(r.homeId)?.name ?? 'Desconocido',
+          count: cur, year: s.year,
+        };
+      }
+    }
+    if (playerFedTeams.has(r.awayId)) {
+      const cur = awayWin ? (streaks.get(r.awayId) ?? 0) + 1 : 0;
+      streaks.set(r.awayId, cur);
+      if (cur > (s.recordBook.longestWinStreak?.count ?? 0)) {
+        s.recordBook.longestWinStreak = {
+          teamId: r.awayId, teamName: byId.get(r.awayId)?.name ?? 'Desconocido',
+          count: cur, year: s.year,
+        };
+      }
+    }
+  }
+}
+
+function accumulateFederationCoefficients(s: GameState): void {
+  for (const ranking of s.globalRankings) {
+    const existing = s.federationCoefficients.find(c => c.federationId === ranking.federationId);
+    if (existing) {
+      existing.cumulativeScore = Math.round((existing.cumulativeScore + ranking.score) * 10) / 10;
+      existing.lastRank = ranking.rank;
+      existing.lastScore = ranking.score;
+      existing.seasonsRanked += 1;
+      existing.name = ranking.federationName;
+    } else {
+      s.federationCoefficients.push({
+        federationId: ranking.federationId,
+        name: ranking.federationName,
+        cumulativeScore: Math.round(ranking.score * 10) / 10,
+        lastRank: ranking.rank,
+        lastScore: ranking.score,
+        seasonsRanked: 1,
+      });
+    }
+  }
+  s.federationCoefficients.sort((a, b) => b.cumulativeScore - a.cumulativeScore);
 }
 
 // ─── Board mandates (Batch 4) ────────────────────────────────────────────────
@@ -856,10 +935,15 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
+  // 7.2: Record book — scan results before they are cleared at season end.
+  updateRecordBook(s);
+
   s.year += 1;
   progressNegotiations(s); // §4.2 timers compare against the new year
   processRivalActions(s);
   computeGlobalRanking(s);
+  // 7.3: Accumulate federation coefficients from the freshly-computed ranking.
+  accumulateFederationCoefficients(s);
 
   // Fase 6.4: transfer window between seasons. Mutates s.players (teamId) and
   // recomputes team.strength from the squad when players are tracked. Uses an

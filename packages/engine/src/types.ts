@@ -597,6 +597,37 @@ export interface GameState {
   // Narrative layer (Batch 5): season chronicles + team position history.
   seasonChronicles: SeasonChronicle[];
   teamSeasonHistory: TeamSeasonSnapshot[];
+  // Batch 7: accumulated historical records and federation world ranking.
+  recordBook: RecordBook | null;
+  federationCoefficients: FederationCoefficient[];
+}
+
+export interface RecordBook {
+  biggestWin: {
+    margin: number;
+    homeId: number;
+    homeName: string;
+    awayId: number;
+    awayName: string;
+    homeGoals: number;
+    awayGoals: number;
+    year: number;
+  } | null;
+  longestWinStreak: {
+    teamId: number;
+    teamName: string;
+    count: number;
+    year: number;
+  } | null;
+}
+
+export interface FederationCoefficient {
+  federationId: number;
+  name: string;
+  cumulativeScore: number;
+  lastRank: number;
+  lastScore: number;
+  seasonsRanked: number;
 }
 
 export interface CreateGameOptions {
