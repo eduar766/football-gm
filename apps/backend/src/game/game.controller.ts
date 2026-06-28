@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -21,6 +22,7 @@ import {
   SetLeaguePrizeRequest,
   SignContractRequest,
   StartNegotiationRequest,
+  SetOfferValueRequest,
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { GameService } from './game.service';
@@ -326,5 +328,14 @@ export class GameController {
     body: StartNegotiationRequest,
   ) {
     return this.games.startNegotiation(id, body.targetTeamId);
+  }
+
+  @Patch(':id/negotiations/offer-value')
+  setOfferValue(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(SetOfferValueRequest))
+    body: SetOfferValueRequest,
+  ) {
+    return this.games.setOfferValue(id, body.negId, body.offerValue);
   }
 }

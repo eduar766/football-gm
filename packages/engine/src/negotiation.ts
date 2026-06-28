@@ -3,7 +3,7 @@
 // progression mutates an already-cloned state.
 
 import { rngNext } from './rng';
-import type { Federation, GameState, Team } from './types';
+import type { Federation, GameState, Negotiation, NegotiationRequirement, Team } from './types';
 
 // Prestige groups into 5 tiers; the tier is prelatory — it gates which teams a
 // federation may even approach (§4.1).
@@ -44,7 +44,89 @@ export function canNegotiate(state: GameState, teamId: number): boolean {
   if (!t) return false;
   if (t.federationId === state.playerFederationId) return false;
   if (hasActiveNegotiation(state, teamId)) return false;
+  // Cooldown after rejection (§4.2 reintento)
+  const cooldown = state.poachCooldowns[teamId];
+  if (cooldown && state.year < cooldown) return false;
   return teamTier(state, t) <= playerTier(state); // tier gate (§4.1)
+}
+
+// Generate 1-3 requirements based on team arraigo. More demanding teams
+// (high arraigo) want more assurances — revenue share and stadium quality.
+function generateRequirements(state: GameState, team: Team): NegotiationRequirement[] {
+  const reqs: NegotiationRequirement[] = [];
+  const ownerFed = state.federations.find((f) => f.id === team.federationId);
+
+  // Always: prestige parity — the team wants to join a federation that's at
+  // least as strong as the one they're leaving.
+  const prestigeObj = Math.max(10, (ownerFed?.prestige ?? 30) - 5);
+  reqs.push({ tipo: 'prestigio', objetivo: prestigeObj, revealed: false, cumplido: false });
+
+  // Medium+ arraigo: revenue share commitment.
+  if (team.arraigo >= 40) {
+    const repartoObj = Math.min(20, Math.max(5, Math.round(team.arraigo / 10)));
+    reqs.push({ tipo: 'reparto', objetivo: repartoObj, revealed: false, cumplido: false });
+  }
+
+  // High arraigo: stadium infrastructure (max capacity in player league must exceed threshold).
+  if (team.arraigo >= 70) {
+    const playerTeams = state.teams.filter(
+      (t) => t.federationId === state.playerFederationId && t.divisionOrden !== null,
+    );
+    const avgCap =
+      playerTeams.length > 0
+        ? playerTeams.reduce((s, t) => s + t.stadiumCapacity, 0) / playerTeams.length
+        : 10_000;
+    // Require average capacity ≥ 60% of the team's own capacity (achievable but not trivial).
+    const estadioObj = Math.max(10_000, Math.round(team.stadiumCapacity * 0.6));
+    // Only add if the player doesn't already meet it — otherwise it's trivial padding.
+    if (avgCap < estadioObj) {
+      reqs.push({ tipo: 'estadio', objetivo: estadioObj, revealed: false, cumplido: false });
+    }
+  }
+
+  return reqs;
+}
+
+// Re-evaluate which requirements are currently satisfied. Called each season
+// during gathering_requirements and once during offer evaluation.
+function checkRequirements(s: GameState, n: Negotiation): void {
+  const pf = s.federations.find((f) => f.id === s.playerFederationId);
+  const playerPrestige = pf?.prestige ?? 0;
+  const playerTeams = s.teams.filter(
+    (t) => t.federationId === s.playerFederationId && t.divisionOrden !== null,
+  );
+  const avgCapacity =
+    playerTeams.length > 0
+      ? playerTeams.reduce((sum, t) => sum + t.stadiumCapacity, 0) / playerTeams.length
+      : 0;
+
+  for (const req of n.requirements) {
+    if (!req.revealed) continue;
+    switch (req.tipo) {
+      case 'prestigio':
+        req.cumplido = playerPrestige >= req.objetivo;
+        break;
+      case 'estadio':
+        req.cumplido = avgCapacity >= req.objetivo;
+        break;
+      case 'reparto':
+        req.cumplido = n.offerValue >= req.objetivo;
+        break;
+    }
+  }
+}
+
+// Set the revenue-share offer value (0–30 %). Triggers a requirement re-check.
+export function setNegotiationOfferValue(prev: GameState, negId: number, offerValue: number): GameState {
+  const n = prev.negotiations.find(
+    (n) => n.id === negId && (n.state === 'gathering_requirements' || n.state === 'offer'),
+  );
+  if (!n) return prev;
+  const s = structuredClone(prev);
+  const neg = s.negotiations.find((n) => n.id === negId)!;
+  neg.offerValue = Math.min(30, Math.max(0, Math.round(offerValue)));
+  checkRequirements(s, neg);
+  return s;
 }
 
 // Teams the player may currently open a negotiation for. Pure selector for the
@@ -81,6 +163,9 @@ export function startNegotiation(prev: GameState, targetTeamId: number): GameSta
     requirementsSeasonsLeft: seasons,
     acceptedYear: null,
     effectiveYear: null,
+    requirements: generateRequirements(prev, team),
+    offerValue: 0,
+    revealedCount: 0,
   });
   s.nextNegotiationId += 1;
   return s;
@@ -127,25 +212,33 @@ export function progressNegotiations(s: GameState): void {
     if (!team) continue;
 
     if (n.state === 'gathering_requirements') {
+      // Reveal one requirement per season so the player discovers them gradually.
+      if (n.revealedCount < n.requirements.length) {
+        n.requirements[n.revealedCount].revealed = true;
+        n.revealedCount += 1;
+      }
+      // Re-check all revealed requirements each season.
+      checkRequirements(s, n);
       n.requirementsSeasonsLeft -= 1;
       if (n.requirementsSeasonsLeft <= 0) n.state = 'offer';
       continue;
     }
 
     if (n.state === 'offer') {
-      const by = fedOf(s, n.byFederationId);
-      const from = fedOf(s, team.federationId);
-      let chance =
-        0.6 -
-        team.arraigo * 0.005 +
-        ((by?.prestige ?? 0) - (from?.prestige ?? 0)) * 0.004;
-      chance = Math.min(0.95, Math.max(0.05, chance));
-      if (rngNext(s.rng) < chance) {
+      // Batch 3: acceptance driven by requirements, not a dice roll.
+      checkRequirements(s, n);
+      const revealed = n.requirements.filter((r) => r.revealed);
+      const met = revealed.filter((r) => r.cumplido).length;
+      // Threshold: ≥75% of revealed requirements must be met, OR no requirements.
+      const meetsThreshold = revealed.length === 0 || met / revealed.length >= 0.75;
+      if (meetsThreshold) {
         n.state = 'accepted';
         n.acceptedYear = s.year;
-        n.effectiveYear = s.year + 2; // effective two years after acceptance
+        n.effectiveYear = s.year + 2;
       } else {
         n.state = 'rejected';
+        // 1-season cooldown before the player can retry this team.
+        s.poachCooldowns[n.targetTeamId] = s.year + 1;
       }
       continue;
     }

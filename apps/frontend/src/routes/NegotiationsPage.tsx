@@ -1,9 +1,19 @@
-import { Box, Group, Paper, Skeleton, Stack, Tabs, Text } from '@mantine/core';
+import { useState } from 'react';
+import { Box, Button, Group, NumberInput, Paper, Skeleton, Stack, Tabs, Text, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconArrowsExchange, IconCheck, IconHistory, IconRefresh, IconX } from '@tabler/icons-react';
-import type { EngineNegotiationState, NegotiationDto } from '@football-gm/contracts';
+import {
+  IconArrowsExchange,
+  IconCheck,
+  IconCircleCheck,
+  IconCircleX,
+  IconClock,
+  IconHistory,
+  IconRefresh,
+  IconX,
+} from '@tabler/icons-react';
+import type { EngineNegotiationState, NegotiationDto, NegotiationRequirementDto } from '@football-gm/contracts';
 import { api } from '../api';
 
 const LABEL: Record<EngineNegotiationState, string> = {
@@ -31,20 +41,74 @@ const ACTIVE_STATES = new Set<EngineNegotiationState>([
   'effective',
 ]);
 
+const REQ_LABEL: Record<string, string> = {
+  prestigio: 'Prestigio federativo',
+  estadio: 'Capacidad media de estadio',
+  reparto: '% de ingresos ofrecido',
+};
+
+const REQ_UNIT: Record<string, string> = {
+  prestigio: 'pts',
+  estadio: 'espectadores',
+  reparto: '%',
+};
+
+function RequirementRow({ req }: { req: NegotiationRequirementDto }) {
+  if (!req.revealed) {
+    return (
+      <Group gap="xs" py={4}>
+        <IconClock size={14} color="rgba(255,255,255,0.3)" />
+        <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>
+          Requisito pendiente de revelar…
+        </Text>
+      </Group>
+    );
+  }
+  return (
+    <Group gap="xs" py={4}>
+      {req.cumplido ? (
+        <IconCircleCheck size={16} color="#10B981" />
+      ) : (
+        <IconCircleX size={16} color="#EF4444" />
+      )}
+      <Text size="xs" style={{ flex: 1 }}>
+        {REQ_LABEL[req.tipo] ?? req.tipo}
+      </Text>
+      <Text
+        size="xs"
+        fw={700}
+        style={{
+          fontFamily: '"Geist Mono", monospace',
+          color: req.cumplido ? '#10B981' : '#EF4444',
+        }}
+      >
+        ≥ {req.objetivo.toLocaleString()} {REQ_UNIT[req.tipo] ?? ''}
+      </Text>
+    </Group>
+  );
+}
+
 function NegotiationCard({
   n,
   index,
   onRetry,
   retrying,
+  onSetOffer,
+  settingOffer,
 }: {
   n: NegotiationDto;
   index: number;
   onRetry?: (teamId: number) => void;
   retrying?: boolean;
+  onSetOffer?: (negId: number, value: number) => void;
+  settingOffer?: boolean;
 }) {
+  const [localOffer, setLocalOffer] = useState(n.offerValue);
   const cfg = STAGE_CONFIG[n.state];
   const currentIdx = STEPS.indexOf(n.state as (typeof STEPS)[number]);
   const isActive = ACTIVE_STATES.has(n.state);
+  const hasReparto = n.requirements.some((r) => r.revealed && r.tipo === 'reparto');
+  const canEditOffer = onSetOffer && (n.state === 'gathering_requirements' || n.state === 'offer');
 
   return (
     <Paper
@@ -183,6 +247,68 @@ function NegotiationCard({
         </Group>
       )}
 
+      {/* Requirements checklist */}
+      {n.requirements.length > 0 && (
+        <Box
+          mt="sm"
+          p="sm"
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase" mb={6} style={{ letterSpacing: '0.05em' }}>
+            Condiciones del equipo
+          </Text>
+          <Stack gap={0}>
+            {n.requirements.map((req, i) => (
+              <RequirementRow key={i} req={req} />
+            ))}
+            {/* Unrevealed slots */}
+            {Array.from({ length: n.requirements.length - n.revealedCount }).map((_, i) => (
+              <Group key={`hidden-${i}`} gap="xs" py={4}>
+                <IconClock size={14} color="rgba(255,255,255,0.2)" />
+                <Text size="xs" c="dimmed" style={{ fontStyle: 'italic', opacity: 0.5 }}>
+                  Condición oculta — se revela en {n.requirementsSeasonsLeft - i} temporada(s)
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+
+          {/* Revenue share input — shown when reparto requirement is revealed */}
+          {hasReparto && canEditOffer && (
+            <Group gap="xs" mt="sm" align="flex-end">
+              <NumberInput
+                label="Tu oferta de reparto (%)"
+                description="% de tus ingresos comerciales anuales comprometidos con este equipo."
+                value={localOffer}
+                onChange={(v) => setLocalOffer(Number(v) || 0)}
+                min={0}
+                max={30}
+                step={1}
+                suffix="%"
+                size="xs"
+                style={{ flex: 1 }}
+                styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+              />
+              <Tooltip label="Guardar oferta de reparto">
+                <Button
+                  size="xs"
+                  variant="outline"
+                  style={{ borderColor: '#10B981', color: '#10B981' }}
+                  leftSection={<IconCheck size={13} />}
+                  onClick={() => onSetOffer!(n.id, localOffer)}
+                  loading={settingOffer}
+                >
+                  Confirmar
+                </Button>
+              </Tooltip>
+            </Group>
+          )}
+        </Box>
+      )}
+
       <Group gap="md" mt="sm">
         <Text size="xs" c="dimmed">
           Inicio:{' '}
@@ -192,7 +318,7 @@ function NegotiationCard({
         </Text>
         {n.state === 'gathering_requirements' && (
           <Text size="xs" c="dimmed">
-            Req. restantes:{' '}
+            Temporadas restantes:{' '}
             <span style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
               {n.requirementsSeasonsLeft}
             </span>
@@ -218,7 +344,7 @@ function NegotiationCard({
 
       {n.state === 'rejected' && (
         <Text size="xs" c="dimmed" mt="sm" style={{ fontStyle: 'italic' }}>
-          Puedes reintentar desde aquí o desde el Mercado de adhesiones.
+          Puedes reintentar desde aquí o desde el Mercado. Espera al menos una temporada.
         </Text>
       )}
     </Paper>
@@ -235,27 +361,31 @@ export function NegotiationsPage() {
     queryFn: () => api.negotiations(id),
   });
 
+  const invalidate = () =>
+    qc.invalidateQueries({
+      predicate: (q) => ['negotiations', 'market', 'summary'].includes(q.queryKey[0] as string),
+    });
+
   const retry = useMutation({
     mutationFn: (targetTeamId: number) => api.startNegotiation(id, targetTeamId),
     onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Negociación reintentada',
-      });
-      qc.invalidateQueries({
-        predicate: (q) =>
-          ['negotiations', 'market', 'summary'].includes(q.queryKey[0] as string),
-      });
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Negociación reintentada' });
+      invalidate();
     },
     onError: (e: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: e.message,
-      });
+      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
+    },
+  });
+
+  const setOffer = useMutation({
+    mutationFn: ({ negId, offerValue }: { negId: number; offerValue: number }) =>
+      api.setOfferValue(id, negId, offerValue),
+    onSuccess: () => {
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Oferta de reparto guardada' });
+      invalidate();
+    },
+    onError: (e: Error) => {
+      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
     },
   });
 
@@ -361,7 +491,13 @@ export function NegotiationsPage() {
             ) : (
               <Stack gap="md">
                 {active.map((n, i) => (
-                  <NegotiationCard key={n.id} n={n} index={i} />
+                  <NegotiationCard
+                    key={n.id}
+                    n={n}
+                    index={i}
+                    onSetOffer={(negId, value) => setOffer.mutate({ negId, offerValue: value })}
+                    settingOffer={setOffer.isPending}
+                  />
                 ))}
               </Stack>
             )}

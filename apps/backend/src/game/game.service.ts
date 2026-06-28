@@ -39,6 +39,7 @@ import {
   setLeagueFormat as engineSetLeagueFormat,
   signContract as engineSignContract,
   startNegotiation as engineStartNegotiation,
+  setNegotiationOfferValue as engineSetNegotiationOfferValue,
   removePrize as engineRemovePrize,
   setCupPrize as engineSetCupPrize,
   setLeaguePrize as engineSetLeaguePrize,
@@ -94,6 +95,12 @@ export class GameService {
     const state = row.state as unknown as GameState;
     // Ensure fields added in later versions exist on old serialized states.
     if (!state.poachCooldowns) state.poachCooldowns = {};
+    // Batch 3: negotiation requirements (old saves have none).
+    for (const n of state.negotiations) {
+      if (!n.requirements) n.requirements = [];
+      if (n.offerValue === undefined) n.offerValue = 0;
+      if (n.revealedCount === undefined) n.revealedCount = n.requirements.length;
+    }
     if (state.eventStrengthPenalty === undefined) state.eventStrengthPenalty = 0;
     if (state.eventCapacityPenaltyPct === undefined) state.eventCapacityPenaltyPct = 0;
     if (state.eventImpulseLoss === undefined) state.eventImpulseLoss = 0;
@@ -846,10 +853,12 @@ export class GameService {
       year: state.year,
       divisionOrden: orden,
       divisionName: div?.name ?? 'División',
-      availableDivisions: state.divisions.map((d) => ({
-        orden: d.orden,
-        name: d.name,
-      })),
+      // Only expose the player's own divisions — rival federation divisions
+      // share the same `orden` values (each rival league has orden=1) which
+      // causes duplicate SegmentedControl options in the frontend.
+      availableDivisions: state.divisions
+        .filter((d) => d.federationId === state.playerFederationId)
+        .map((d) => ({ orden: d.orden, name: d.name })),
       rows,
     };
   }
@@ -1334,6 +1343,13 @@ export class GameService {
       }
     }
 
+    const teamsForFed = !isPlayer
+      ? state.teams
+          .filter((t) => t.federationId === federationId)
+          .sort((a, b) => b.strength - a.strength)
+          .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo }))
+      : undefined;
+
     return {
       id: engFed.id,
       name: engFed.name,
@@ -1346,6 +1362,7 @@ export class GameService {
       confederationId: engFed.confederationId || undefined,
       confederationName: engFed.confederationId ? confNames.get(engFed.confederationId) : undefined,
       standings,
+      teams: teamsForFed,
     };
   }
 
@@ -1497,6 +1514,9 @@ export class GameService {
       effectiveYear: n.effectiveYear,
       fromFederationName: fedName.get(n.fromFederationId) ?? '—',
       byFederationName: fedName.get(n.byFederationId) ?? '—',
+      requirements: n.requirements ?? [],
+      offerValue: n.offerValue ?? 0,
+      revealedCount: n.revealedCount ?? 0,
     }));
   }
 
@@ -1535,6 +1555,36 @@ export class GameService {
         effectiveYear: n.effectiveYear,
         fromFederationName: fedName.get(n.fromFederationId) ?? '—',
         byFederationName: fedName.get(n.byFederationId) ?? '—',
+        requirements: n.requirements ?? [],
+        offerValue: n.offerValue ?? 0,
+        revealedCount: n.revealedCount ?? 0,
+      }));
+    });
+  }
+
+  async setOfferValue(gameId: number, negId: number, offerValue: number): Promise<NegotiationDto[]> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.loadState(gameId, tx);
+      const next = engineSetNegotiationOfferValue(state, negId, offerValue);
+      if (next === state) throw new BadRequestException('Negociación no encontrada o no modificable');
+      await this.saveState(tx, gameId, next);
+      const map = await this.engineToDbTeam(gameId, tx);
+      const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
+      const fedName = new Map(next.federations.map((f) => [f.id, f.name]));
+      return next.negotiations.map((n) => ({
+        id: n.id,
+        targetTeamId: map.get(n.targetTeamId) ?? n.targetTeamId,
+        targetTeamName: teamName.get(n.targetTeamId) ?? '—',
+        state: n.state,
+        startedYear: n.startedYear,
+        requirementsSeasonsLeft: n.requirementsSeasonsLeft,
+        acceptedYear: n.acceptedYear,
+        effectiveYear: n.effectiveYear,
+        fromFederationName: fedName.get(n.fromFederationId) ?? '—',
+        byFederationName: fedName.get(n.byFederationId) ?? '—',
+        requirements: n.requirements ?? [],
+        offerValue: n.offerValue ?? 0,
+        revealedCount: n.revealedCount ?? 0,
       }));
     });
   }

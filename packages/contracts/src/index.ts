@@ -223,6 +223,14 @@ export const FederationDivision = z.object({
 });
 export type FederationDivision = z.infer<typeof FederationDivision>;
 
+export const FederationTeamItem = z.object({
+  teamId: Id,
+  name: z.string(),
+  strength: z.number().int(),
+  arraigo: z.number().int(),
+});
+export type FederationTeamItem = z.infer<typeof FederationTeamItem>;
+
 export const FederationOverview = z.object({
   id: Id,
   name: z.string(),
@@ -235,6 +243,7 @@ export const FederationOverview = z.object({
   confederationId: z.number().int().optional(),
   confederationName: z.string().optional(),
   standings: z.array(StandingRowDto).optional(),
+  teams: z.array(FederationTeamItem).optional(),
 });
 export type FederationOverview = z.infer<typeof FederationOverview>;
 
@@ -339,6 +348,17 @@ export const MarketResponse = z.object({
 });
 export type MarketResponse = z.infer<typeof MarketResponse>;
 
+export const NegotiationRequirementType = z.enum(['prestigio', 'estadio', 'reparto']);
+export type NegotiationRequirementType = z.infer<typeof NegotiationRequirementType>;
+
+export const NegotiationRequirementDto = z.object({
+  tipo: NegotiationRequirementType,
+  objetivo: z.number(),
+  revealed: z.boolean(),
+  cumplido: z.boolean(),
+});
+export type NegotiationRequirementDto = z.infer<typeof NegotiationRequirementDto>;
+
 export const NegotiationDto = z.object({
   id: Id,
   targetTeamId: Id,
@@ -350,6 +370,9 @@ export const NegotiationDto = z.object({
   effectiveYear: z.number().int().nullable(),
   fromFederationName: z.string(),
   byFederationName: z.string(),
+  requirements: z.array(NegotiationRequirementDto).default([]),
+  offerValue: z.number().int().default(0),
+  revealedCount: z.number().int().default(0),
 });
 export type NegotiationDto = z.infer<typeof NegotiationDto>;
 
@@ -357,6 +380,12 @@ export const StartNegotiationRequest = z.object({
   targetTeamId: Id,
 });
 export type StartNegotiationRequest = z.infer<typeof StartNegotiationRequest>;
+
+export const SetOfferValueRequest = z.object({
+  negId: Id,
+  offerValue: z.number().int().min(0).max(30),
+});
+export type SetOfferValueRequest = z.infer<typeof SetOfferValueRequest>;
 
 /* --------------------------------- commissioner: league structure (§4.4) */
 

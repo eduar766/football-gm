@@ -106,6 +106,18 @@ export type NegotiationState =
   | 'effective'
   | 'rejected';
 
+// A concrete condition a team demands before accepting. Requirements are
+// generated at negotiation start but revealed one per season so the player
+// discovers them progressively during the gathering phase.
+export type NegotiationRequirementType = 'prestigio' | 'estadio' | 'reparto';
+
+export interface NegotiationRequirement {
+  tipo: NegotiationRequirementType;
+  objetivo: number; // threshold: prestige pts, stadium capacity, or % revenue share
+  revealed: boolean; // visible to the player yet?
+  cumplido: boolean; // currently satisfied?
+}
+
 export interface Negotiation {
   id: number;
   targetTeamId: number;
@@ -116,6 +128,10 @@ export interface Negotiation {
   requirementsSeasonsLeft: number;
   acceptedYear: number | null;
   effectiveYear: number | null; // acceptedYear + 2
+  // Batch 3: real requirements (§4.2)
+  requirements: NegotiationRequirement[];
+  offerValue: number; // 0-30: % of commercial income committed as annual revenue share
+  revealedCount: number;
 }
 
 // Player roster + per-season stats for the awards layer (§6).

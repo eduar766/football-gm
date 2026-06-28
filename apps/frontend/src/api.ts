@@ -76,6 +76,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ targetTeamId }),
     }),
+  setOfferValue: (id: number, negId: number, offerValue: number) =>
+    req<NegotiationDto[]>(`/games/${id}/negotiations/offer-value`, {
+      method: 'PATCH',
+      body: JSON.stringify({ negId, offerValue }),
+    }),
   economy: (id: number) => req<EconomyResponse>(`/games/${id}/economy`),
   setEconomyPolicy: (
     id: number,

@@ -1,4 +1,4 @@
-import { Badge, Box, Card, Group, Paper, SimpleGrid, Skeleton, Table, Text } from '@mantine/core';
+import { Badge, Box, Card, Group, Paper, SimpleGrid, Skeleton, Table, Text, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { IconBuilding } from '@tabler/icons-react';
@@ -179,6 +179,57 @@ export function FederationPage() {
           </Table.Tbody>
         </Table>
       </Paper>
+
+      {/* Rival federation team list */}
+      {f.teams && f.teams.length > 0 && (
+        <Paper p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+          <Text fw={700} mb="sm">Equipos</Text>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>#</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Fuerza</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Arraigo</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {f.teams.map((t, i) => (
+                <Table.Tr
+                  key={t.teamId}
+                  className="stagger-item"
+                  style={{
+                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    animationDelay: `${i * 20}ms`,
+                  }}
+                >
+                  <Table.Td>
+                    <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>{i + 1}</Text>
+                  </Table.Td>
+                  <Table.Td fw={500}>{t.name}</Table.Td>
+                  <Table.Td ta="right">
+                    <Group gap="xs" justify="flex-end" wrap="nowrap">
+                      <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+                        {t.strength}
+                      </Text>
+                      <Box style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', flexShrink: 0 }}>
+                        <Box style={{ width: `${t.strength}%`, height: '100%', borderRadius: 3, background: t.strength >= 70 ? 'linear-gradient(90deg, #059669, #10B981)' : t.strength >= 50 ? 'linear-gradient(90deg, #D97706, #F59E0B)' : 'linear-gradient(90deg, #DC2626, #EF4444)' }} />
+                      </Box>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td ta="right">
+                    <Tooltip label="Lealtad del equipo (0-100)" fz="xs">
+                      <Text style={{ fontFamily: '"Geist Mono", monospace', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981', cursor: 'default' }}>
+                        {t.arraigo}
+                      </Text>
+                    </Tooltip>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
 
       {/* Rival federation standings */}
       {f.standings && f.standings.length > 0 && (

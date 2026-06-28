@@ -151,8 +151,13 @@ export function processEconomy(s: GameState): {
   const merchandiseRevenue = s.prestige * competing * 15_000;
 
   const income = contractIncome + matchdayRevenue + merchandiseRevenue;
-  // Income / cost / talent / norm enforcement move the treasury here.
-  const net = income - cost - talent - normCost;
+
+  // Batch 3: committed revenue shares for teams that adhesed with an offerValue.
+  const revenueShareCost = s.negotiations
+    .filter((n) => n.state === 'effective' && (n.offerValue ?? 0) > 0)
+    .reduce((sum, n) => sum + Math.round((n.offerValue / 100) * income), 0);
+
+  const net = income - cost - talent - normCost - revenueShareCost;
   s.treasury += net;
 
   const transferFees = s.transfers
