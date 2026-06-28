@@ -18,14 +18,17 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconTrophy, IconX } from '@tabler/icons-react';
+import { IconCheck, IconLayoutGrid, IconTrophy, IconX } from '@tabler/icons-react';
 import type {
   CupCategory,
   CupFormat,
+  CupDto,
+  CupMatchDto,
   CupStatus,
   CupType,
 } from '@football-gm/contracts';
 import { api } from '../api';
+import { BracketView } from '../components/BracketView';
 
 const TIPO_LABEL: Record<CupType, string> = {
   copa: 'Copa',
@@ -37,6 +40,260 @@ const STATUS_CONFIG: Record<CupStatus, { label: string; gradient: string }> = {
   en_curso: { label: 'En curso', gradient: 'linear-gradient(135deg, #2563EB, #3B82F6)' },
   finalizada: { label: 'Finalizada', gradient: 'linear-gradient(135deg, #059669, #10B981)' },
 };
+
+type RoundGroup = {
+  logicalNumero: number;
+  legs: { numero: number; label: string; matches: CupMatchDto[] }[];
+};
+
+function groupRounds(cup: CupDto): RoundGroup[] {
+  const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
+  const groups: RoundGroup[] = [];
+  if (isIdaVuelta) {
+    const seen = new Set<number>();
+    for (const r of cup.rounds) {
+      if (seen.has(r.numero)) continue;
+      const logicalNumero = r.numero;
+      const ida = cup.rounds.find((x) => x.numero === logicalNumero && x.leg === 'ida');
+      const vuelta = cup.rounds.find((x) => x.numero === logicalNumero + 1 && x.leg === 'vuelta');
+      const legs: RoundGroup['legs'] = [];
+      if (ida) legs.push({ numero: ida.numero, label: 'Ida', matches: ida.matches });
+      if (vuelta) legs.push({ numero: vuelta.numero, label: 'Vuelta', matches: vuelta.matches });
+      groups.push({ logicalNumero, legs });
+      seen.add(logicalNumero);
+      if (vuelta) seen.add(vuelta.numero);
+    }
+  } else {
+    for (const r of cup.rounds) {
+      groups.push({ logicalNumero: r.numero, legs: [{ numero: r.numero, label: '', matches: r.matches }] });
+    }
+  }
+  return groups;
+}
+
+function CupStatusBadge({ status }: { status: CupStatus }) {
+  const sc = STATUS_CONFIG[status];
+  return (
+    <Box
+      style={{
+        padding: '3px 12px',
+        borderRadius: 14,
+        background: sc.gradient,
+        color: '#fff',
+        fontWeight: 600,
+        fontSize: '12px',
+      }}
+    >
+      {sc.label}
+    </Box>
+  );
+}
+
+function CupHeader({ cup }: { cup: CupDto }) {
+  return (
+    <Group justify="space-between" mb="sm">
+      <div>
+        <Group gap="sm">
+          <IconTrophy size={18} color="#F59E0B" />
+          <Text fw={700} size="lg">{cup.name}</Text>
+        </Group>
+        <Text size="xs" c="dimmed" ml={30}>
+          {TIPO_LABEL[cup.tipo]} ·{' '}
+          {cup.formato === 'liga' ? 'liga' : cup.formato === 'eliminatoria_ida_vuelta' ? 'ida y vuelta' : 'partido único'}
+          {cup.categoria === 'juvenil' ? ' · juvenil' : ''} · año {cup.year}
+        </Text>
+      </div>
+      <Group gap="xs">
+        {cup.recurring && (
+          <Box
+            style={{
+              padding: '3px 12px',
+              borderRadius: 14,
+              background: 'rgba(139,92,246,0.15)',
+              color: '#8B5CF6',
+              fontWeight: 600,
+              fontSize: '12px',
+            }}
+          >
+            Recurrente
+          </Box>
+        )}
+        <CupStatusBadge status={cup.status} />
+      </Group>
+    </Group>
+  );
+}
+
+function ChampionBanner({ cup }: { cup: CupDto }) {
+  if (cup.status !== 'finalizada' || !cup.championTeamName) return null;
+  return (
+    <Box
+      p="sm"
+      mb="sm"
+      style={{
+        borderRadius: 8,
+        background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(217,119,6,0.08) 100%)',
+        border: '1px solid rgba(245,158,11,0.3)',
+      }}
+    >
+      <Group gap="sm">
+        <Box
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            flexShrink: 0,
+          }}
+        >
+          🏆
+        </Box>
+        <div>
+          <Text size="xs" c="dimmed">Campeón</Text>
+          <Text fw={800} size="sm" style={{ color: '#F59E0B' }}>
+            {cup.championTeamName}
+          </Text>
+        </div>
+      </Group>
+    </Box>
+  );
+}
+
+/* ── Liga format: match list ──────────────────────────────────────────── */
+
+function LigaCupCard({ cup }: { cup: CupDto }) {
+  const groups = groupRounds(cup);
+  return (
+    <Paper
+      p="md"
+      mb="md"
+      className="stagger-item"
+      style={{
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderLeft: '3px solid #10B981',
+      }}
+    >
+      <CupHeader cup={cup} />
+      <ChampionBanner cup={cup} />
+      {groups.map((g) => {
+        const realMatches = g.legs
+          .flatMap((l) => l.matches)
+          .filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE');
+        if (realMatches.length === 0) return null;
+        return (
+          <Box key={g.logicalNumero} mb="sm">
+            <Group gap="sm" mb={4}>
+              <Box
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  background: 'rgba(16,185,129,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '10px', color: '#10B981' }}>
+                  {g.logicalNumero}
+                </Text>
+              </Box>
+              <Text size="sm" fw={600}>Jornada {g.logicalNumero}</Text>
+            </Group>
+            <Table>
+              <Table.Tbody>
+                {realMatches.map((m, i) => (
+                  <Table.Tr
+                    key={i}
+                    style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
+                  >
+                    <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} style={{ textAlign: 'right' }}>
+                      {m.homeTeamName}
+                    </Table.Td>
+                    <Table.Td ta="center">
+                      {m.played ? (
+                        <Group gap="xs" justify="center">
+                          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
+                            {m.homeGoals}
+                          </Text>
+                          <Text c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>–</Text>
+                          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
+                            {m.awayGoals}
+                          </Text>
+                        </Group>
+                      ) : (
+                        <Text c="dimmed" size="sm" style={{ fontFamily: '"Geist Mono", monospace' }}>vs</Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>
+                      {m.awayTeamName}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Box>
+        );
+      })}
+    </Paper>
+  );
+}
+
+/* ── Elimination bracket ──────────────────────────────────────────────── */
+
+function EliminationCupCard({ cup }: { cup: CupDto }) {
+  const [expanded, setExpanded] = useState(true);
+  const groups = groupRounds(cup);
+
+  // Build bracket rounds (filter BYEs per round, keep structure)
+  const bracketRounds = groups.map((g) => ({
+    label: g.legs.length > 1
+      ? `Ronda ${g.logicalNumero}`
+      : g.legs[0]?.label
+        ? `Ronda ${g.logicalNumero} · ${g.legs[0].label}`
+        : `Ronda ${g.logicalNumero}`,
+    matches: g.legs.flatMap((l) => l.matches),
+  }));
+
+  return (
+    <Paper
+      p="md"
+      mb="md"
+      className="stagger-item"
+      style={{
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderLeft: '3px solid #F59E0B',
+      }}
+    >
+      <Group justify="space-between" mb="sm">
+        <div style={{ flex: 1 }}>
+          <CupHeader cup={cup} />
+        </div>
+        <Button
+          size="compact-xs"
+          variant="subtle"
+          color="gray"
+          leftSection={<IconLayoutGrid size={14} />}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? 'Ocultar bracket' : 'Ver bracket'}
+        </Button>
+      </Group>
+      <ChampionBanner cup={cup} />
+      {expanded && (
+        <Box mt="xs">
+          <BracketView rounds={bracketRounds} championTeamName={cup.championTeamName} />
+        </Box>
+      )}
+    </Paper>
+  );
+}
+
+/* ── Main page ────────────────────────────────────────────────────────── */
 
 export function CupsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -88,6 +345,8 @@ export function CupsPage() {
   }
 
   const list = cups.data?.cups ?? [];
+  const ligaCups = list.filter((c) => c.formato === 'liga');
+  const elimCups = list.filter((c) => c.formato !== 'liga');
 
   return (
     <div className="page-enter">
@@ -231,232 +490,39 @@ export function CupsPage() {
           <Text c="dimmed" size="sm">Sin copas todavía.</Text>
         </Paper>
       ) : (
-        list.map((c, i) => {
-          const sc = STATUS_CONFIG[c.status];
-          return (
-            <Paper
-              key={c.id}
-              p="md"
-              mb="md"
-              className="stagger-item"
-              style={{
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderLeft: '3px solid #F59E0B',
-                animationDelay: `${i * 50}ms`,
-              }}
-            >
-              <Group justify="space-between" mb="sm">
-                <div>
-                  <Group gap="sm">
-                    <IconTrophy size={18} color="#F59E0B" />
-                    <Text fw={700} size="lg">{c.name}</Text>
-                  </Group>
-                  <Text size="xs" c="dimmed" ml={30}>
-                    {TIPO_LABEL[c.tipo]} ·{' '}
-                    {c.formato === 'liga' ? 'liga' : c.formato === 'eliminatoria_ida_vuelta' ? 'eliminatoria (ida y vuelta)' : 'eliminatoria'}
-                    {c.categoria === 'juvenil' ? ' · juvenil' : ''} · año {c.year}
-                  </Text>
-                </div>
-                <Group gap="xs">
-                  {c.recurring && (
-                    <Box
-                      style={{
-                        padding: '3px 12px',
-                        borderRadius: 14,
-                        background: 'rgba(139,92,246,0.15)',
-                        color: '#8B5CF6',
-                        fontWeight: 600,
-                        fontSize: '12px',
-                      }}
-                    >
-                      Recurrente
-                    </Box>
-                  )}
-                  <Box
-                    style={{
-                      padding: '3px 12px',
-                      borderRadius: 14,
-                      background: sc.gradient,
-                      color: '#fff',
-                      fontWeight: 600,
-                      fontSize: '12px',
-                    }}
-                  >
-                    {sc.label}
-                  </Box>
-                </Group>
+        <>
+          {/* ── Elimination Brackets ──────────────────────────── */}
+          {elimCups.length > 0 && (
+            <Box mb="md">
+              <Group gap="sm" mb="sm">
+                <IconTrophy size={16} color="#F59E0B" />
+                <Text fw={700} size="lg">Brackets de Eliminación</Text>
               </Group>
-              {c.championTeamName && c.status === 'finalizada' && (
-                <Box
-                  p="sm"
-                  mb="sm"
-                  style={{
-                    borderRadius: 8,
-                    background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(217,119,6,0.08) 100%)',
-                    border: '1px solid rgba(245,158,11,0.3)',
-                  }}
-                >
-                  <Group gap="sm">
-                    <Box
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #F59E0B, #D97706)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '18px',
-                        flexShrink: 0,
-                      }}
-                    >
-                      🏆
-                    </Box>
-                    <div>
-                      <Text size="xs" c="dimmed">Campeón</Text>
-                      <Text fw={800} size="sm" style={{ color: '#F59E0B' }}>
-                        {c.championTeamName}
-                      </Text>
-                    </div>
-                  </Group>
-                </Box>
-              )}
-              {(() => {
-                const isIdaVuelta = c.formato === 'eliminatoria_ida_vuelta';
-                // Group rounds: for ida_vuelta, pair consecutive rounds (ida+vuelta)
-                // with the same logical round number.
-                type RoundGroup = { logicalNumero: number; legs: { numero: number; label: string; matches: typeof c.rounds[0]['matches'] }[] };
-                const groups: RoundGroup[] = [];
-                if (isIdaVuelta) {
-                  const seen = new Set<number>();
-                  for (const r of c.rounds) {
-                    if (seen.has(r.numero)) continue;
-                    const logicalNumero = r.numero;
-                    const ida = c.rounds.find((x) => x.numero === logicalNumero && x.leg === 'ida');
-                    const vuelta = c.rounds.find((x) => x.numero === logicalNumero + 1 && x.leg === 'vuelta');
-                    const legs: RoundGroup['legs'] = [];
-                    if (ida) legs.push({ numero: ida.numero, label: 'Ida', matches: ida.matches });
-                    if (vuelta) legs.push({ numero: vuelta.numero, label: 'Vuelta', matches: vuelta.matches });
-                    groups.push({ logicalNumero, legs });
-                    seen.add(logicalNumero);
-                    if (vuelta) seen.add(vuelta.numero);
-                  }
-                } else {
-                  for (const r of c.rounds) {
-                    groups.push({ logicalNumero: r.numero, legs: [{ numero: r.numero, label: '', matches: r.matches }] });
-                  }
-                }
-                return groups.map((g) => {
-                  const allMatches = g.legs.flatMap((l) => l.matches);
-                  const realMatches = allMatches.filter(
-                    (m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE',
-                  );
-                  if (realMatches.length === 0) return null;
-                  return (
-                    <Box key={g.logicalNumero} style={{ marginBottom: 16 }}>
-                      <Group gap="sm" mb={6}>
-                        <Box
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: '50%',
-                            background: 'rgba(245,158,11,0.15)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '11px', color: '#F59E0B' }}>
-                            {g.logicalNumero}
-                          </Text>
-                        </Box>
-                        <Text size="sm" fw={600}>Ronda {g.logicalNumero}</Text>
-                      </Group>
-                      {g.legs.map((leg) => (
-                        <Box key={leg.numero} ml={isIdaVuelta ? 16 : 0} mb={isIdaVuelta ? 8 : 0}>
-                          {isIdaVuelta && (
-                            <Text size="xs" fw={600} c="dimmed" mb={4} ml={30}>
-                              {leg.label}
-                            </Text>
-                          )}
-                          <Table>
-                            <Table.Tbody>
-                              {leg.matches.filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE').map((m, i) => (
-                                <Table.Tr
-                                  key={i}
-                                  style={{
-                                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                                  }}
-                                >
-                                  <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} style={{ textAlign: 'right' }}>
-                                    {m.homeTeamName}
-                                  </Table.Td>
-                                  <Table.Td ta="center">
-                                    {m.played ? (
-                                      <Group gap="xs" justify="center">
-                                        <Text
-                                          fw={800}
-                                          style={{
-                                            fontFamily: '"Geist Mono", monospace',
-                                            fontSize: '18px',
-                                            color: '#F9FAFB',
-                                            minWidth: 28,
-                                            textAlign: 'center',
-                                          }}
-                                        >
-                                          {m.homeGoals}
-                                        </Text>
-                                        <Text c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>–</Text>
-                                        <Text
-                                          fw={800}
-                                          style={{
-                                            fontFamily: '"Geist Mono", monospace',
-                                            fontSize: '18px',
-                                            color: '#F9FAFB',
-                                            minWidth: 28,
-                                            textAlign: 'center',
-                                          }}
-                                        >
-                                          {m.awayGoals}
-                                        </Text>
-                                      </Group>
-                                    ) : (
-                                      <Text c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>vs</Text>
-                                    )}
-                                  </Table.Td>
-                                  <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>
-                                    {m.awayTeamName}
-                                  </Table.Td>
-                                  <Table.Td ta="right">
-                                    {m.played && m.winnerTeamId !== null ? (
-                                      <Box
-                                        style={{
-                                          display: 'inline-flex',
-                                          padding: '2px 10px',
-                                          borderRadius: 12,
-                                          background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
-                                          color: '#fff',
-                                          fontWeight: 600,
-                                          fontSize: '12px',
-                                        }}
-                                      >
-                                        {m.winnerTeamId === m.homeTeamId ? m.homeTeamName : m.awayTeamName}
-                                      </Box>
-                                    ) : null}
-                                  </Table.Td>
-                                </Table.Tr>
-                              ))}
-                            </Table.Tbody>
-                          </Table>
-                        </Box>
-                      ))}
-                    </Box>
-                  );
-                });
-              })()}
-            </Paper>
-          );
-        })
+              <Text size="xs" c="dimmed" mb="md" ml={24}>
+                Fase eliminatoria directa — el perdedor queda fuera.
+              </Text>
+              {elimCups.map((cup) => (
+                <EliminationCupCard key={cup.id} cup={cup} />
+              ))}
+            </Box>
+          )}
+
+          {/* ── Group Stage (Liga) ────────────────────────────── */}
+          {ligaCups.length > 0 && (
+            <Box>
+              <Group gap="sm" mb="sm">
+                <IconLayoutGrid size={16} color="#10B981" />
+                <Text fw={700} size="lg">Fase de Grupos</Text>
+              </Group>
+              <Text size="xs" c="dimmed" mb="md" ml={24}>
+                Liga todos contra todos — el líder alza la copa.
+              </Text>
+              {ligaCups.map((cup) => (
+                <LigaCupCard key={cup.id} cup={cup} />
+              ))}
+            </Box>
+          )}
+        </>
       )}
     </div>
   );

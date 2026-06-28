@@ -28,6 +28,7 @@ import { expireStaleEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
+import { simulateRivalLeagues, driftRivalStrengths, updateRivalPrestige } from './rival-sim';
 import type {
   CreateGameOptions,
   Division,
@@ -68,8 +69,12 @@ const CREATED_TEAM_ARRAIGO = 75;
 const DEFAULT_STADIUM_CAPACITY = 25_000;
 const DEFAULT_ACADEMIA = 40;
 
-function teamsInDivision(teams: Team[], orden: number): Team[] {
-  return teams.filter((t) => t.divisionOrden === orden);
+function teamsInDivision(teams: Team[], orden: number, federationId?: number): Team[] {
+  return teams.filter((t) => {
+    if (t.divisionOrden !== orden) return false;
+    if (federationId !== undefined && t.federationId !== federationId) return false;
+    return true;
+  });
 }
 
 export function createGame(seed: number, options: CreateGameOptions = {}): GameState {
@@ -84,6 +89,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
       name: options.playerFederationName ?? 'Federación del Comisionado',
       prestige: startingPrestige,
       isPlayer: true,
+      confederationId: 0,
     },
   ];
 
@@ -151,8 +157,10 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
   }
 
   // Rival federations and their external teams (negotiation targets, not yet
-  // in any division of the player's league).
+  // in any division of the player's league). Each rival federation gets its
+  // own divisions when seed data is provided (Fase 9).
   let nextFederationId = 2;
+  const rivalDivisions: Division[] = [];
   for (const rival of options.rivals ?? []) {
     const rivalId = nextFederationId++;
     federations.push({
@@ -160,6 +168,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
       name: rival.name,
       prestige: rival.prestige,
       isPlayer: false,
+      confederationId: rival.confederationId ?? 0,
     });
     for (const rt of rival.teams) {
       teams.push({
@@ -177,7 +186,39 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     }
   }
 
-  const divisions: Division[] = [{ orden: 1, name: divisionName(1) }];
+  // Fase 9: if confederations are provided, create divisions for rival federations
+  // and assign rival teams to their respective divisions.
+  if (options.confederations && options.confederations.length > 0) {
+    let rivalDivOrden = 1;
+    for (const conf of options.confederations) {
+      if (!conf.available) continue;
+      // Each league in the confederation becomes a division for its federation
+      for (const league of conf.leagues) {
+        // Find the federation for this league's country
+        const rivalFed = federations.find(f => f.name.includes(league.country) || f.name.includes(league.name) || f.name === league.name);
+        if (!rivalFed) continue;
+        // Find teams belonging to this league's country
+        const leagueTeams = teams.filter(t => t.federationId === rivalFed.id && t.divisionOrden === null);
+        if (leagueTeams.length === 0) continue;
+        const divOrden = rivalDivOrden++;
+        rivalDivisions.push({
+          orden: divOrden,
+          name: league.name,
+          federationId: rivalFed.id,
+        });
+        // Assign teams to this division (by strength, top to bottom)
+        const sorted = [...leagueTeams].sort((a, b) => b.strength - a.strength);
+        for (const t of sorted) {
+          t.divisionOrden = divOrden;
+        }
+      }
+    }
+  }
+
+  const divisions: Division[] = [
+    { orden: 1, name: divisionName(1), federationId: playerFederationId },
+    ...rivalDivisions,
+  ];
 
   // A fresh game lands in pretemporada (§4.8): the commissioner sets up
   // competitions/contracts/prizes BEFORE calling startSeason, which builds the
@@ -247,6 +288,10 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     eventImpulseLoss: 0,
     eventTreasuryInjection: 0,
     poachCooldowns: {},
+    confederations: [],
+    rivalRng: makeRng((seed ^ 0xabcd1234) >>> 0),
+    rivalStandings: {},
+    rivalChampions: [],
   };
 }
 
@@ -262,6 +307,7 @@ export function startSeason(prev: GameState): GameState {
     s.divisions,
     s.rng,
     s.leagueFormat === 'ida' ? 1 : 2,
+    s.playerFederationId,
   );
   s.fixtures = fixtures;
   s.totalMatchdays = total;
@@ -547,15 +593,15 @@ export function closeSeason(prev: GameState): GameState {
   if (!prev.seasonOver) return prev;
   const s = structuredClone(prev);
 
-  // Final table per division (computed before any promotion changes).
+  // Final table per player-federation division (computed before any promotion changes).
   const penalties = pointPenaltiesForYear(s, s.year);
   const standingsByOrden = new Map<number, StandingRow[]>();
-  for (const d of s.divisions) {
+  for (const d of s.divisions.filter(d => d.federationId === s.playerFederationId)) {
     standingsByOrden.set(
       d.orden,
       applyPointPenalties(
         computeStandings(
-          teamsInDivision(s.teams, d.orden),
+          teamsInDivision(s.teams, d.orden, s.playerFederationId),
           s.results.filter((r) => r.divisionOrden === d.orden),
         ),
         penalties,
@@ -565,7 +611,7 @@ export function closeSeason(prev: GameState): GameState {
 
   // Player prestige is driven by the top flight (division 1).
   const top = standingsByOrden.get(1) ?? [];
-  const topTeams = teamsInDivision(s.teams, 1);
+  const topTeams = teamsInDivision(s.teams, 1, s.playerFederationId);
   const titleRaceGap =
     top.length > 0 ? top[0].points - top[Math.min(2, top.length - 1)].points : 0;
   const meanStrength =
@@ -593,7 +639,7 @@ export function closeSeason(prev: GameState): GameState {
   const playerFed = s.federations.find((f) => f.id === s.playerFederationId);
   if (playerFed) playerFed.prestige = s.prestige;
 
-  for (const d of s.divisions) {
+  for (const d of s.divisions.filter(d => d.federationId === s.playerFederationId)) {
     const st = standingsByOrden.get(d.orden) ?? [];
     if (st.length === 0) continue;
     const champion = st[0];
@@ -675,6 +721,18 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
+  // Fase 9: simulate rival leagues (independent RNG, doesn't affect player's matches).
+  if (s.confederations.length > 0) {
+    const rivalResult = simulateRivalLeagues(s);
+    // Merge rival standings (keep previous years, overwrite current)
+    for (const [key, rows] of Object.entries(rivalResult.standings)) {
+      s.rivalStandings[key] = rows;
+    }
+    s.rivalChampions.push(...rivalResult.champions);
+    driftRivalStrengths(s, rivalResult.standings);
+    updateRivalPrestige(s);
+  }
+
   s.year += 1;
   progressNegotiations(s); // §4.2 timers compare against the new year
   processRivalActions(s);
@@ -685,23 +743,28 @@ export function closeSeason(prev: GameState): GameState {
   // independent rng, so player-less default games are byte-identical.
   runTransferWindow(s);
 
-  // Promotion / relegation between adjacent divisions (§1).
-  if (s.divisions.length >= 2) {
+  // Promotion / relegation between adjacent player-federation divisions (§1).
+  const playerDivs = s.divisions
+    .filter(d => d.federationId === s.playerFederationId)
+    .sort((a, b) => a.orden - b.orden);
+  if (playerDivs.length >= 2) {
     const byId = new Map(s.teams.map((t) => [t.id, t]));
-    for (let d = 1; d < s.divisions.length; d++) {
-      const upper = standingsByOrden.get(d) ?? [];
-      const lower = standingsByOrden.get(d + 1) ?? [];
+    for (let i = 0; i < playerDivs.length - 1; i++) {
+      const upperOrden = playerDivs[i].orden;
+      const lowerOrden = playerDivs[i + 1].orden;
+      const upper = standingsByOrden.get(upperOrden) ?? [];
+      const lower = standingsByOrden.get(lowerOrden) ?? [];
       const pr = Math.min(
         PROMOTION_RELEGATION,
         Math.floor(Math.min(upper.length, lower.length) / 2),
       );
       for (const r of upper.slice(upper.length - pr)) {
         const t = byId.get(r.teamId);
-        if (t) t.divisionOrden = d + 1;
+        if (t) t.divisionOrden = lowerOrden;
       }
       for (const r of lower.slice(0, pr)) {
         const t = byId.get(r.teamId);
-        if (t) t.divisionOrden = d;
+        if (t) t.divisionOrden = upperOrden;
       }
     }
   }

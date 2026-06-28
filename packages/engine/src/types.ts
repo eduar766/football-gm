@@ -1,5 +1,13 @@
 import type { RngState } from './rng';
 
+// Confederation (UEFA, CONMEBOL, etc.) — groups federations by region.
+export interface Confederation {
+  id: number;
+  name: string;
+  region: string;
+  available: boolean;
+}
+
 // Federation is one entity type (design §3): the player's and the rivals' are
 // the same model, distinguished by `isPlayer`. This gives symmetry so rivals
 // can act with the same rules as the player.
@@ -8,12 +16,15 @@ export interface Federation {
   name: string;
   prestige: number;
   isPlayer: boolean;
+  confederationId: number;
 }
 
 // A tier of the player's league (§4.4). orden 1 = top flight.
+// For rival leagues, each federation has its own divisions (federationId set).
 export interface Division {
   orden: number;
   name: string;
+  federationId: number; // which federation owns this division (player or rival)
 }
 
 export interface Team {
@@ -404,6 +415,20 @@ export interface SeasonRecord {
   delta: number;
 }
 
+// Standings row for rival leagues (simulated off-screen).
+export interface RivalStandingRow {
+  teamId: number;
+  name: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDiff: number;
+  points: number;
+}
+
 export interface GameState {
   seed: number;
   rng: RngState;
@@ -478,6 +503,13 @@ export interface GameState {
   eventTreasuryInjection: number;
   // Poach cooldown: teamId → year until which poaching is blocked.
   poachCooldowns: Record<number, number>;
+  // Rival simulation (Fase 9): confederations, independent rng, and computed standings.
+  confederations: Confederation[];
+  rivalRng: RngState;
+  // Rival standings per division key "federationId:divisionOrden".
+  rivalStandings: Record<string, RivalStandingRow[]>;
+  // Rival champions per year (appended each closeSeason).
+  rivalChampions: SeasonRecord[];
 }
 
 export interface CreateGameOptions {
@@ -496,8 +528,11 @@ export interface CreateGameOptions {
   rivals?: Array<{
     name: string;
     prestige: number;
+    confederationId?: number;
     teams: Array<{ name: string; strength: number; arraigo: number }>;
   }>;
+  // Fase 9: confederations + league structure for rival sim.
+  confederations?: Array<Confederation & { leagues: Array<{ name: string; country: string; flag: string }> }>;
   playerFederationName?: string;
   impulsesPerSeason?: number;
   startingPrestige?: number;

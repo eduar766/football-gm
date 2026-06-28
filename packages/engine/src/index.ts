@@ -13,4 +13,6 @@ export * from './events';
 export * from './cups';
 export * from './prizes';
 export * from './transfers';
+export * from './rival-sim';
+export * from './seed-data';
 export * from './engine';

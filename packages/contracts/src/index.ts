@@ -230,6 +230,9 @@ export const FederationOverview = z.object({
   leagueName: z.string().nullable(),
   teamCount: z.number().int(),
   divisions: z.array(FederationDivision),
+  confederationId: z.number().int().optional(),
+  confederationName: z.string().optional(),
+  standings: z.array(StandingRowDto).optional(),
 });
 export type FederationOverview = z.infer<typeof FederationOverview>;
 
@@ -268,11 +271,20 @@ export const GoalScorerRankingRow = z.object({
 });
 export type GoalScorerRankingRow = z.infer<typeof GoalScorerRankingRow>;
 
+export const RivalChampionRow = z.object({
+  year: z.number().int(),
+  federationName: z.string(),
+  championName: z.string(),
+  points: z.number().int(),
+});
+export type RivalChampionRow = z.infer<typeof RivalChampionRow>;
+
 export const HistoryResponse = z.object({
   records: z.array(SeasonRecordDto),
   palmares: z.array(PalmaresRow),
   awards: z.array(AwardDto),
   topScorers: z.array(GoalScorerRankingRow),
+  rivalChampions: z.array(RivalChampionRow),
 });
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
 
@@ -294,8 +306,18 @@ export const FederationListItem = z.object({
   tier: Tier,
   isPlayer: z.boolean(),
   teamCount: z.number().int(),
+  confederationId: z.number().int().optional(),
+  confederationName: z.string().optional(),
 });
 export type FederationListItem = z.infer<typeof FederationListItem>;
+
+export const ConfederationDto = z.object({
+  id: Id,
+  name: z.string(),
+  region: z.string(),
+  available: z.boolean(),
+});
+export type ConfederationDto = z.infer<typeof ConfederationDto>;
 
 // A rival-owned team the player may currently negotiate for (tier-gated).
 export const MarketTeam = z.object({

@@ -179,6 +179,66 @@ export function FederationPage() {
           </Table.Tbody>
         </Table>
       </Paper>
+
+      {/* Rival federation standings */}
+      {f.standings && f.standings.length > 0 && (
+        <Paper p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+          <Group gap="sm" mb="sm">
+            <Text fw={700}>Tabla de Posiciones</Text>
+            {f.confederationName && (
+              <Badge size="sm" variant="light" color="blue">
+                {f.confederationName}
+              </Badge>
+            )}
+          </Group>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>#</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">PJ</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">G</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">E</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">P</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">DG</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Pts</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {f.standings.map((r, i) => (
+                <Table.Tr
+                  key={r.teamId}
+                  className="stagger-item"
+                  style={{
+                    borderLeft: i === 0 ? '3px solid #F59E0B' : i < 3 ? '3px solid #10B981' : '3px solid transparent',
+                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    animationDelay: `${i * 30}ms`,
+                  }}
+                >
+                  <Table.Td>
+                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: i === 0 ? '#F59E0B' : 'rgba(255,255,255,0.5)' }}>
+                      {i + 1}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td fw={i < 3 ? 600 : 400}>{r.name}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.played}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.won}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.drawn}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.lost}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace', color: r.goalDiff > 0 ? '#10B981' : r.goalDiff < 0 ? '#EF4444' : undefined }}>
+                    {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
+                  </Table.Td>
+                  <Table.Td ta="right">
+                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: i === 0 ? '#F59E0B' : '#10B981' }}>
+                      {r.points}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
     </div>
   );
 }

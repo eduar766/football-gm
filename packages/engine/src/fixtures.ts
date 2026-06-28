@@ -50,15 +50,20 @@ export function generateFixtures(
 
 // One round-robin per division, concatenated. A "matchday" advances every
 // division by a round; the season length is the longest division's schedule.
+// Only generates fixtures for the player's own federation divisions.
 export function buildDivisionFixtures(
   teams: Team[],
   divisions: Division[],
   rng: RngState,
   legs: 1 | 2 = 2,
+  playerFederationId?: number,
 ): { fixtures: Fixture[]; total: number } {
   const fixtures: Fixture[] = [];
-  for (const d of divisions) {
-    const ids = teams.filter((t) => t.divisionOrden === d.orden).map((t) => t.id);
+  const playerDivisions = playerFederationId !== undefined
+    ? divisions.filter(d => d.federationId === playerFederationId)
+    : divisions;
+  for (const d of playerDivisions) {
+    const ids = teams.filter((t) => t.divisionOrden === d.orden && t.federationId === d.federationId).map((t) => t.id);
     if (ids.length >= 2) fixtures.push(...generateFixtures(ids, rng, d.orden, legs));
   }
   const total = fixtures.length

@@ -1,8 +1,9 @@
 import { Box, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconBuilding } from '@tabler/icons-react';
+import { IconBuilding, IconWorld } from '@tabler/icons-react';
 import { api } from '../api';
+import type { FederationListItem } from '@football-gm/contracts';
 
 const TIER_COLOR: Record<number, string> = {
   1: '#F59E0B',
@@ -11,6 +12,117 @@ const TIER_COLOR: Record<number, string> = {
   4: '#6B7280',
   5: '#4B5563',
 };
+
+function FedRow({ f, index, gameId }: { f: FederationListItem; index: number; gameId: string }) {
+  return (
+    <Table.Tr
+      key={f.id}
+      className="stagger-item"
+      style={{
+        borderLeft: f.isPlayer ? '3px solid #10B981' : '3px solid transparent',
+        background: f.isPlayer
+          ? 'rgba(16,185,129,0.06)'
+          : index % 2 === 0
+            ? 'rgba(255,255,255,0.02)'
+            : 'transparent',
+        transition: 'border-color 0.15s, background 0.15s',
+        animationDelay: `${index * 50}ms`,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderLeftColor = '#10B981';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderLeftColor = f.isPlayer ? '#10B981' : 'transparent';
+      }}
+    >
+      <Table.Td>
+        <Group gap="sm">
+          {f.isPlayer && (
+            <Box
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#10B981',
+                boxShadow: '0 0 8px rgba(16,185,129,0.5)',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <Link
+            to={f.isPlayer ? '/games/$gameId/federation' : '/games/$gameId/federations/$fedId'}
+            params={f.isPlayer ? { gameId } : { gameId, fedId: String(f.id) }}
+          >
+            <Text fw={f.isPlayer ? 700 : 400} style={{ fontFamily: '"DM Sans", sans-serif', color: f.isPlayer ? '#10B981' : '#60A5FA', cursor: 'pointer' }}>
+              {f.name}
+            </Text>
+          </Link>
+        </Group>
+      </Table.Td>
+      <Table.Td ta="right">
+        <Group gap="xs" justify="flex-end" wrap="nowrap">
+          <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+            {f.prestige}
+          </Text>
+          <Box
+            style={{
+              width: 48,
+              height: 6,
+              borderRadius: 3,
+              background: 'rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            <Box
+              style={{
+                width: `${Math.min(100, f.prestige)}%`,
+                height: '100%',
+                borderRadius: 3,
+                background: 'linear-gradient(90deg, #D97706, #F59E0B)',
+              }}
+            />
+          </Box>
+        </Group>
+      </Table.Td>
+      <Table.Td ta="right">
+        <Box
+          style={{
+            display: 'inline-flex',
+            padding: '2px 10px',
+            borderRadius: 12,
+            background: `${TIER_COLOR[f.tier] ?? '#6B7280'}20`,
+            color: TIER_COLOR[f.tier] ?? '#6B7280',
+            fontFamily: '"Geist Mono", monospace',
+            fontWeight: 700,
+            fontSize: '13px',
+          }}
+        >
+          {f.tier}
+        </Box>
+      </Table.Td>
+      <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
+        {f.teamCount}
+      </Table.Td>
+      <Table.Td ta="right">
+        {f.isPlayer && (
+          <Box
+            style={{
+              padding: '2px 10px',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #10B981, #059669)',
+              color: '#fff',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}
+          >
+            Tú
+          </Box>
+        )}
+      </Table.Td>
+    </Table.Tr>
+  );
+}
 
 export function FederationsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -72,127 +184,55 @@ export function FederationsPage() {
       </Paper>
 
       <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Federación</Table.Th>
-              <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Prestigio</Table.Th>
-              <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Tier</Table.Th>
-              <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Equipos</Table.Th>
-              <Table.Th />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {feds.data?.map((f, i) => (
-              <Table.Tr
-                key={f.id}
-                className="stagger-item"
-                style={{
-                  borderLeft: f.isPlayer ? '3px solid #10B981' : '3px solid transparent',
-                  background: f.isPlayer
-                    ? 'rgba(16,185,129,0.06)'
-                    : i % 2 === 0
-                      ? 'rgba(255,255,255,0.02)'
-                      : 'transparent',
-                  transition: 'border-color 0.15s, background 0.15s',
-                  animationDelay: `${i * 50}ms`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderLeftColor = '#10B981';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderLeftColor = f.isPlayer ? '#10B981' : 'transparent';
-                }}
-              >
-                <Table.Td>
-                  <Group gap="sm">
-                    {f.isPlayer && (
-                      <Box
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: '#10B981',
-                          boxShadow: '0 0 8px rgba(16,185,129,0.5)',
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
-                    <Link
-                      to={f.isPlayer ? '/games/$gameId/federation' : '/games/$gameId/federations/$fedId'}
-                      params={f.isPlayer ? { gameId } : { gameId, fedId: String(f.id) }}
-                    >
-                      <Text fw={f.isPlayer ? 700 : 400} style={{ fontFamily: '"DM Sans", sans-serif', color: f.isPlayer ? '#10B981' : '#60A5FA', cursor: 'pointer' }}>
-                        {f.name}
-                      </Text>
-                    </Link>
-                  </Group>
-                </Table.Td>
-                <Table.Td ta="right">
-                  <Group gap="xs" justify="flex-end" wrap="nowrap">
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
-                      {f.prestige}
-                    </Text>
-                    <Box
-                      style={{
-                        width: 48,
-                        height: 6,
-                        borderRadius: 3,
-                        background: 'rgba(255,255,255,0.08)',
-                        overflow: 'hidden',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Box
-                        style={{
-                          width: `${Math.min(100, f.prestige)}%`,
-                          height: '100%',
-                          borderRadius: 3,
-                          background: 'linear-gradient(90deg, #D97706, #F59E0B)',
-                        }}
-                      />
-                    </Box>
-                  </Group>
-                </Table.Td>
-                <Table.Td ta="right">
-                  <Box
-                    style={{
-                      display: 'inline-flex',
-                      padding: '2px 10px',
-                      borderRadius: 12,
-                      background: `${TIER_COLOR[f.tier] ?? '#6B7280'}20`,
-                      color: TIER_COLOR[f.tier] ?? '#6B7280',
-                      fontFamily: '"Geist Mono", monospace',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                    }}
-                  >
-                    {f.tier}
-                  </Box>
-                </Table.Td>
-                <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
-                  {f.teamCount}
-                </Table.Td>
-                <Table.Td ta="right">
-                  {f.isPlayer && (
-                    <Box
-                      style={{
-                        padding: '2px 10px',
-                        borderRadius: 12,
-                        background: 'linear-gradient(135deg, #10B981, #059669)',
-                        color: '#fff',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Tú
-                    </Box>
-                  )}
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        {/* Group federations by confederation */}
+        {(() => {
+          const allFeds = feds.data ?? [];
+          const playerFeds = allFeds.filter(f => f.isPlayer);
+          const byConf = new Map<string, FederationListItem[]>();
+          for (const f of allFeds) {
+            if (f.isPlayer) continue;
+            const conf = f.confederationName ?? 'Sin confederación';
+            const arr = byConf.get(conf) ?? [];
+            arr.push(f);
+            byConf.set(conf, arr);
+          }
+          let rowIdx = 0;
+
+          return (
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Federación</Table.Th>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Prestigio</Table.Th>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Tier</Table.Th>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Equipos</Table.Th>
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {/* Player federation first */}
+                {playerFeds.map((f) => (
+                  <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
+                ))}
+
+                {/* Then grouped by confederation */}
+                {[...byConf.entries()].map(([confName, confFeds]) => [
+                  <Table.Tr key={`conf-${confName}`}>
+                    <Table.Td colSpan={5} style={{ padding: '8px 0 4px' }}>
+                      <Group gap="xs">
+                        <IconWorld size={14} color="#3B82F6" />
+                        <Text size="sm" fw={600} c="dimmed">{confName}</Text>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>,
+                  ...confFeds.sort((a, b) => b.prestige - a.prestige).map((f) => (
+                    <FedRow key={f.id} f={f} index={rowIdx++} gameId={gameId} />
+                  )),
+                ])}
+              </Table.Tbody>
+            </Table>
+          );
+        })()}
       </Paper>
     </div>
   );

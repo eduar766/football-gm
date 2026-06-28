@@ -194,3 +194,60 @@ pnpm test               # engine 99/99 pass (14 files)
 - **Negotiations**: Tabs split active/history; retry button on rejected negotiations calls `startNegotiation` directly
 - **Palmarés**: computed from `seasonRecords` (league + cup champions) in `getTeam()`, displayed as trophy cards
 - **TeamsPage**: Tabs split "Mi federación" (grouped by division) vs "Otras federaciones" (grouped by federation)
+
+### Current Session State
+
+> **Last updated:** Junio 2026 — After Fase 9 (Rival Simulation + Real Data)
+
+### What was done
+
+**Fase 9 — Motor de Rivales + Datos Reales (all 12 steps):**
+
+| Step | Feature | Key files |
+|------|---------|-----------|
+| 1 | Seed data: 132 UEFA teams | `packages/engine/src/seed-data.ts` (nuevo) |
+| 2 | Types: Confederation, Division.federationId, RivalStandingRow, GameState expansion | `packages/engine/src/types.ts` |
+| 3 | createGame builds rival leagues from seed data | `packages/engine/src/engine.ts` |
+| 4 | Rival sim: simulateRivalLeagues, driftRivalStrengths, updateRivalPrestige | `packages/engine/src/rival-sim.ts` (nuevo) |
+| 5 | closeSeason integrates rival sim + writes rival champions | `packages/engine/src/engine.ts` |
+| 6 | world-generator uses seed data for real rivals | `apps/backend/src/game/world-generator.ts` |
+| 7 | game.service: rival division persistence, backward compat | `apps/backend/src/game/game.service.ts` |
+| 8 | Contracts: FederationOverview.standings, ConfederationDto | `packages/contracts/src/index.ts` |
+| 9 | FederationPage: rival standings table | `apps/frontend/src/routes/FederationPage.tsx` |
+| 10 | FederationsPage: grouped by confederation | `apps/frontend/src/routes/FederationsPage.tsx` |
+| 11 | TeamsPage: works with real divisions (existing logic) | `apps/frontend/src/routes/TeamsPage.tsx` |
+
+### What's pending
+
+| # | Feature | Priority | Notes |
+|---|---------|----------|-------|
+| — | GameLayout sidebar confederation | Media | Show player's confederation in sidebar |
+| — | Tests for rival simulation | Alta | Add tests for `simulateRivalLeagues` in `rival-sim.test.ts` |
+| — | Tests for ida y vuelta | Alta | Add test cases for `eliminatoria_ida_vuelta` in `cups.test.ts` |
+| — | Tests for new norm types | Alta | Add test cases for `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` in `norms.test.ts` |
+| — | Fase 8 Batch 2 | Alta | Narrativa (form streaks, event chains, title tension) |
+
+### Verification status
+
+```bash
+pnpm typecheck          # 6/6 packages pass
+pnpm test               # engine 99/99 pass (14 files)
+```
+
+### Key architecture notes for next session
+
+- **Engine `Confederation`** at `types.ts:4`: `{ id, name, region, available }`
+- **Engine `Federation`** expanded with `confederationId: number` (0 for player)
+- **Engine `Division`** expanded with `federationId: number` (links division to its federation)
+- **Engine `GameState`** has: `confederations`, `rivalRng`, `rivalStandings`, `rivalChampions`
+- **`rival-sim.ts`**: `simulateRivalLeagues()` → generate fixtures → simulate matches via `simulateMatch` → compute standings → drift strengths → update prestige
+- **`seed-data.ts`**: UEFA with 7 federations (England, Spain, Italy, Germany, France, Netherlands, Portugal), 132 real teams
+- **Rival sim uses `rivalRng`** (independent) — never touches `state.rng`, golden-safe
+- **Rival teams get `divisionOrden`** — no longer `null`; each rival federation has its own divisions
+- **`buildDivisionFixtures()`** takes optional `playerFederationId` — only generates fixtures for player's divisions
+- **`closeSeason()`** filters player-federation-only divisions for standings, history, and promotion/relegation
+- **Rival standings persisted** in `GameState.rivalStandings` (key: `"federationId:orden"`)
+- **Backward compatible**: `loadState()` defaults `confederations`, `rivalRng`, `rivalStandings`, `rivalChampions` for old saves
+- **FederationPage** shows standings table for rival federations (when `f.standings` exists)
+- **FederationsPage** groups by confederation with `IconWorld` dividers
+- **CONMEBOL/CONCACAF/CAF/AFC/OFC** appear as "Próximamente" in seed data (`available: false`)

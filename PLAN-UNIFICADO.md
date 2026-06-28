@@ -6,13 +6,14 @@
 
 ## Estado de Sesión
 
-> **Última sesión:** Junio 2026 — Fase 8 Batch 1 + #11: Tipos de sanciones
-> **Siguiente sesión:** Fase 8 Batch 2 (narrativa: form streaks, event chains, title tension)
+> **Última sesión:** Junio 2026 — Fase 9: Motor de Rivales + Datos Reales (132 equipos UEFA)
+> **Siguiente sesión:** Fase 8 Batch 2 — Narrativa (form streaks, event chains, title tension)
 
-### Completado en esta sesión
+### Completado en sesiones anteriores
 
 | # | Feature | Prioridad | Estado |
 |---|---------|-----------|--------|
+| Fase 9 | Motor de Rivales + 132 equipos UEFA reales | Alta | ✅ |
 | #13 | Revisión + Reunión de emergencia | Baja | ✅ |
 | #8 | Evento notificación tardía | Baja | ✅ |
 | #2 | Selección masiva equipos | Baja | ✅ |
@@ -23,11 +24,317 @@
 | #5 | Bracket inline en dashboard | Media | ✅ |
 | #12 | Requisitos de equipos | Media | ✅ |
 | #1 | Copa ida y vuelta | Alta | ✅ |
+| #11 | Tipos de sanciones | Alta | ✅ |
 
 ### Pendiente para próxima sesión
 
 | # | Feature | Prioridad | Notas |
 |---|---------|-----------|-------|
+
+---
+
+## Fase 9 — Motor de Rivales + Datos Reales
+
+> **Objetivo:** Las federaciones rivales dejan de ser "cáscaras vacías". Cada una tiene su
+> liga interna con equipos reales, simula partidos, produce campeones, y afecta prestige.
+> El jugador puede elegir confederación (UEFA, CONMEBOL, etc.) al crear la partida.
+
+### Arquitectura actual (problema)
+
+```
+GameState:
+  federations: Federation[]     ← 1 player + 4 rivals
+  divisions: Division[]         ← SOLO del jugador
+  teams: Team[]                 ← rivals tienen divisionOrden: null, sin jugadores
+  history: SeasonRecord[]       ← SOLO del jugador
+```
+
+**Resultado:** Rival federations existen como datos estáticos. No tienen ligas, no juegan,
+no generan campeones. Su prestige apenas cambia (+1 represalia).
+
+### Arquitectura propuesta
+
+```
+GameState:
+  confederations: Confederation[]   ← NUEVO: UEFA, CONMEBOL, CONCACAF, etc.
+  federations: Federation[]         ← EXPANDIDO: incluye confederationId
+  divisions: Division[]             ← EXPANDIDO: incluye todas las ligas (player + rival)
+  teams: Team[]                     ← EXPANDIDO: rivals ahora tienen divisionOrden
+  history: SeasonRecord[]           ← EXPANDIDO: incluye rivales
+  rivalRng: RngState                ← NUEVO: RNG independiente para simular rivales
+```
+
+---
+
+### Fase 9.1 — Datos semilla (seed data)
+
+**Archivo nuevo:** `packages/engine/src/seed-data.ts`
+
+Contiene la estructura del mundo real hardcodeada (sin dependencia de APIs externas):
+
+```typescript
+interface ConfederationData {
+  id: number;
+  name: string;           // 'UEFA', 'CONMEBOL', etc.
+  region: string;
+  available: boolean;     // false = "Próximamente"
+  leagues: LeagueData[];
+}
+
+interface LeagueData {
+  name: string;           // 'Premier League', 'La Liga', etc.
+  country: string;
+  divisions: DivisionData[];
+}
+
+interface DivisionData {
+  name: string;           // 'Primera División'
+  orden: number;
+  teams: TeamData[];
+}
+
+interface TeamData {
+  name: string;
+  strength: number;       // 32-95 (basado en grandeza real)
+  arraigo: number;        // 50-100 (lealtad al club/federación)
+  stadium: string;
+}
+```
+
+**Contenido:** Solo UEFA disponible. CONMEBOL aparece como "Próximamente".
+
+#### UEFA — 7 federaciones, 132 equipos
+
+| País | Liga | Equipos | Elite (80+) | Fuertes (65-79) | Medios (50-64) | Bajos (35-49) |
+|------|------|---------|-------------|-----------------|----------------|---------------|
+| 🏴󠁧󠁢󠁥󠁮󠁧󠁿 Inglaterra | Premier League | 20 | 6 | 4 | 5 | 5 |
+| 🇪🇸 España | La Liga | 20 | 3 | 5 | 4 | 8 |
+| 🇮🇹 Italia | Serie A | 20 | 5 | 3 | 4 | 8 |
+| 🇩🇪 Alemania | Bundesliga | 18 | 2 | 4 | 5 | 7 |
+| 🇫🇷 Francia | Ligue 1 | 18 | 1 | 4 | 5 | 8 |
+| 🇳🇱 Holanda | Eredivisie | 18 | 0 | 3 | 5 | 10 |
+| 🇵🇹 Portugal | Primeira Liga | 18 | 3 | 1 | 3 | 11 |
+
+**Ejemplo — Premier League (20 equipos):**
+```
+Man City (92, arraigo 95)  · Etihad Stadium
+Liverpool (90, arraigo 95) · Anfield
+Arsenal (88, arraigo 95)   · Emirates Stadium
+Man Utd (83, arraigo 90)   · Old Trafford
+Chelsea (82, arraigo 90)   · Stamford Bridge
+Tottenham (78, arraigo 85) · Tottenham Hotspur Stadium
+Newcastle (75, arraigo 80) · St James' Park
+Aston Villa (70, arraigo 80) · Villa Park
+West Ham (65, arraigo 75)  · London Stadium
+Brighton (62, arraigo 65)  · AMEX Stadium
+... (10 más)
+```
+
+**Ejemplo — La Liga (20 equipos):**
+```
+Real Madrid (95, arraigo 100) · Santiago Bernabéu
+Barcelona (90, arraigo 95)    · Estadi Olímpic
+Atlético (82, arraigo 85)     · Cívitas Metropolitano
+Athletic Club (72, arraigo 90) · San Mamés
+Villarreal (68, arraigo 75)   · Estadio de la Cerámica
+Sevilla (68, arraigo 80)      · Sánchez-Pizjuán
+Real Betis (65, arraigo 75)   · Benito Villamarín
+Real Sociedad (65, arraigo 80) · Reale Arena
+... (12 más)
+```
+
+**Ejemplo — Bundesliga (18 equipos):**
+```
+Bayern Munich (92, arraigo 95)    · Allianz Arena
+Dortmund (82, arraigo 85)         · Signal Iduna Park
+Leverkusen (78, arraigo 75)       · BayArena
+Leipzig (75, arraigo 70)          · Red Bull Arena
+Stuttgart (70, arraigo 80)        · MHPArena
+Frankfurt (70, arraigo 75)        · Deutsche Bank Park
+... (12 más)
+```
+
+**Rating de prestigio (strength) basado en:**
+- Títulos de liga + Champions League + histórico
+- Calidad actual de plantilla
+- Poder financiero
+- Real Madrid (95) es el máximo: 15 Champions, hegemonía histórica
+
+**Rating de arraigo basado en:**
+- Identidad local del club
+- Historial de resistencia a transferencias
+- Tamaño de la afición
+- Real Madrid/Barcelona/Bayern: 95-100 (casi imposible de poach)
+- Monaco: 65 (históricamente vende)
+- Equipos recién ascendidos: 50-60
+
+**Ejemplo UEFA:**
+- Premier League (14 equipos): Man City, Arsenal, Liverpool, Chelsea...
+- La Liga (14 equipos): Barcelona, Real Madrid, Atlético, Sevilla...
+- Serie A (14 equipos): Inter, Milan, Juventus, Napoli...
+- Bundesliga (14 equipos): Bayern, Dortmund, Leipzig...
+
+**Ejemplo CONMEBOL:**
+- Liga Argentina (12 equipos): Boca, River, Racing, San Lorenzo...
+- Liga Brasileña (12 equipos): Flamengo, Palmeiras, Corinthians...
+
+---
+
+### Fase 9.2 — Tipos del motor
+
+**Cambios en `types.ts`:**
+
+| Tipo | Cambio |
+|------|--------|
+| `Confederation` | NUEVO: `{ id, name, region }` |
+| `Federation` | Agregar `confederationId: number` |
+| `Division` | Agregar `federationId: number` para saber a quién pertenece |
+| `GameState` | Agregar `confederations[]`, `rivalRng` |
+| `SeasonRecord` | Agregar `federationId?: number` para distinguir player vs rival |
+
+---
+
+### Fase 9.3 — Creación del mundo
+
+**Cambios en `engine.ts createGame`:**
+
+1. Recibe `confederations` en las opciones (o usa default)
+2. Por cada confederación, por cada liga, por cada división:
+   - Crea `Division` entries con `federationId`
+   - Crea `Team` entries con `divisionOrden` (ya no null)
+3. Las divisiones del jugador se marcan como "player league"
+4. Se genera un `rivalRng` independiente
+
+**Cambios en `world-generator.ts`:**
+
+1. En vez de generar 4 federaciones genéricas, genera federaciones basadas en datos semilla
+2. Cada rival federation tiene equipos reales con fuerza predefinida
+3. El jugador elige confederación → se asigna a esa liga
+4. Los equipos del jugador se generan dentro de la liga elegida
+
+---
+
+### Fase 9.4 — Simulación de ligas rivales
+
+**Nuevo archivo:** `packages/engine/src/rival-sim.ts`
+
+Función principal: `simulateRivalLeagues(s: GameState): void`
+
+Flujo:
+1. Para cada división que NO sea del jugador:
+   - Generar fixtures round-robin (usando `rivalRng`)
+   - Simular todos los partidos (usando `match.ts` con team.strength)
+   - Calcular standings (usando `standings.ts`)
+   - El campeón es el primero de la tabla
+2. Actualizar `team.strength` basado en posición:
+   - Campeón: +2-3 strength
+   - Último: -2-3 strength
+   - Promedio: drift suave ±1
+3. Los resultados se descartan después de季节 (no se guardan fixtures individuales)
+4. Solo se guarda el standings final y el campeón en `history`
+
+**Integración en `closeSeason`:**
+```
+1. computeStandings (player divisions) — EXISTE
+2. simulateRivalLeagues(s) — NUEVO
+3. write seasonRecords for ALL divisions — MODIFICADO
+4. updateRivalPrestige(s) — NUEVO: campeón rival +3, último -2
+```
+
+---
+
+### Fase 9.5 — Persistencia en DB
+
+**Cambios en `game.service.ts createGame`:**
+
+1. Por cada rival federation → insertar `leagues` row
+2. Por cada liga rival → insertar `divisions` rows
+3. Por cada equipo rival → asignar `divisionId` (ya no null)
+
+**Cambios en `game.service.ts closeSeason`:**
+
+1. Insertar `seasonRecords` para divisiones rivales (campeón)
+2. Insertar `seasonRecordPositions` para standings rivales
+3. Actualizar `teams.strength` y `federations.prestige` en DB
+
+**Migration:** No se necesita nueva tabla. Las tablas `leagues`, `divisions`,
+`seasonRecords` ya soportan múltiples federaciones. Solo se insertan más rows.
+
+---
+
+### Fase 9.6 — Contratos y API
+
+**Cambios en `contracts/index.ts`:**
+
+| DTO | Cambio |
+|-----|--------|
+| `FederationOverview` | Agregar `standings: StandingRowDto[]` (posiciones de liga rival) |
+| `FederationOverview` | Agregar `confederationName?: string` |
+| `GameSummary` | Agregar `confederationName?: string` |
+
+**Cambios en `game.controller.ts`:**
+
+- `GET /games/:id/federations/:fedId` ya existe → modificar para incluir standings
+
+---
+
+### Fase 9.7 — Frontend
+
+**FederationPage.tsx (rival):**
+- Debajo de "Divisiones", agregar sección "Tabla de posiciones"
+- Mostrar: posición, equipo, PJ, PG, PE, PP, GF, GC, DG, Puntos
+- Highlight del campeón actual
+- Badge "Histórico" si el equipo ha sido campeón
+
+**FederationPage.tsx (player):**
+- Sin cambios significativos (ya muestra todo)
+
+**FederationsPage.tsx:**
+- Mostrar confederación de cada federación (badge o agrupación)
+- Highlight de rivales de la misma confederación
+
+**TeamsPage.tsx:**
+- Los equipos rivales ahora aparecen en sus divisiones reales
+- El tab "Otras federaciones" muestra ligas reales
+
+**GameLayout.tsx:**
+- Sidebar muestra confederación del jugador
+
+---
+
+### Orden de implementación
+
+| Paso | Archivo(s) | Descripción |
+|------|-----------|-------------|
+| 1 | `seed-data.ts` | Datos semilla: confederaciones, ligas, equipos reales |
+| 2 | `types.ts` | Confederation, expandir Federation/Division/GameState |
+| 3 | `engine.ts` | createGame: crear ligas rivales |
+| 4 | `rival-sim.ts` | simulateRivalLeagues: simulación abstracta de temporada |
+| 5 | `engine.ts` | closeSeason: integrar rival sim + escribir history |
+| 6 | `world-generator.ts` | Usar datos semilla, elegir confederación |
+| 7 | `game.service.ts` | Persistir ligas rivales, closeSeason con rivales |
+| 8 | `contracts/index.ts` | FederationOverview con standings |
+| 9 | `FederationPage.tsx` | Tabla de posiciones rival |
+| 10 | `FederationsPage.tsx` | Agrupar por confederación |
+| 11 | `TeamsPage.tsx` | Equipos rivales en divisiones reales |
+| 12 | `GameLayout.tsx` | Sidebar con confederación |
+
+---
+
+### Constraints
+
+- **RNG golden-stable:** `rivalRng` independiente. Jamás usar `state.rng` para rivales.
+- **Performance:** ~2000 match simulations por season (~2ms, despreciable).
+- **GameState size:** Pruning de fixtures rivales después de closeSeason (guardar solo standings).
+- **Backward compatibility:** Existing saves con `divisionOrden: null` → migración en `loadState`.
+- **No API calls:** Datos hardcodeados. Sin dependencia de red.
+
+### Verificación
+
+```bash
+pnpm typecheck          # 6/6 packages pass
+pnpm test               # engine tests pass + nuevos tests para rival-sim
+```
 | Fase 8 Batch 2 | Narrativa (form streaks, event chains, title tension) | Alta | Ver tabla arriba |
 | — | Tests de ida y vuelta | Alta | Agregar test cases para `eliminatoria_ida_vuelta` |
 | — | Tests de nuevos tipos de normas | Alta | Agregar test cases para `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` |

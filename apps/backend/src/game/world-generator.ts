@@ -3,7 +3,7 @@
 // simulation core. This runs once at game creation; the engine then owns its
 // own RNG stream for the simulation.
 
-import { makeRng, randInt, rngNext, type RngState } from '@football-gm/engine';
+import { makeRng, randInt, rngNext, type RngState, CONFEDERATIONS } from '@football-gm/engine';
 
 export interface WorldPlayer {
   name: string;
@@ -33,11 +33,15 @@ export interface WorldRivalTeam {
   name: string;
   strength: number;
   arraigo: number;
+  league: string;
+  country: string;
+  flag: string;
 }
 
 export interface WorldRival {
   name: string;
   prestige: number;
+  confederationId: number;
   teams: WorldRivalTeam[];
 }
 
@@ -47,6 +51,7 @@ export interface World {
   divisionName: string;
   teams: WorldTeam[];
   rivals: WorldRival[];
+  confederations: Array<{ id: number; name: string; region: string; available: boolean; leagues: Array<{ name: string; country: string; flag: string }> }>;
 }
 
 const PREFIXES = [
@@ -57,13 +62,6 @@ const PLACES = [
   'Riveras', 'Porteña', 'Sauces', 'Maravillas', 'del Valle', 'Aldea',
   'Peñalba', 'Marítimo', 'Ferroviaria', 'Montaña', 'del Norte', 'Costa Brava',
   'Sierra', 'Robledo', 'Laguna', 'Olivar',
-];
-const RIVAL_NAMES = [
-  'Federación Continental',
-  'Liga del Atlántico',
-  'Confederación del Sur',
-  'Asociación Boreal',
-  'Círculo Insular',
 ];
 const FIRST_NAMES = [
   'Iker', 'Sergio', 'Marco', 'Andrés', 'Lucas', 'Diego', 'Pablo', 'Mateo',
@@ -82,10 +80,6 @@ const SQUAD_PLAN: Array<{ pos: WorldPlayer['posicion']; count: number }> = [
   { pos: 'MED', count: 6 },
   { pos: 'DEL', count: 4 },
 ];
-
-// Rival prestige spread on purpose across tiers so the tier gate is visible:
-// two reachable (tier 1-2), one mid (tier 3), one elite (tier 5, blocked early).
-const RIVAL_PRESTIGE = [12, 28, 48, 88];
 
 function pick<T>(rng: RngState, arr: T[]): T {
   return arr[Math.floor(rngNext(rng) * arr.length)];
@@ -156,22 +150,41 @@ export function generateWorld(seed: number): World {
     };
   });
 
-  const rivals: WorldRival[] = RIVAL_PRESTIGE.map((prestige, i) => ({
-    name: RIVAL_NAMES[i] ?? `Federación Rival ${i + 1}`,
-    prestige,
-    teams: Array.from({ length: 5 }, () => {
-      // Stronger federations hold stronger, more rooted clubs.
-      const strength = Math.min(
-        90,
-        Math.max(35, Math.round(prestige * 0.7) + randInt(rng, -8, 18)),
-      );
-      return {
-        name: nextName(),
-        strength,
-        arraigo: randInt(rng, 20, 90),
-      };
-    }),
-  }));
+  // Fase 9: use seed data for rival federations (real teams from UEFA).
+  // Each league becomes a rival federation with its real teams.
+  const usedNames = new Set<string>();
+  const rivals: WorldRival[] = [];
+  let rivalIdx = 0;
+  for (const conf of CONFEDERATIONS) {
+    if (!conf.available) continue;
+    for (const league of conf.leagues) {
+      const fedName = `${league.flag} ${league.name} Federation`;
+      if (usedNames.has(fedName)) continue;
+      usedNames.add(fedName);
+      // Compute average strength of the league's teams for prestige
+      const avgStrength = league.divisions.reduce((acc, d) => {
+        const divAvg = d.teams.reduce((a, t) => a + t.strength, 0) / d.teams.length;
+        return acc + divAvg;
+      }, 0) / league.divisions.length;
+      const prestige = Math.min(100, Math.max(5, Math.round(avgStrength * 0.85)));
+      rivals.push({
+        name: fedName,
+        prestige,
+        confederationId: conf.id,
+        teams: league.divisions.flatMap(d =>
+          d.teams.map(t => ({
+            name: t.name,
+            strength: t.strength,
+            arraigo: t.arraigo,
+            league: league.name,
+            country: league.country,
+            flag: league.flag,
+          })),
+        ),
+      });
+      rivalIdx++;
+    }
+  }
 
   return {
     federationName: 'Federación del Comisionado',
@@ -179,5 +192,16 @@ export function generateWorld(seed: number): World {
     divisionName: 'Primera División',
     teams,
     rivals,
+    confederations: CONFEDERATIONS.map(c => ({
+      id: c.id,
+      name: c.name,
+      region: c.region,
+      available: c.available,
+      leagues: c.leagues.map(l => ({
+        name: l.name,
+        country: l.country,
+        flag: l.flag,
+      })),
+    })),
   };
 }

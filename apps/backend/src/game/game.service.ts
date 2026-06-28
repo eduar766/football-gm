@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { NormType } from '@football-gm/engine';
+import { CONFEDERATIONS } from '@football-gm/engine';
 import {
   advanceMatchday as engineAdvanceMatchday,
   advanceSeason as engineAdvanceSeason,
@@ -97,6 +98,61 @@ export class GameService {
     if (state.eventCapacityPenaltyPct === undefined) state.eventCapacityPenaltyPct = 0;
     if (state.eventImpulseLoss === undefined) state.eventImpulseLoss = 0;
     if (state.eventTreasuryInjection === undefined) state.eventTreasuryInjection = 0;
+    if (!state.confederations) state.confederations = [];
+    if (!state.rivalRng) state.rivalRng = { s: 0 };
+    if (!state.rivalStandings) state.rivalStandings = {};
+    if (!state.rivalChampions) state.rivalChampions = [];
+    // Ensure all divisions have federationId (migrate old saves)
+    for (const d of state.divisions) {
+      if ((d as any).federationId === undefined) {
+        (d as any).federationId = state.playerFederationId;
+      }
+    }
+    // Ensure all federations have confederationId (migrate old saves)
+    for (const f of state.federations) {
+      if ((f as any).confederationId === undefined) {
+        (f as any).confederationId = 0;
+      }
+    }
+    // Rebuild missing rival divisions from seed data (migrate saves before Fase 9 division fix)
+    const rivalFeds = state.federations.filter(f => !f.isPlayer);
+    for (const rf of rivalFeds) {
+      const hasDivisions = state.divisions.some(d => d.federationId === rf.id);
+      if (hasDivisions) continue;
+      // Find matching confederation league by federation name
+      for (const conf of CONFEDERATIONS) {
+        if (!conf.available) continue;
+        for (const league of conf.leagues) {
+          if (rf.name.includes(league.name) || rf.name.includes(league.country)) {
+            const orden = state.divisions.length + 1;
+            state.divisions.push({
+              orden,
+              name: league.name,
+              federationId: rf.id,
+            });
+            // Assign teams to this division
+            const teamsForFed = state.teams.filter(t => t.federationId === rf.id && t.divisionOrden === null);
+            for (const t of teamsForFed) {
+              t.divisionOrden = orden;
+            }
+            break;
+          }
+        }
+      }
+      // If no match found, create a generic single division
+      if (!state.divisions.some(d => d.federationId === rf.id)) {
+        const orden = state.divisions.length + 1;
+        state.divisions.push({
+          orden,
+          name: rf.name,
+          federationId: rf.id,
+        });
+        const teamsForFed = state.teams.filter(t => t.federationId === rf.id && t.divisionOrden === null);
+        for (const t of teamsForFed) {
+          t.divisionOrden = orden;
+        }
+      }
+    }
     return state;
   }
 
@@ -252,6 +308,7 @@ export class GameService {
     const world = generateWorld(seed);
     const state = engineCreateGame(seed, {
       playerFederationName: world.federationName,
+      confederations: world.confederations,
       teams: world.teams.map((t) => ({
         name: t.name,
         strength: t.strength,
@@ -265,6 +322,7 @@ export class GameService {
       rivals: world.rivals.map((r) => ({
         name: r.name,
         prestige: r.prestige,
+        confederationId: r.confederationId,
         teams: r.teams.map((rt) => ({
           name: rt.name,
           strength: rt.strength,
@@ -296,6 +354,7 @@ export class GameService {
       }
       const playerFedDbId = fedByEngine.get(state.playerFederationId)!;
 
+      // Player league + division
       const [league] = await tx
         .insert(s.leagues)
         .values({ gameId: game.id, federationId: playerFedDbId, name: world.leagueName })
@@ -312,11 +371,49 @@ export class GameService {
         })
         .returning({ id: s.divisions.id });
 
+      // Fase 9: create leagues + divisions for rival federations
+      const rivalLeagueByFed = new Map<number, number>(); // engineFedId -> dbLeagueId
+      const rivalDivByOrden = new Map<string, number>(); // "engineFedId:orden" -> dbDivId
+      for (const rival of world.rivals) {
+        const fedDbId = fedByEngine.get(state.federations.find(f => f.name === rival.name)?.id ?? 0);
+        if (!fedDbId) continue;
+        const [rLeague] = await tx
+          .insert(s.leagues)
+          .values({ gameId: game.id, federationId: fedDbId, name: rival.name })
+          .returning({ id: s.leagues.id });
+        rivalLeagueByFed.set(state.federations.find(f => f.name === rival.name)?.id ?? 0, rLeague.id);
+        // Create one division per league (orden 1)
+        const [rDiv] = await tx
+          .insert(s.divisions)
+          .values({
+            gameId: game.id,
+            leagueId: rLeague.id,
+            name: rival.name,
+            orden: 1,
+            plazas: rival.teams.length,
+          })
+          .returning({ id: s.divisions.id });
+        rivalDivByOrden.set(`${state.federations.find(f => f.name === rival.name)?.id ?? 0}:1`, rDiv.id);
+      }
+
       // Teams: league teams get the rich domain attributes + squad; rival teams
       // are negotiation targets (lighter projection).
       let leagueIdx = 0;
       for (const t of state.teams) {
-        const rich = t.divisionOrden !== null ? world.teams[leagueIdx++] : undefined;
+        const isPlayerTeam = t.federationId === state.playerFederationId;
+        const rich = isPlayerTeam && t.divisionOrden !== null ? world.teams[leagueIdx++] : undefined;
+        // For rival teams, find their division from the engine state
+        let teamDivisionId: number | null = null;
+        if (t.divisionOrden !== null) {
+          if (isPlayerTeam) {
+            teamDivisionId = division.id;
+          } else {
+            const engDiv = state.divisions.find(d => d.orden === t.divisionOrden && d.federationId === t.federationId);
+            if (engDiv) {
+              teamDivisionId = rivalDivByOrden.get(`${t.federationId}:${engDiv.orden}`) ?? null;
+            }
+          }
+        }
         const [row] = await tx
           .insert(s.teams)
           .values({
@@ -335,7 +432,7 @@ export class GameService {
             ojeadoresRating: rich?.ojeadoresRating ?? 50,
             cuerpoTecnicoRating: rich?.cuerpoTecnicoRating ?? 50,
             federationId: fedByEngine.get(t.federationId) ?? playerFedDbId,
-            divisionId: t.divisionOrden !== null ? division.id : null,
+            divisionId: teamDivisionId,
           })
           .returning({ id: s.teams.id });
         if (rich) {
@@ -1127,70 +1224,124 @@ export class GameService {
   }
 
   async getFederationById(gameId: number, federationId: number): Promise<FederationOverview> {
-    const [fed] = await this.db
+    const state = await this.loadState(gameId);
+    const engFed = state.federations.find(f => f.id === federationId);
+    if (!engFed) throw new NotFoundException(`Federation ${federationId} not found`);
+    const confNames = new Map(state.confederations.map((c) => [c.id, c.name]));
+
+    // Check if this is the player federation (has a DB row)
+    const [dbFed] = await this.db
       .select()
       .from(s.federations)
-      .where(and(eq(s.federations.gameId, gameId), eq(s.federations.id, federationId)));
-    if (!fed) throw new NotFoundException(`Federation ${federationId} not found`);
+      .where(and(eq(s.federations.gameId, gameId), eq(s.federations.engineFederationId, federationId)));
 
-    const [league] = await this.db
-      .select({ id: s.leagues.id, name: s.leagues.name })
-      .from(s.leagues)
-      .where(eq(s.leagues.federationId, federationId));
+    // For player federation, use DB data; for rivals, use engine state
+    const isPlayer = engFed.isPlayer;
 
-    const divisions = league
-      ? await this.db
-          .select({
-            id: s.divisions.id,
-            name: s.divisions.name,
-            orden: s.divisions.orden,
-            plazas: s.divisions.plazas,
-          })
-          .from(s.divisions)
-          .where(eq(s.divisions.leagueId, league.id))
-          .orderBy(asc(s.divisions.orden))
-      : [];
+    let leagueName: string | null = null;
+    let divisions: FederationOverview['divisions'] = [];
+    let teamCount = 0;
 
-    const teamRows = await this.db
-      .select({
-        id: s.teams.id,
-        name: s.teams.name,
-        strength: s.teams.strength,
-        arraigo: s.teams.arraigo,
-        divisionId: s.teams.divisionId,
-      })
-      .from(s.teams)
-      .where(eq(s.teams.federationId, federationId))
-      .orderBy(desc(s.teams.strength));
+    if (isPlayer && dbFed) {
+      // Player federation — query DB as before
+      const [league] = await this.db
+        .select({ id: s.leagues.id, name: s.leagues.name })
+        .from(s.leagues)
+        .where(eq(s.leagues.federationId, dbFed.id));
+      leagueName = league?.name ?? null;
 
-    const teamCount = teamRows.length;
-    const divisionTeams = new Map<number, typeof teamRows>();
-    const pendingTeams: typeof teamRows = [];
-    for (const t of teamRows) {
-      if (t.divisionId != null) {
-        const arr = divisionTeams.get(t.divisionId) ?? [];
-        arr.push(t);
-        divisionTeams.set(t.divisionId, arr);
-      } else {
-        pendingTeams.push(t);
+      const dbDivisions = league
+        ? await this.db
+            .select({
+              id: s.divisions.id,
+              name: s.divisions.name,
+              orden: s.divisions.orden,
+              plazas: s.divisions.plazas,
+            })
+            .from(s.divisions)
+            .where(eq(s.divisions.leagueId, league.id))
+            .orderBy(asc(s.divisions.orden))
+        : [];
+
+      const teamRows = await this.db
+        .select({ divisionId: s.teams.divisionId })
+        .from(s.teams)
+        .where(eq(s.teams.federationId, dbFed.id));
+      teamCount = teamRows.length;
+
+      const divCounts = new Map<number, number>();
+      for (const t of teamRows) {
+        if (t.divisionId != null) {
+          divCounts.set(t.divisionId, (divCounts.get(t.divisionId) ?? 0) + 1);
+        }
       }
-    }
 
-    return {
-      id: fed.id,
-      name: fed.name,
-      prestige: fed.prestige,
-      tier: tierOf(fed.prestige),
-      isPlayer: fed.isPlayer,
-      leagueName: league?.name ?? null,
-      teamCount,
-      divisions: divisions.map((d) => ({
+      divisions = dbDivisions.map((d) => ({
         id: d.id,
         name: d.name ?? 'División',
         orden: d.orden,
         plazas: d.plazas,
-        teamCount: (divisionTeams.get(d.id) ?? []).length,
-      })),
+        teamCount: divCounts.get(d.id) ?? 0,
+      }));
+    } else {
+      // Rival federation — build from engine state
+      const rivalTeams = state.teams.filter(t => t.federationId === federationId);
+      teamCount = rivalTeams.length;
+
+      const rivalDivisions = state.divisions
+        .filter(d => d.federationId === federationId)
+        .sort((a, b) => a.orden - b.orden);
+
+      divisions = rivalDivisions.map(d => {
+        const count = rivalTeams.filter(t => t.divisionOrden === d.orden).length;
+        return {
+          id: d.orden,
+          name: d.name ?? `División ${d.orden}`,
+          orden: d.orden,
+          plazas: d.orden === 1 ? 20 : 18,
+          teamCount: count,
+        };
+      });
+
+      // Derive league name from division names or confederation
+      leagueName = rivalDivisions[0]?.name ?? confNames.get(engFed.confederationId ?? 0) ?? null;
+    }
+
+    // Rival standings from engine state
+    let standings: FederationOverview['standings'] = undefined;
+    if (!isPlayer) {
+      const rivalKey = Object.keys(state.rivalStandings).find(k => {
+        const [fedIdStr] = k.split(':');
+        return Number(fedIdStr) === engFed.id;
+      });
+      if (rivalKey) {
+        standings = state.rivalStandings[rivalKey].map(r => ({
+          teamId: r.teamId,
+          name: r.name,
+          played: r.played,
+          won: r.won,
+          drawn: r.drawn,
+          lost: r.lost,
+          goalsFor: r.goalsFor,
+          goalsAgainst: r.goalsAgainst,
+          goalDiff: r.goalDiff,
+          points: r.points,
+        }));
+      }
+    }
+
+    return {
+      id: engFed.id,
+      name: engFed.name,
+      prestige: engFed.prestige,
+      tier: tierOf(engFed.prestige),
+      isPlayer,
+      leagueName,
+      teamCount,
+      divisions,
+      confederationId: engFed.confederationId || undefined,
+      confederationName: engFed.confederationId ? confNames.get(engFed.confederationId) : undefined,
+      standings,
     };
   }
 
@@ -1247,6 +1398,17 @@ export class GameService {
       .where(eq(s.vwRankingGoleadores.gameId, gameId))
       .orderBy(desc(s.vwRankingGoleadores.totalGoles));
 
+    // Rival champions from engine state (cross-reference division → federation)
+    const state = await this.loadState(gameId);
+    const divToFed = new Map(state.divisions.map(d => [d.orden, d.federationId]));
+    const fedNames = new Map(state.federations.map(f => [f.id, f.name]));
+    const rivalChampions = state.rivalChampions.map(rc => ({
+      year: rc.year,
+      federationName: fedNames.get(divToFed.get(rc.divisionOrden) ?? -1) ?? 'Desconocida',
+      championName: rc.championName,
+      points: rc.points,
+    }));
+
     return {
       records: records.map((r) => ({
         anio: r.anio,
@@ -1273,6 +1435,7 @@ export class GameService {
         seasonsWon: r.seasonsWon,
         totalGoles: r.totalGoles,
       })),
+      rivalChampions,
     };
   }
 
@@ -1280,6 +1443,7 @@ export class GameService {
 
   async getFederations(gameId: number): Promise<FederationListItem[]> {
     const state = await this.loadState(gameId);
+    const confNames = new Map(state.confederations.map((c) => [c.id, c.name]));
     return state.federations
       .map((f) => ({
         id: f.id,
@@ -1288,6 +1452,8 @@ export class GameService {
         tier: tierOf(f.prestige),
         isPlayer: f.isPlayer,
         teamCount: state.teams.filter((t) => t.federationId === f.id).length,
+        confederationId: f.confederationId || undefined,
+        confederationName: f.confederationId ? confNames.get(f.confederationId) : undefined,
       }))
       .sort((a, b) => b.prestige - a.prestige);
   }

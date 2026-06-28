@@ -84,6 +84,7 @@ export function runLevelingLeague(prev: GameState): GameState {
   s.divisions = Array.from({ length: nDiv }, (_, i) => ({
     orden: i + 1,
     name: divisionName(i + 1),
+    federationId: s.playerFederationId,
   }));
   return s;
 }
