@@ -146,16 +146,77 @@ export function driftRivalStrengths(s: GameState, standings: Record<string, Riva
   }
 }
 
-// Update rival federation prestige based on their average team strength.
+// 6.1 — Rival investment: federations with weak teams actively raise them.
+// Uses rivalRng for the boost amount. Each low-prestige federation lifts its
+// three weakest teams by 1-2 points so they don't stagnate indefinitely.
+export function applyRivalInvestments(s: GameState): void {
+  for (const fed of s.federations) {
+    if (fed.isPlayer) continue;
+    if (fed.prestige >= 20) continue; // only struggling federations invest
+    const fedTeams = s.teams
+      .filter(t => t.federationId === fed.id && t.divisionOrden !== null)
+      .sort((a, b) => a.strength - b.strength);
+    const boost = randInt(s.rivalRng, 1, 2);
+    for (const t of fedTeams.slice(0, 3)) {
+      t.strength = Math.min(85, t.strength + boost);
+    }
+  }
+}
+
+// 6.3 — Rival inter-negotiations: strong rivals occasionally poach teams from
+// weaker rivals, redistributing talent across the confederation landscape.
+// Fully governed by rivalRng — never touches state.rng.
+export function runRivalNegotiations(s: GameState): void {
+  const rivalFeds = s.federations.filter(f => !f.isPlayer);
+
+  for (const pursuer of rivalFeds) {
+    if (pursuer.prestige < 35) continue; // only established federations can poach
+    if (randInt(s.rivalRng, 0, 2) !== 0) continue; // ~33% chance per rival per season
+
+    // Find a weaker rival with low-arraigo teams
+    const weaker = rivalFeds.filter(
+      f => f.id !== pursuer.id && f.prestige < pursuer.prestige - 15,
+    );
+    if (weaker.length === 0) continue;
+
+    const victim = weaker[randInt(s.rivalRng, 0, weaker.length - 1)];
+    const candidates = s.teams.filter(
+      t =>
+        t.federationId === victim.id &&
+        t.divisionOrden !== null &&
+        t.arraigo < 50,
+    );
+    if (candidates.length === 0) continue;
+
+    // Don't strip a rival below 4 teams — preserve league viability
+    const victimTeamCount = s.teams.filter(t => t.federationId === victim.id).length;
+    if (victimTeamCount <= 4) continue;
+
+    const target = candidates[randInt(s.rivalRng, 0, candidates.length - 1)];
+    const prestigeXfer = Math.max(1, Math.round(target.strength / 15));
+
+    target.federationId = pursuer.id;
+    target.arraigo = Math.max(10, target.arraigo - 15);
+    pursuer.prestige = Math.min(100, pursuer.prestige + prestigeXfer);
+    victim.prestige = Math.max(0, victim.prestige - prestigeXfer);
+  }
+}
+
+// 6.4 — Update rival federation prestige with its own inertia.
+// Prestige represents historical reputation and decays slower than it rises:
+// it grows toward strength at ≤+2/season, shrinks at ≤-1/season.
 export function updateRivalPrestige(s: GameState): void {
   for (const fed of s.federations) {
     if (fed.isPlayer) continue;
     const teams = s.teams.filter(t => t.federationId === fed.id && t.divisionOrden !== null);
     if (teams.length === 0) continue;
     const avgStrength = teams.reduce((a, t) => a + t.strength, 0) / teams.length;
-    // Prestige drifts slowly toward the avg strength (capped 0-100)
-    const target = Math.round(avgStrength * 0.9);
+    const target = Math.round(avgStrength * 0.85);
     const diff = target - fed.prestige;
-    fed.prestige = Math.max(0, Math.min(100, fed.prestige + Math.round(diff * 0.1)));
+    // Asymmetric: easier to gain reputation than to lose it.
+    const change = diff > 0
+      ? Math.min(2, Math.round(diff * 0.15))
+      : Math.max(-1, Math.round(diff * 0.08));
+    fed.prestige = Math.max(0, Math.min(100, fed.prestige + change));
   }
 }

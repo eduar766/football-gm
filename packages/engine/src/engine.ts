@@ -30,7 +30,13 @@ import { buildChronicle } from './headlines';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
-import { simulateRivalLeagues, driftRivalStrengths, updateRivalPrestige } from './rival-sim';
+import {
+  simulateRivalLeagues,
+  driftRivalStrengths,
+  updateRivalPrestige,
+  applyRivalInvestments,
+  runRivalNegotiations,
+} from './rival-sim';
 import type {
   BoardMandate,
   CreateGameOptions,
@@ -612,14 +618,16 @@ export function processRivalActions(s: GameState): void {
     }
   }
 
-  // Retaliation: if player poached a team this window, rivals get +1 prestige
+  // 6.2 — Represalia selectiva: solo la federación robada gana prestigio,
+  // no todas. La federación perjudicada obtiene un rebote de simpatía (+3).
   const recentPoaches = s.negotiations.filter(
     n => n.state === 'effective' && n.effectiveYear === s.year
   );
   if (recentPoaches.length > 0) {
+    const robbedIds = new Set(recentPoaches.map(n => n.fromFederationId));
     for (const fed of s.federations) {
-      if (fed.isPlayer) continue;
-      fed.prestige = Math.min(100, fed.prestige + 1);
+      if (fed.isPlayer || !robbedIds.has(fed.id)) continue;
+      fed.prestige = Math.min(100, fed.prestige + 3);
     }
   }
 }
@@ -828,7 +836,9 @@ export function closeSeason(prev: GameState): GameState {
     }
     s.rivalChampions.push(...rivalResult.champions);
     driftRivalStrengths(s, rivalResult.standings);
-    updateRivalPrestige(s);
+    applyRivalInvestments(s);   // 6.1: struggling federations boost weakest teams
+    runRivalNegotiations(s);    // 6.3: strong rivals poach from weak rivals
+    updateRivalPrestige(s);     // 6.4: prestige has own inertia, decays slowly
   }
 
   // Evaluate board mandate for the just-closed season (after prestige + economy settled).
