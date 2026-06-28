@@ -307,7 +307,10 @@ export function CupsPage() {
 
   const teamOptions = useMemo(() => {
     const all = (structure.data?.divisions ?? []).flatMap((d) => d.teams);
-    return all.map((t) => ({ value: String(t.teamId), label: t.name }));
+    const seen = new Set<number>();
+    return all
+      .filter((t) => { if (seen.has(t.teamId)) return false; seen.add(t.teamId); return true; })
+      .map((t) => ({ value: String(t.teamId), label: t.name }));
   }, [structure.data]);
 
   const [name, setName] = useState('Copa de la Federación');

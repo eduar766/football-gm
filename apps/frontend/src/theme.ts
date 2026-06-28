@@ -179,10 +179,6 @@ export const theme: MantineThemeOverride = createTheme({
       styles: {
         input: {
           fontFamily: '"DM Sans", sans-serif',
-          '&:focus-within': {
-            borderColor: '#10B981',
-            boxShadow: '0 0 0 2px rgba(16,185,129,0.1)',
-          },
         },
       },
     },

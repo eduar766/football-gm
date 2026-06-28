@@ -675,7 +675,13 @@ export function DashboardPage() {
                     <Select
                       label="Reunión de emergencia"
                       placeholder="Selecciona un equipo"
-                      data={(structure.data?.divisions ?? []).flatMap((d) => d.teams).map((t) => ({ value: String(t.teamId), label: t.name }))}
+                      data={(() => {
+                        const seen = new Set<number>();
+                        return (structure.data?.divisions ?? [])
+                          .flatMap((d) => d.teams)
+                          .filter((t) => { if (seen.has(t.teamId)) return false; seen.add(t.teamId); return true; })
+                          .map((t) => ({ value: String(t.teamId), label: t.name }));
+                      })()}
                       value={emergencyTeamId}
                       onChange={setEmergencyTeamId}
                       size="xs"

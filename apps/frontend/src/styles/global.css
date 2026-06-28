@@ -74,3 +74,10 @@
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* Mantine input focus ring (replaces theme.ts pseudo-selector which is unsupported in inline styles) */
+.mantine-TextInput-wrapper:focus-within input,
+.mantine-Input-wrapper:focus-within input {
+  border-color: #10B981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+}
