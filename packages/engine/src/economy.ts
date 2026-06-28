@@ -54,7 +54,9 @@ export function generateContractOffers(
 ): ContractOffer[] {
   const rng = makeRng((seed ^ (year * 2654435761) ^ 0x9e3779b9) >>> 0);
   const count = 3 + (randInt(rng, 0, 1) === 1 ? 1 : 0);
-  const base = 1_500_000 + prestige * 90_000 + leagueSize * 220_000;
+  // Recalibrated (Fase 10): base values were inflated because leagueSize
+  // was incorrectly counting rival teams (~150) instead of player teams (~20).
+  const base = 600_000 + prestige * 30_000 + leagueSize * 80_000;
   return Array.from({ length: count }, (_, i) => ({
     id: year * 100 + i,
     tipo: CONTRACT_TYPES[randInt(rng, 0, CONTRACT_TYPES.length - 1)],
@@ -113,27 +115,40 @@ export function processEconomy(s: GameState): {
   econDelta: number;
   talentBump: number;
 } {
-  const competing = s.teams.filter((t) => t.divisionOrden !== null).length;
+  // Fase 10 fix: filter to player-federation teams/divisions only.
+  // Before this fix, Fase 9 rival teams (~132) were counted, inflating
+  // competing to ~150 and blowing up all revenue figures by 7-8×.
+  const playerTeams = s.teams.filter(
+    (t) => t.divisionOrden !== null && t.federationId === s.playerFederationId,
+  );
+  const competing = playerTeams.length;
+  const playerDivisions = s.divisions.filter(
+    (d) => d.federationId === s.playerFederationId,
+  );
+
   const contractIncome = s.commercialContracts.reduce((a, c) => a + c.valorAnual, 0);
-  const cost = operatingCost(competing, s.divisions.length);
+  const cost = operatingCost(competing, playerDivisions.length);
   const normCost = s.norms.length * NORM_ENFORCEMENT_COST;
   const prizes = s.prizePayments
     .filter((p) => p.year === s.year)
     .reduce((a, p) => a + p.amount, 0);
   const talent = Math.max(0, s.economy.talentInvestment);
 
-  // Matchday revenue: home matches × capacity × ticket price × 0.7
+  // Matchday revenue: federation earns a 10% commission on gate receipts.
+  // (The club keeps the rest — consistent with team autonomy §2.)
+  // Previously 70% was taken, which modeled the federation as the ticket seller.
   const capacityMultiplier = 1 - s.eventCapacityPenaltyPct;
   let matchdayRevenue = 0;
-  for (const t of s.teams) {
-    if (t.stadiumCapacity > 0 && t.divisionOrden !== null) {
+  for (const t of playerTeams) {
+    if (t.stadiumCapacity > 0) {
       const homeMatches = s.results.filter((r) => r.homeId === t.id).length;
-      matchdayRevenue += homeMatches * t.stadiumCapacity * 15 * 0.7 * capacityMultiplier;
+      matchdayRevenue += homeMatches * t.stadiumCapacity * 15 * 0.1 * capacityMultiplier;
     }
   }
 
-  // Merchandise revenue: scales with league prestige × number of teams
-  const merchandiseRevenue = s.prestige * s.teams.length * 50_000;
+  // Merchandise/brand revenue: scales with prestige × player teams only.
+  // Factor reduced from 50K to 15K to match calibrated budget expectations.
+  const merchandiseRevenue = s.prestige * competing * 15_000;
 
   const income = contractIncome + matchdayRevenue + merchandiseRevenue;
   // Income / cost / talent / norm enforcement move the treasury here.
@@ -176,7 +191,7 @@ export function processEconomy(s: GameState): {
     s.seed,
     s.year + 1,
     s.prestige,
-    competing,
+    competing, // player teams only — rivals excluded
   );
   return { econDelta, talentBump };
 }

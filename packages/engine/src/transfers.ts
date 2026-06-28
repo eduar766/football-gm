@@ -97,9 +97,9 @@ export function runTransferWindow(s: GameState): void {
     // Acceptance roll. Failed attempts still consume an rng value above.
     if (rngNext(s.transfersRng) >= OFFER_SUCCESS_P) continue;
 
+    // Fee is recorded for display but NOT deducted from federation treasury.
+    // Clubs manage their own finances; the commissioner is not the buyer (§2).
     const fee = Math.round(buyer.strength * 50_000 + target.calidad * 100_000);
-    if (s.treasury < fee) continue;
-    s.treasury -= fee;
 
     const fromTeamId = target.teamId;
     target.teamId = buyer.id;

@@ -6,248 +6,165 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Football league management simulator inspired by *Total Extreme Wrestling*. The player acts as a **commissioner** — not a coach or player — running a competition and growing it into a world-class league. Full design is in `diseno-simulador-liga.md` (Spanish).
 
-## Planned stack
-
-- **Backend:** NestJS + TypeScript
-- **Database:** PostgreSQL — the entity model is fully relational; history tables are append-only
-- **Frontend:** React (data-only UI: tables and lists, no 3D engine)
-- **Phase 3 (future):** Python service for narrative pattern detection; LLM-generated season chronicles
-
-## Build roadmap
-
-The design document marks phases 1–2 as done (design). Remaining phases:
-
-1. **Data schema** — translate entity model to DB tables
-2. **Minimum loop** — simulate a season, produce a standings table (match engine = weighted random by squad quality)
-3. **Commissioner systems** — prestige, tiers, negotiation, snowball brakes, reactive federations
-4. **History layer** — append-only tables + derived views (standings, top scorers, awards)
-5. **Polish** — match engine realism, events, controversies
-
-**Prototype path:** single React artifact, in-memory, no backend. 10 teams, table, "advance season" button, prestige. Validates fun before multi-week investment.
-
-## Core entity model
-
-```
-Federation  →  League  →  Division  →  Team  →  Player
-Federation  →  Cup/Tournament
-Season      →  Matchday  →  Match (2 teams)
-```
-
-Key modeling decisions (from the design doc):
-- **Federation is one entity type** — the player's federation and rival federations share the same model; distinguished by an `is_player` flag.
-- **Nothing is hard-deleted** — a team leaving a league changes federation association, never gets deleted (preserves history).
-- **History is append-only** — season records, trajectories, and awards are written once at season close and never mutated. Derived views (palmarés, rankings) are computed from those records, not stored separately.
-- **Impulses** — limited per-season "thumb on the scale" actions; they hang off `Season` (counter) and point to a specific `Match`.
-- **Negotiation** has its own lifecycle: tier check → requirement gathering (1–2 years) → offer/acceptance → effective **two years after acceptance**. Total: up to 5 years.
-
-## Key game mechanics to preserve
-
-- **Prestige & tiers (1–5):** prestige is the main score; tier gates which teams you can negotiate with. A tier-4 federation cannot approach tier-1+ clubs.
-- **Snowball brakes:** two-year adhesion delay, tier gate, team `arraigo` (loyalty to current federation), financial tension (commercial income must scale with league size), reactive rival federations.
-- **Team autonomy:** teams manage their own squads, coaches, youth academies. The player never signs players for a club — doing so would break the commissioner identity.
-
 ## Monorepo layout
 
 pnpm + Turborepo workspace (package manager: `pnpm`, Node >= 22):
 
 ```
-apps/backend      @football-gm/backend    NestJS API (imperative shell: persistence + HTTP)
-apps/frontend     @football-gm/frontend   React + Vite (data-only UI)
-packages/engine   @football-gm/engine     pure, seeded simulation core (no I/O)
-packages/contracts @football-gm/contracts shared zod schemas + inferred DTOs (back/front contract)
-packages/config   @football-gm/config     shared tsconfig / eslint / prettier
+apps/backend       @football-gm/backend     NestJS API (imperative shell: persistence + HTTP)
+apps/frontend      @football-gm/frontend    React + Vite (data-only UI; Mantine + TanStack Router/Query)
+packages/engine    @football-gm/engine      pure, seeded simulation core (no I/O)
+packages/contracts @football-gm/contracts   shared Zod schemas + inferred DTOs (back/front contract)
+packages/config    @football-gm/config      shared tsconfig / eslint / prettier
 ```
 
-`engine` and `contracts` are built with **tsup** (emits `dist/` with `.d.ts`). The backend
-and frontend consume them as workspace packages, so those `dist/` types must exist before
-the backend typechecks — see the dev note below.
-
-## Ports
-
-| Service  | URL                     | Notes                                   |
-|----------|-------------------------|-----------------------------------------|
-| Frontend | http://localhost:5290   | **Open this in the browser** — the app  |
-| Backend  | http://localhost:3000   | API only; routes under `/games/...`. `GET /` 404s by design |
-| Postgres | localhost:**5544**      | Docker (`5544:5432` to avoid clashing with a local Postgres on 5432) |
-
-The frontend reads `VITE_API_URL` (default `http://localhost:3000`) from `apps/frontend/.env.local`.
-The backend reads `DATABASE_URL` (port 5544) from `apps/backend/.env`.
+`engine` and `contracts` are built with **tsup** (emits `dist/` with `.d.ts`). The backend and frontend consume them as workspace packages.
 
 ## Commands
 
 ```bash
 # First-time / each session: start the DB, then apply migrations
-docker compose up -d            # starts football-gm-db (Postgres 16) on :5544
-pnpm --filter @football-gm/backend db:migrate   # apply drizzle migrations
+docker compose up -d                                      # Postgres 16 on :5544
+pnpm --filter @football-gm/backend db:migrate             # apply drizzle migrations
 
-# Run everything (turbo): builds engine+contracts, then watches all apps
+# Run everything (turbo): builds engine+contracts first, then watches all apps
 pnpm dev                        # backend :3000, frontend :5290, engine/contracts watchers
 
-# Per-package / repo-wide
+# Repo-wide
 pnpm build                      # turbo run build
-pnpm typecheck                  # turbo run typecheck
-pnpm test                       # turbo run test (engine has vitest + fast-check)
+pnpm typecheck                  # turbo run typecheck (all 6 packages)
+pnpm test                       # engine vitest + fast-check
 pnpm lint
 
-# Database (drizzle-kit, run from apps/backend or via --filter)
-pnpm --filter @football-gm/backend db:generate  # generate migration from schema changes
-pnpm --filter @football-gm/backend db:migrate   # apply migrations
+# Run a single test file
+pnpm --filter @football-gm/engine test -- test/cups.test.ts
+pnpm --filter @football-gm/engine test -- test/golden.test.ts --update   # update golden snapshot
+
+# Database (drizzle-kit, from apps/backend or via --filter)
+pnpm --filter @football-gm/backend db:generate            # generate migration from schema changes
+pnpm --filter @football-gm/backend db:migrate             # apply migrations
 ```
 
-### Dev build-order gotcha (important)
+## Ports
 
-`engine`/`contracts` are built by `tsup --watch`. Two things keep the backend's
-`nest --watch` from failing with `TS7016: Could not find a declaration file`:
-- `turbo.json` → the `dev` task has `dependsOn: ["^build"]`, so deps are built before backend starts.
-- `packages/{engine,contracts}/tsup.config.ts` → `clean: !options.watch`, so the watcher
-  does **not** wipe `dist/` (and its `.d.ts`) on startup, which previously left a window where
-  the backend resolved those imports as `any` and got stuck on stale errors.
+| Service  | URL                     | Notes                                   |
+|----------|-------------------------|-----------------------------------------|
+| Frontend | http://localhost:5290   | **Open this in the browser**            |
+| Backend  | http://localhost:3000   | Routes under `/games/...`. `GET /` 404s by design |
+| Postgres | localhost:**5544**      | Docker (`5544:5432` to avoid clashing with a local Postgres on 5432) |
 
-If you ever see that error, the dist types are missing — run `pnpm build` once, then `pnpm dev`.
+The frontend reads `VITE_API_URL` (default `http://localhost:3000`) from `apps/frontend/.env.local`.
+The backend reads `DATABASE_URL` (port 5544) from `apps/backend/.env`.
 
----
+## Architecture
 
-## Current Session State
+### Functional core / imperative shell
 
-> **Last updated:** Junio 2026 — After Fase 8 Batch 1 + #11 (tipos de sanciones) + UI improvements batch
+The engine (`packages/engine`) is **pure TypeScript with no I/O**. Every exported function takes a `GameState` and returns a new one (via `structuredClone` at the boundary). The backend is the imperative shell that owns persistence, HTTP, and side effects.
 
-### What was done
+`GameState` is serialized as JSONB in `game_engine_states` and is the authoritative write-model. The relational tables (`teams`, `federations`, `season_records`, etc.) are the **read/history projections** — written at season close and used for SQL queries. They are never the source of truth for simulation state.
 
-12 features implemented across 3 batches:
+Every mutating backend operation follows this pattern:
 
-**Fase 6 — Batch de mejoras (Baja/Media/Alta):**
-
-| # | Feature | Key files |
-|---|---------|-----------|
-| #13 | Revisión + Reunión de emergencia | `game.service.ts`, `game.controller.ts`, `DashboardPage.tsx` |
-| #8 | Evento notificación tardía | `DashboardPage.tsx` (query invalidation) |
-| #2 | Selección masiva equipos | `CupsPage.tsx` (select all/clear buttons) |
-| #3 | BYE ocultos en brackets | `CupsPage.tsx`, `DashboardPage.tsx` |
-| #7 | UI premios mejorada | `PrizesPage.tsx` (ShareEditor component) |
-| #9 | Celebración de campeón | `DashboardPage.tsx` (golden alert) |
-| #10 | Nombres de patrocinadores | `economy.ts`, `EconomyPage.tsx` |
-| #5 | Bracket inline en dashboard | `DashboardPage.tsx` |
-| #12 | Requisitos de equipos | `TeamDetailPage.tsx`, `game.service.ts` |
-| #1 | Copa ida y vuelta | `cups.ts`, `types.ts`, `CupsPage.tsx` (full 2-leg implementation) |
-
-**Fase 7 — Consecuencias reales en eventos:**
-
-| Feature | Key files |
-|---------|-----------|
-| Type-specific event consequences | `events.ts` (switch-case por tipo) |
-| 4 new GameState fields | `types.ts`, `engine.ts` (init + reset) |
-| Capacity penalty in revenue | `economy.ts` |
-| Effect descriptions | `contracts/index.ts`, `game.service.ts`, `EventsPage.tsx` |
-
-**Fase 8 Batch 1 — Estrategia y dificultad:**
-
-| Feature | Key files |
-|---------|-----------|
-| Fix crisis_economica_club exploit | `events.ts` (+3M€ but -5 strength) |
-| Norm enforcement cost (500K€/norm) | `economy.ts`, `types.ts`, `contracts` |
-| cultivateArraigo action (2M€, +5-10) | `engine.ts`, `game.service.ts`, `game.controller.ts`, `TeamDetailPage.tsx` |
-| Arraigo decay (-2/season) | `engine.ts` closeSeason |
-| Poach cooldown (2 seasons) | `negotiation.ts`, `types.ts` (poachCooldowns) |
-| Base prestige decay -1 → -2 | `engine.ts` closeSeason |
-| Cup creation cost (2M€) | `cups.ts` |
-| Tipos de sanciones (#11) | `types.ts`, `norms.ts`, `contracts`, `NormsPage.tsx` |
-
-**UI improvements batch:**
-
-| Feature | Key files |
-|---------|-----------|
-| Negotiations: active/history tabs + retry | `NegotiationsPage.tsx` (Tabs, retry button for rejected) |
-| Palmarés in team detail | `TeamDetailPage.tsx`, `game.service.ts` (palmares section) |
-| Teams page: my league vs other federations tabs | `TeamsPage.tsx` (Tabs, group by federation) |
-| Rival federation structures | `FederationPage.tsx`, `game.service.ts`, `game.controller.ts` |
-| Recurring cups | `cups.ts`, `types.ts`, `CupDto`, `CupsPage.tsx` (checkbox, badge) |
-
-### What's pending
-
-| # | Feature | Priority | Notes |
-|---|---------|----------|-------|
-| Fase 8 Batch 2 | Narrativa (form streaks, event chains, title tension) | Alta | see PLAN-UNIFICADO.md |
-| — | Tests for ida y vuelta | Alta | Add test cases for `eliminatoria_ida_vuelta` in `cups.test.ts` |
-| — | Tests for new norm types | Alta | Add test cases for `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` in `norms.test.ts` |
-
-### Verification status
-
-```bash
-pnpm typecheck          # 6/6 packages pass
-pnpm test               # engine 99/99 pass (14 files)
-# golden snapshot may need: pnpm --filter @football-gm/engine test -- --update
+```ts
+return this.db.transaction(async (tx) => {
+  const state = await this.loadState(gameId, tx);
+  const next = engineDoSomething(state, args);
+  await this.saveState(tx, gameId, next);
+  return this.buildResponse(next, ...);
+});
 ```
 
-### Key architecture notes for next session
+### Forward-compatibility pattern
 
-- **Engine `CupFormat`** at `types.ts:144`: `'eliminatoria' | 'eliminatoria_ida_vuelta' | 'liga'`
-- **Engine `CupMatch.leg`** and **`CupRound.leg`**: optional `'ida' | 'vuelta'` field
-- **`playCupRound()`** in `cups.ts`: handles ida (play only) vs vuelta (play + aggregate + winner)
-- **`computeTwoLegWinner()`**: aggregate → away goals → penalties
-- **`scheduleCups()`**: ida/vuelta on consecutive matchdays
-- **Contracts `CupMatchDto.leg`** and **`CupRoundDto.leg`**: optional, passed through backend `cupsResponse()`
-- **`NormType`** in engine is `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'` — all 6 values
-- **Player model** now has `nationality: string` ('local'/'extranjero') and `cantera: boolean` — seeded in world-generator, stored in DB, passed through contracts
-- **Norm breach logic** in `norms.ts`: `valorActual()` computes count-based values for new norm types (foreign count, cantera count, avg age)
-- **Recurring cups**: `Cup.recurring: boolean` flag; `CupTemplate` type in engine; templates saved in `closeSeason()` and recreated in pretemporada
-- **Federation detail**: `GET /games/:id/federations/:fedId` returns full structure (teams, divisions) for any federation
-- **Negotiations**: Tabs split active/history; retry button on rejected negotiations calls `startNegotiation` directly
-- **Palmarés**: computed from `seasonRecords` (league + cup champions) in `getTeam()`, displayed as trophy cards
-- **TeamsPage**: Tabs split "Mi federación" (grouped by division) vs "Otras federaciones" (grouped by federation)
+When you add a new field to `GameState`, always add a default in `loadState()` so old saves don't break:
 
-### Current Session State
-
-> **Last updated:** Junio 2026 — After Fase 9 (Rival Simulation + Real Data)
-
-### What was done
-
-**Fase 9 — Motor de Rivales + Datos Reales (all 12 steps):**
-
-| Step | Feature | Key files |
-|------|---------|-----------|
-| 1 | Seed data: 132 UEFA teams | `packages/engine/src/seed-data.ts` (nuevo) |
-| 2 | Types: Confederation, Division.federationId, RivalStandingRow, GameState expansion | `packages/engine/src/types.ts` |
-| 3 | createGame builds rival leagues from seed data | `packages/engine/src/engine.ts` |
-| 4 | Rival sim: simulateRivalLeagues, driftRivalStrengths, updateRivalPrestige | `packages/engine/src/rival-sim.ts` (nuevo) |
-| 5 | closeSeason integrates rival sim + writes rival champions | `packages/engine/src/engine.ts` |
-| 6 | world-generator uses seed data for real rivals | `apps/backend/src/game/world-generator.ts` |
-| 7 | game.service: rival division persistence, backward compat | `apps/backend/src/game/game.service.ts` |
-| 8 | Contracts: FederationOverview.standings, ConfederationDto | `packages/contracts/src/index.ts` |
-| 9 | FederationPage: rival standings table | `apps/frontend/src/routes/FederationPage.tsx` |
-| 10 | FederationsPage: grouped by confederation | `apps/frontend/src/routes/FederationsPage.tsx` |
-| 11 | TeamsPage: works with real divisions (existing logic) | `apps/frontend/src/routes/TeamsPage.tsx` |
-
-### What's pending
-
-| # | Feature | Priority | Notes |
-|---|---------|----------|-------|
-| — | GameLayout sidebar confederation | Media | Show player's confederation in sidebar |
-| — | Tests for rival simulation | Alta | Add tests for `simulateRivalLeagues` in `rival-sim.test.ts` |
-| — | Tests for ida y vuelta | Alta | Add test cases for `eliminatoria_ida_vuelta` in `cups.test.ts` |
-| — | Tests for new norm types | Alta | Add test cases for `tope_extrangeros`, `minimo_cantera`, `tope_edad_media` in `norms.test.ts` |
-| — | Fase 8 Batch 2 | Alta | Narrativa (form streaks, event chains, title tension) |
-
-### Verification status
-
-```bash
-pnpm typecheck          # 6/6 packages pass
-pnpm test               # engine 99/99 pass (14 files)
+```ts
+if (!state.newField) state.newField = defaultValue;
 ```
 
-### Key architecture notes for next session
+### RNG determinism — never mix the two RNGs
 
-- **Engine `Confederation`** at `types.ts:4`: `{ id, name, region, available }`
-- **Engine `Federation`** expanded with `confederationId: number` (0 for player)
-- **Engine `Division`** expanded with `federationId: number` (links division to its federation)
-- **Engine `GameState`** has: `confederations`, `rivalRng`, `rivalStandings`, `rivalChampions`
-- **`rival-sim.ts`**: `simulateRivalLeagues()` → generate fixtures → simulate matches via `simulateMatch` → compute standings → drift strengths → update prestige
-- **`seed-data.ts`**: UEFA with 7 federations (England, Spain, Italy, Germany, France, Netherlands, Portugal), 132 real teams
-- **Rival sim uses `rivalRng`** (independent) — never touches `state.rng`, golden-safe
-- **Rival teams get `divisionOrden`** — no longer `null`; each rival federation has its own divisions
-- **`buildDivisionFixtures()`** takes optional `playerFederationId` — only generates fixtures for player's divisions
-- **`closeSeason()`** filters player-federation-only divisions for standings, history, and promotion/relegation
-- **Rival standings persisted** in `GameState.rivalStandings` (key: `"federationId:orden"`)
-- **Backward compatible**: `loadState()` defaults `confederations`, `rivalRng`, `rivalStandings`, `rivalChampions` for old saves
-- **FederationPage** shows standings table for rival federations (when `f.standings` exists)
-- **FederationsPage** groups by confederation with `IconWorld` dividers
-- **CONMEBOL/CONCACAF/CAF/AFC/OFC** appear as "Próximamente" in seed data (`available: false`)
+`GameState` has **two independent RNG streams**:
+- `state.rng` — drives the match engine, norms, events, cups, negotiations, etc.
+- `state.rivalRng` — drives rival league simulation only.
+
+These must never cross. Any new simulation code that touches player leagues uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`. This keeps the golden snapshot deterministic regardless of whether rival sim runs.
+
+### Core entity model
+
+```
+Federation  →  Division  →  Team  →  Player
+Federation  →  Cup/Tournament
+Season      →  Matchday  →  Match (2 teams)
+Confederation  →  Federation (grouping for display)
+```
+
+Key modeling invariants:
+- **Federation is one entity type** — player's and rivals' share the same model; distinguished by `isPlayer`. Rivals use the same tier/prestige rules.
+- **Nothing is hard-deleted** — a team leaving a league re-associates to a new `federationId`, never deleted.
+- **History is append-only** — `seasonRecords`, `trajectories`, and `awards` are written once at season close; palmarés and rankings are derived from them, never stored separately.
+- **Tier is derived** — never stored; always computed from prestige via `tierOf()` in the engine.
+- **Divisions carry `federationId`** — player's divisions have `federationId = playerFederationId`; rival federations have their own divisions with their own `federationId`.
+
+### Key types (packages/engine/src/types.ts)
+
+- `GameState` — the full serializable simulation state.
+- `SeasonPhase` — `'pretemporada'` (setup window) | `'temporada'` (playable).
+- `CupFormat` — `'eliminatoria'` | `'eliminatoria_ida_vuelta'` | `'liga'`.
+- `NormType` — `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'`.
+- `NegotiationState` — `'gathering_requirements' | 'offer' | 'accepted' | 'effective' | 'rejected'`.
+- `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks.
+- `CupTemplate` — blueprint for recurring cups; saved at `closeSeason`, recreated in `pretemporada`.
+
+### Contracts (packages/contracts/src/index.ts)
+
+Single source of truth for the back/front contract. Backend validates incoming requests with Zod via `ZodValidationPipe`; frontend infers its types from the same schemas. No separate type definitions.
+
+### Frontend routing
+
+Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`. `GameLayout.tsx` is the shell for all in-game pages; it wraps all game routes. `GamesPage.tsx` is the lobby (list/create games).
+
+All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper with no extra abstractions.
+
+### Engine module responsibilities
+
+| Module | Responsibility |
+|--------|---------------|
+| `engine.ts` | `createGame`, `startSeason`, `advanceMatchday`, `closeSeason` — the main season loop |
+| `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers |
+| `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close |
+| `negotiation.ts` | Negotiation lifecycle, rival poach attempts |
+| `norms.ts` | Norm creation, breach detection, `valorActual()` for count-based norms |
+| `events.ts` | Event spawning, resolution, type-specific consequences |
+| `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic |
+| `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige` |
+| `seed-data.ts` | UEFA seed data: 7 federations, 132 real teams |
+| `rng.ts` | Mulberry32 PRNG — deterministic, serializable as a single `u32` |
+
+### Dev build-order gotcha
+
+`engine`/`contracts` must have their `dist/` built before the backend typechecks. `turbo.json` handles this via `dependsOn: ["^build"]` in the `dev` task. The tsup watcher uses `clean: !options.watch` so it does **not** wipe `dist/` on start.
+
+If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, then `pnpm dev`.
+
+## Key game mechanics
+
+- **Prestige & tiers (1–5):** prestige is the main score; tier gates which teams you can negotiate with.
+- **Snowball brakes:** two-year adhesion delay, tier gate, team `arraigo` (loyalty, 0–100), financial tension (commercial income must scale with league size), reactive rival federations.
+- **Negotiation lifecycle:** tier check → requirements gathering (1–3 seasons, longer with high arraigo) → offer → accepted → effective two years after acceptance. Up to 5 years total.
+- **Impulses:** limited per-season "thumb on the scale" actions that favor one team in a specific match.
+- **Team autonomy:** teams manage their own squads. The player never signs players for a club — that would break the commissioner identity.
+- **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`.
+- **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
+
+## Adding a new game action (checklist)
+
+1. Add pure function to the relevant engine module (takes + returns `GameState`).
+2. Export it from `packages/engine/src/index.ts`.
+3. Add request/response Zod schemas to `packages/contracts/src/index.ts`.
+4. Add the endpoint to `apps/backend/src/game/game.controller.ts`.
+5. Implement the `db.transaction(loadState → engine fn → saveState)` flow in `game.service.ts`.
+6. Add the API call to `apps/frontend/src/api.ts`.
+7. Wire up `useMutation` in the relevant frontend page.
+8. Add engine tests in `packages/engine/test/`.

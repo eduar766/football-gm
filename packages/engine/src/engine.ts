@@ -17,6 +17,7 @@ import {
   applyPointPenalties,
   decayViolationHistory,
   governancePenalty,
+  governanceBonus,
   pointPenaltiesForYear,
 } from './norms';
 import {
@@ -633,6 +634,7 @@ export function closeSeason(prev: GameState): GameState {
   const { econDelta, talentBump } = processEconomy(s);
   delta += econDelta;
   delta += governancePenalty(s); // §4.7: unchecked breaches erode credibility
+  delta += governanceBonus(s);   // §4.7: well-enforced norms boost credibility
 
   const prestigeBefore = s.prestige;
   s.prestige = Math.max(0, s.prestige + delta);
@@ -842,7 +844,10 @@ const REVIEW_COST = 500_000;
 const EMERGENCY_MEETING_COST = 200_000;
 const REVIEW_SUCCESS_PROB = 0.7;
 
+const REVIEWS_PER_SEASON = 2;
+
 // Challenge a specific match result (referee mistake). 70% chance to replay.
+// Limited to 2 uses per season to prevent re-rolling bad results freely.
 export function callReview(
   prev: GameState,
   matchday: number,
@@ -851,6 +856,10 @@ export function callReview(
 ): GameState {
   if (prev.phase !== 'temporada') return prev;
   if (prev.treasury < REVIEW_COST) return prev;
+  const reviewsThisSeason = prev.actionHistory.filter(
+    (a) => a.year === prev.year && a.type === 'call_review',
+  ).length;
+  if (reviewsThisSeason >= REVIEWS_PER_SEASON) return prev;
   const alreadyUsed = prev.actionHistory.some(
     (a) =>
       a.year === prev.year &&
@@ -862,6 +871,8 @@ export function callReview(
 
   const s = structuredClone(prev);
   s.treasury -= REVIEW_COST;
+  // Each review costs 1 prestige point — political capital consumed.
+  s.prestige = Math.max(0, s.prestige - 1);
 
   const success = rngNext(s.rng) < REVIEW_SUCCESS_PROB;
   const result = success ? 'replay_approved' : 'replay_denied';

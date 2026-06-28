@@ -152,10 +152,9 @@ export function resolveEvent(
         if (team) team.strength = Math.max(35, team.strength - 5);
         break;
       case 'crisis_economica_club':
-        // Federation bails out the club with 3M€ but club loses 5 strength.
-        s.eventTreasuryInjection += 3_000_000;
-        s.treasury += 3_000_000;
-        if (team) team.strength = Math.max(35, team.strength - 5);
+        // Federation bails out the club: 5M€ cost, club remains stable.
+        // Previously gave +3M€ (wrong direction — was a free exploit).
+        s.treasury -= 5_000_000;
         break;
       case 'escandalo_directiva':
         // Lose 2 impulses (crisis of confidence).

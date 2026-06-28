@@ -211,6 +211,27 @@ export function governancePenalty(state: GameState): number {
   return unsanctioned > 0 ? -Math.min(GOVERNANCE_CAP, unsanctioned) : 0;
 }
 
+// Well-enforced norms signal a serious, credible competition — prestige bonus.
+// Requires at least 2 active norms and high compliance to reward intentional
+// regulation (not just having one norm no one ever breaks).
+export function governanceBonus(state: GameState): number {
+  if (state.norms.length < 2) return 0;
+  let compliant = 0;
+  let total = 0;
+  for (const norm of state.norms) {
+    for (const team of state.teams) {
+      if (!isSubject(state, team)) continue;
+      total++;
+      if (!breaches(team, norm, state.players)) compliant++;
+    }
+  }
+  if (total === 0) return 0;
+  const ratio = compliant / total;
+  if (ratio >= 0.9 && state.norms.length >= 3) return 2;
+  if (ratio >= 0.75) return 1;
+  return 0;
+}
+
 export function decayViolationHistory(s: GameState): void {
   const penalizedThisYear = new Set(
     s.sanctions.filter(san => san.year === s.year).map(san => san.teamId),
