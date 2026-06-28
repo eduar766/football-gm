@@ -32,7 +32,7 @@ pnpm dev                        # backend :3000, frontend :5290, engine/contract
 
 # Repo-wide
 pnpm build                      # turbo run build
-pnpm typecheck                  # turbo run typecheck (all 6 packages)
+pnpm typecheck                  # turbo run typecheck (all packages)
 pnpm test                       # engine vitest + fast-check
 pnpm lint
 
@@ -86,26 +86,27 @@ if (!state.newField) state.newField = defaultValue;
 ### RNG determinism — never mix the two RNGs
 
 `GameState` has **two independent RNG streams**:
-- `state.rng` — drives the match engine, norms, events, cups, negotiations, etc.
+- `state.rng` — drives the match engine, norms, events, cups, negotiations, mandates, headlines, etc.
 - `state.rivalRng` — drives rival league simulation only.
+- `state.mandatesRng` — independent stream for board mandate generation (seeded from game seed).
 
-These must never cross. Any new simulation code that touches player leagues uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`. This keeps the golden snapshot deterministic regardless of whether rival sim runs.
+These must never cross. Any new simulation code that touches player leagues uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`. This keeps the golden snapshot deterministic.
 
 ### Core entity model
 
 ```
-Federation  →  Division  →  Team  →  Player
-Federation  →  Cup/Tournament
-Season      →  Matchday  →  Match (2 teams)
-Confederation  →  Federation (grouping for display)
+Confederation  →  Federation  →  Division  →  Team  →  Player
+Federation     →  Cup/Tournament
+Season         →  Matchday     →  Match (2 teams)
 ```
 
 Key modeling invariants:
 - **Federation is one entity type** — player's and rivals' share the same model; distinguished by `isPlayer`. Rivals use the same tier/prestige rules.
 - **Nothing is hard-deleted** — a team leaving a league re-associates to a new `federationId`, never deleted.
-- **History is append-only** — `seasonRecords`, `trajectories`, and `awards` are written once at season close; palmarés and rankings are derived from them, never stored separately.
+- **History is append-only** — `seasonRecords`, `trajectories`, `seasonChronicles`, and `awards` are written once at season close; palmarés and rankings are derived from them, never stored separately.
 - **Tier is derived** — never stored; always computed from prestige via `tierOf()` in the engine.
-- **Divisions carry `federationId`** — player's divisions have `federationId = playerFederationId`; rival federations have their own divisions with their own `federationId`.
+- **Divisions carry `federationId`** — player's divisions have `federationId = playerFederationId`; rival federations have their own divisions.
+- **Division contamination guard** — all backend DB operations filter by `federationId === playerFederationId` when querying player-only data.
 
 ### Key types (packages/engine/src/types.ts)
 
@@ -114,8 +115,15 @@ Key modeling invariants:
 - `CupFormat` — `'eliminatoria'` | `'eliminatoria_ida_vuelta'` | `'liga'`.
 - `NormType` — `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'`.
 - `NegotiationState` — `'gathering_requirements' | 'offer' | 'accepted' | 'effective' | 'rejected'`.
-- `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks.
+- `NegotiationRequirement` — `{ tipo: 'prestigio'|'estadio'|'reparto', objetivo, cumplido, revealed }`. Requirements are revealed one per season during `gathering_requirements`; acceptance requires ≥75% of revealed reqs met.
+- `BoardMandate` — `{ id, objetivo, target, deadline, met, year }`. One mandate per season; 2 consecutive failures reduce impulses.
+- `RecordBook` — `{ biggestWin, longestWinStreak }`. Accumulated in `state.recordBook` at each `closeSeason`.
+- `FederationCoefficient` — `{ federationId, name, cumulativeScore, lastRank, seasonsRanked }`. Stored in `state.federationCoefficients`.
+- `SeasonChronicle` — narrative summary written at `closeSeason` (champion, best player, revelation, disappointment).
+- `Headline` — short narrative fact derived from match results/history (rachas, goleadas, sorpresas).
+- `Rivalry` — pair of teams detected as rivals from trajectory history (contiguous positions over N seasons).
 - `CupTemplate` — blueprint for recurring cups; saved at `closeSeason`, recreated in `pretemporada`.
+- `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks.
 
 ### Contracts (packages/contracts/src/index.ts)
 
@@ -123,7 +131,7 @@ Single source of truth for the back/front contract. Backend validates incoming r
 
 ### Frontend routing
 
-Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`. `GameLayout.tsx` is the shell for all in-game pages; it wraps all game routes. `GamesPage.tsx` is the lobby (list/create games).
+Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`. `GameLayout.tsx` is the shell for all in-game pages — it carries the phase chip, sidebar navigation with urgency badges (pending events, norm breaches), and stat pills. `GamesPage.tsx` is the lobby (list/create/export/import games).
 
 All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper with no extra abstractions.
 
@@ -131,14 +139,20 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper wi
 
 | Module | Responsibility |
 |--------|---------------|
-| `engine.ts` | `createGame`, `startSeason`, `advanceMatchday`, `closeSeason` — the main season loop |
+| `engine.ts` | `createGame`, `startSeason`, `advanceMatchday`, `closeSeason` — the main season loop; mandate generation/check; record book; federation coefficients |
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers |
-| `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close |
-| `negotiation.ts` | Negotiation lifecycle, rival poach attempts |
-| `norms.ts` | Norm creation, breach detection, `valorActual()` for count-based norms |
-| `events.ts` | Event spawning, resolution, type-specific consequences |
+| `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
+| `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
+| `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
+| `events.ts` | Event spawning (including chained arcs via `chainedFromId`), resolution, type-specific consequences |
 | `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic |
-| `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige` |
+| `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige`, `runRivalNegotiations` |
+| `headlines.ts` | `generateHeadlines`, `buildChronicle` — narrative layer from match results and history |
+| `awards.ts` | Individual awards (MVP, top scorer, best young player) at season close |
+| `prizes.ts` | Prize pools, share calculation, `processLeaguePrizes` |
+| `salaries.ts` | Player salary simulation and salary cap logic |
+| `standings.ts` | Table computation, rivalry detection from trajectories |
+| `transfers.ts` | Pre-season transfer window simulation |
 | `seed-data.ts` | UEFA seed data: 7 federations, 132 real teams |
 | `rng.ts` | Mulberry32 PRNG — deterministic, serializable as a single `u32` |
 
@@ -148,13 +162,20 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper wi
 
 If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, then `pnpm dev`.
 
-## Key game mechanics
+## Key game mechanics (current implementation)
 
 - **Prestige & tiers (1–5):** prestige is the main score; tier gates which teams you can negotiate with.
-- **Snowball brakes:** two-year adhesion delay, tier gate, team `arraigo` (loyalty, 0–100), financial tension (commercial income must scale with league size), reactive rival federations.
-- **Negotiation lifecycle:** tier check → requirements gathering (1–3 seasons, longer with high arraigo) → offer → accepted → effective two years after acceptance. Up to 5 years total.
-- **Impulses:** limited per-season "thumb on the scale" actions that favor one team in a specific match.
-- **Team autonomy:** teams manage their own squads. The player never signs players for a club — that would break the commissioner identity.
+- **Snowball brakes:** two-year adhesion delay, tier gate, team `arraigo` (loyalty, 0–100), financial tension, reactive rival federations.
+- **Negotiation lifecycle:** tier check → requirements gathering (1–3 seasons, one req revealed per season) → offer (with `offerValue` % revenue share) → accepted → effective two years after acceptance. Acceptance requires ≥75% of revealed requirements met. Rejection triggers 1-season `poachCooldown`.
+- **Board mandates:** one per season generated at `startSeason` (prestige target, team count, revenue, etc.). Two consecutive failures reduce impulses by 1.
+- **Impulses:** limited per-season "thumb on the scale" actions that favor one team. Also spendable as `callReview` (max 2/season, costs −1 prestige each).
+- **Governance bonus:** norms that are enforced and met give +1/+2 prestige at `closeSeason` via `governanceBonus()`.
+- **Rival agency:** rival federations invest in weak teams (6.1), respond selectively when robbed (6.2), negotiate with each other (6.3), and maintain prestige as a separate slow-moving inertial value from strength (6.4).
+- **Narrative layer:** `headlines.ts` generates short facts from each season's results; `buildChronicle` writes a season summary. Both appear in the Dashboard.
+- **Record book:** `state.recordBook` tracks biggest win margin and longest win streak across all seasons. Updated at each `closeSeason`.
+- **Federation coefficients:** `state.federationCoefficients` accumulates each federation's global ranking score over time. Visible in Federations → "Ranking Mundial" tab.
+- **Export/import:** full `GameState` serialized as JSON (download/upload from the Games lobby).
+- **Team autonomy:** teams manage their own squads. The player never signs players for a club.
 - **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`.
 - **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
 
