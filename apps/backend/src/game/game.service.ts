@@ -243,7 +243,7 @@ export class GameService {
     const existing = await tx
       .select({ id: s.divisions.id, orden: s.divisions.orden })
       .from(s.divisions)
-      .where(eq(s.divisions.gameId, gameId));
+      .where(and(eq(s.divisions.gameId, gameId), eq(s.divisions.leagueId, leagueId)));
     const map = new Map<number, number>();
     for (const r of existing) map.set(r.orden, r.id);
     for (const d of divisions) {
@@ -890,12 +890,15 @@ export class GameService {
       strength: t.strength,
       arraigo: t.arraigo,
     });
+    const playerDivisions = state.divisions.filter(
+      (d) => d.federationId === state.playerFederationId,
+    );
     return {
-      divisions: state.divisions.map((d) => ({
+      divisions: playerDivisions.map((d) => ({
         orden: d.orden,
         name: d.name,
         teams: state.teams
-          .filter((t) => t.divisionOrden === d.orden)
+          .filter((t) => t.federationId === state.playerFederationId && t.divisionOrden === d.orden)
           .map(toDto),
       })),
       pending: pendingIntegrationTeams(state).map(toDto),
@@ -914,14 +917,18 @@ export class GameService {
       const next = engineRunLevelingLeague(state);
       const map = await this.engineToDbTeam(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
+      const playerDivisionsNext = next.divisions.filter(
+        (d) => d.federationId === next.playerFederationId,
+      );
       const divMap = await this.ensureDivisions(
         tx,
         gameId,
         leagueId,
-        next.divisions,
+        playerDivisionsNext,
         next.teams,
       );
       for (const t of next.teams) {
+        if (t.federationId !== next.playerFederationId) continue;
         const dbId = map.get(t.id);
         if (dbId) {
           await tx
@@ -943,11 +950,11 @@ export class GameService {
         arraigo: t.arraigo,
       });
       return {
-        divisions: next.divisions.map((d) => ({
+        divisions: playerDivisionsNext.map((d) => ({
           orden: d.orden,
           name: d.name,
           teams: next.teams
-            .filter((t) => t.divisionOrden === d.orden)
+            .filter((t) => t.federationId === next.playerFederationId && t.divisionOrden === d.orden)
             .map(toDto),
         })),
         pending: pendingIntegrationTeams(next).map(toDto),
@@ -978,11 +985,14 @@ export class GameService {
 
       const fedMap = await this.engineToDbFederation(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
+      const playerDivisionsNext = next.divisions.filter(
+        (d) => d.federationId === next.playerFederationId,
+      );
       const divMap = await this.ensureDivisions(
         tx,
         gameId,
         leagueId,
-        next.divisions,
+        playerDivisionsNext,
         next.teams,
       );
 
@@ -1035,11 +1045,11 @@ export class GameService {
         arraigo: t.arraigo,
       });
       return {
-        divisions: next.divisions.map((d) => ({
+        divisions: playerDivisionsNext.map((d) => ({
           orden: d.orden,
           name: d.name,
           teams: next.teams
-            .filter((t) => t.divisionOrden === d.orden)
+            .filter((t) => t.federationId === next.playerFederationId && t.divisionOrden === d.orden)
             .map(toDto),
         })),
         pending: pendingIntegrationTeams(next).map(toDto),

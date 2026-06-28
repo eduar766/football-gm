@@ -430,7 +430,8 @@ export function createOwnTeam(
   if (prev.treasury < CREATE_TEAM_COST) return prev;
 
   const s = structuredClone(prev);
-  const lowestOrden = s.divisions.reduce((m, d) => Math.max(m, d.orden), 1);
+  const playerDivisions = s.divisions.filter((d) => d.federationId === s.playerFederationId);
+  const lowestOrden = playerDivisions.reduce((m, d) => Math.max(m, d.orden), 1);
   const nextId = s.teams.reduce((m, t) => Math.max(m, t.id), 0) + 1;
   s.teams.push({
     id: nextId,
