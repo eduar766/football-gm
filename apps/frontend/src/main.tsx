@@ -10,6 +10,7 @@ import '@mantine/notifications/styles.css';
 import './styles/global.css';
 import { router } from './router';
 import { theme } from './theme';
+import { AuthProvider } from './contexts/AuthContext';
 import { ErrorBoundary } from './ErrorBoundary';
 
 const queryClient = new QueryClient({
@@ -28,7 +29,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <ModalsProvider>
           <Notifications position="top-right" />
           <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            <AuthProvider>
+              <RouterProvider router={router} />
+            </AuthProvider>
           </QueryClientProvider>
         </ModalsProvider>
       </MantineProvider>

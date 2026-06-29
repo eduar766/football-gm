@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import type { AuthUser } from '../auth/jwt.strategy';
 import type { NormType } from '@football-gm/engine';
 import { CONFEDERATIONS } from '@football-gm/engine';
 import {
@@ -74,6 +76,7 @@ import type {
   TeamDetail,
   TeamListItem,
   WorldRankingResponse,
+  WorldStandingsResponse,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -87,6 +90,11 @@ export class GameService {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
   /* ----------------------------------------------------------- helpers */
+
+  private assertOwner(game: { userId: number | null }, user: AuthUser) {
+    if (user.role === 'admin') return;
+    if (game.userId !== user.id) throw new ForbiddenException();
+  }
 
   private async loadState(gameId: number, tx?: Tx): Promise<GameState> {
     const db = tx ?? this.db;
@@ -348,7 +356,14 @@ export class GameService {
 
   /* ------------------------------------------------------ create / list */
 
-  async createGame(input: CreateGameRequest): Promise<{ id: number }> {
+  async createGame(input: CreateGameRequest, user: AuthUser): Promise<{ id: number }> {
+    if (user.role !== 'admin') {
+      const [{ c }] = await this.db
+        .select({ c: count() })
+        .from(s.games)
+        .where(eq(s.games.userId, user.id));
+      if (c >= 3) throw new BadRequestException('GAME_LIMIT_REACHED');
+    }
     const seed = input.seed ?? Math.floor(Math.random() * 2_147_483_647);
     const world = generateWorld(seed);
     const state = engineCreateGame(seed, {
@@ -379,7 +394,7 @@ export class GameService {
     return this.db.transaction(async (tx) => {
       const [game] = await tx
         .insert(s.games)
-        .values({ name: input.name, seed, currentYear: state.year })
+        .values({ name: input.name, seed, currentYear: state.year, userId: user.id })
         .returning({ id: s.games.id });
 
       // Federations (player + rivals), keyed back to their engine ids.
@@ -515,10 +530,11 @@ export class GameService {
     });
   }
 
-  async list(): Promise<GameListItem[]> {
+  async list(user: AuthUser): Promise<GameListItem[]> {
     const rows = await this.db
       .select()
       .from(s.games)
+      .where(user.role === 'admin' ? undefined : eq(s.games.userId, user.id))
       .orderBy(desc(s.games.createdAt));
     return rows.map((g) => ({
       id: g.id,
@@ -529,9 +545,63 @@ export class GameService {
     }));
   }
 
-  async getSummary(gameId: number): Promise<GameSummary> {
+  async getSummary(gameId: number, user: AuthUser): Promise<GameSummary> {
+    const [game] = await this.db
+      .select({ userId: s.games.userId })
+      .from(s.games)
+      .where(eq(s.games.id, gameId));
+    if (!game) throw new NotFoundException(`Game ${gameId} not found`);
+    this.assertOwner(game, user);
     const state = await this.loadState(gameId);
     return this.summaryFrom(gameId, state);
+  }
+
+  async deleteGame(gameId: number, user: AuthUser): Promise<{ ok: boolean }> {
+    const [game] = await this.db
+      .select({ userId: s.games.userId })
+      .from(s.games)
+      .where(eq(s.games.id, gameId));
+    if (!game) throw new NotFoundException(`Game ${gameId} not found`);
+    this.assertOwner(game, user);
+
+    await this.db.transaction(async (tx) => {
+      // Delete in FK-dependency order (leaf → root)
+      const srIds = (
+        await tx.select({ id: s.seasonRecords.id }).from(s.seasonRecords).where(eq(s.seasonRecords.gameId, gameId))
+      ).map((r) => r.id);
+      if (srIds.length > 0) {
+        await tx.delete(s.seasonRecordPositions).where(inArray(s.seasonRecordPositions.seasonRecordId, srIds));
+      }
+
+      const negIds = (
+        await tx.select({ id: s.negotiations.id }).from(s.negotiations).where(eq(s.negotiations.gameId, gameId))
+      ).map((r) => r.id);
+      if (negIds.length > 0) {
+        await tx.delete(s.negotiationRequirements).where(inArray(s.negotiationRequirements.negotiationId, negIds));
+      }
+
+      await tx.delete(s.awards).where(eq(s.awards.gameId, gameId));
+      await tx.delete(s.impulses).where(eq(s.impulses.gameId, gameId));
+      await tx.delete(s.matches).where(eq(s.matches.gameId, gameId));
+      await tx.delete(s.matchdays).where(eq(s.matchdays.gameId, gameId));
+      await tx.delete(s.sanctions).where(eq(s.sanctions.gameId, gameId));
+      await tx.delete(s.negotiations).where(eq(s.negotiations.gameId, gameId));
+      await tx.delete(s.commercialContracts).where(eq(s.commercialContracts.gameId, gameId));
+      await tx.delete(s.norms).where(eq(s.norms.gameId, gameId));
+      await tx.delete(s.seasonRecords).where(eq(s.seasonRecords.gameId, gameId));
+      await tx.delete(s.trajectories).where(eq(s.trajectories.gameId, gameId));
+      await tx.delete(s.players).where(eq(s.players.gameId, gameId));
+      await tx.delete(s.teams).where(eq(s.teams.gameId, gameId));
+      await tx.delete(s.cups).where(eq(s.cups.gameId, gameId));
+      await tx.delete(s.divisions).where(eq(s.divisions.gameId, gameId));
+      await tx.delete(s.leagues).where(eq(s.leagues.gameId, gameId));
+      await tx.delete(s.federations).where(eq(s.federations.gameId, gameId));
+      await tx.delete(s.seasons).where(eq(s.seasons.gameId, gameId));
+      await tx.delete(s.gameEngineStates).where(eq(s.gameEngineStates.gameId, gameId));
+      await tx.delete(s.games).where(eq(s.games.id, gameId));
+    });
+
+    return { ok: true };
   }
 
   async setLeagueFormat(
@@ -1503,15 +1573,14 @@ export class GameService {
       .where(eq(s.vwRankingGoleadores.gameId, gameId))
       .orderBy(desc(s.vwRankingGoleadores.totalGoles));
 
-    // Rival champions from engine state (cross-reference division → federation)
+    // Rival champions from engine state — use rivalSeasonRecords (Fase 11.2+) which
+    // store federationName directly, avoiding the broken divisionOrden→federationId lookup.
     const state = await this.loadState(gameId);
-    const divToFed = new Map(state.divisions.map(d => [d.orden, d.federationId]));
-    const fedNames = new Map(state.federations.map(f => [f.id, f.name]));
-    const rivalChampions = state.rivalChampions.map(rc => ({
-      year: rc.year,
-      federationName: fedNames.get(divToFed.get(rc.divisionOrden) ?? -1) ?? 'Desconocida',
-      championName: rc.championName,
-      points: rc.points,
+    const rivalChampions = (state.rivalSeasonRecords ?? []).map(r => ({
+      year: r.year,
+      federationName: r.federationName,
+      championName: r.championName,
+      points: r.points ?? 0,
     }));
 
     // 7.1: Trajectory data for all player-federation teams
@@ -1602,6 +1671,61 @@ export class GameService {
     return { rows };
   }
 
+  async getWorldStandings(gameId: number): Promise<WorldStandingsResponse> {
+    const state = await this.loadState(gameId);
+
+    const fedById = new Map(state.federations.map((f) => [f.id, f]));
+    const confById = new Map(state.confederations.map((c) => [c.id, c]));
+
+    const rivalDivs = state.divisions.filter((d) => d.federationId !== state.playerFederationId);
+    const divsByFed = new Map<number, typeof rivalDivs>();
+    for (const div of rivalDivs) {
+      const arr = divsByFed.get(div.federationId) ?? [];
+      arr.push(div);
+      divsByFed.set(div.federationId, arr);
+    }
+
+    const federations: WorldStandingsResponse['federations'] = [];
+
+    for (const [fedId, divs] of divsByFed) {
+      const fed = fedById.get(fedId);
+      if (!fed) continue;
+      const confederation = fed.confederationId ? confById.get(fed.confederationId) : undefined;
+
+      const divisions = divs
+        .sort((a, b) => a.orden - b.orden)
+        .map((div) => {
+          const key = `${fedId}:${div.orden}`;
+          const rows = (state.rivalStandings[key] ?? []).map((r) => ({
+            teamId: r.teamId,
+            name: r.name,
+            played: r.played,
+            won: r.won,
+            drawn: r.drawn,
+            lost: r.lost,
+            goalsFor: r.goalsFor,
+            goalsAgainst: r.goalsAgainst,
+            goalDiff: r.goalDiff,
+            points: r.points,
+          }));
+          return { orden: div.orden, name: div.name, standings: rows };
+        });
+
+      federations.push({
+        federationId: fedId,
+        federationName: fed.name,
+        confederationName: confederation?.name,
+        prestige: fed.prestige,
+        tier: tierOf(fed.prestige) as 1 | 2 | 3 | 4 | 5,
+        matchdayProgress: state.rivalCurrentMatchday ?? 0,
+        divisions,
+      });
+    }
+
+    federations.sort((a, b) => b.prestige - a.prestige);
+    return { federations };
+  }
+
   async exportGame(gameId: number): Promise<{ name: string; state: unknown }> {
     const [game] = await this.db
       .select({ name: s.games.name })
@@ -1612,7 +1736,14 @@ export class GameService {
     return { name: game.name, state };
   }
 
-  async importGame(name: string, importedState: unknown): Promise<{ id: number }> {
+  async importGame(name: string, importedState: unknown, user: AuthUser): Promise<{ id: number }> {
+    if (user.role !== 'admin') {
+      const [{ c }] = await this.db
+        .select({ c: count() })
+        .from(s.games)
+        .where(eq(s.games.userId, user.id));
+      if (c >= 3) throw new BadRequestException('GAME_LIMIT_REACHED');
+    }
     return this.db.transaction(async (tx) => {
       const state = importedState as GameState;
       const [newGame] = await tx
@@ -1621,6 +1752,7 @@ export class GameService {
           name,
           seed: state.seed ?? 0,
           currentYear: state.year ?? 1,
+          userId: user.id,
         })
         .returning({ id: s.games.id });
       await tx.insert(s.gameEngineStates).values({

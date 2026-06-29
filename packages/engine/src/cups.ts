@@ -426,6 +426,49 @@ export function activeCups(state: GameState): Cup[] {
   return state.cups.filter((c) => c.status === 'en_curso');
 }
 
+// Force every incomplete cup to finish before the season closes.
+// Iterates rounds (playing any unplayed matches) until a champion is crowned or
+// the safety limit is hit, then falls back to emergency crowning.
+export function forceCompleteIncompleteCups(s: GameState): void {
+  for (const cup of s.cups) {
+    if (cup.status === 'finalizada') continue;
+
+    // TypeScript narrows cup.status to 'en_curso' after the check above, but
+    // playCupRound mutates it to 'finalizada'. Cast avoids the spurious error.
+    for (let guard = 0; guard < 40 && (cup.status as string) !== 'finalizada'; guard++) {
+      // Find the lowest-numbered round that still has unplayed matches.
+      const nextRound = [...cup.rounds]
+        .sort((a, b) => a.numero - b.numero)
+        .find(r => r.matches.some(m => !m.played));
+
+      if (nextRound) {
+        playCupRound(s, cup.id, nextRound.numero);
+      } else {
+        // All rounds are played but no champion yet (multi-round knockout
+        // that needs a new round generated). Try creating the next round.
+        const lastRound = cup.rounds.reduce((a, b) => a.numero > b.numero ? a : b);
+        const nextNum = lastRound.numero + 1;
+        if (!cup.rounds.some(r => r.numero === nextNum)) {
+          ensureNextKnockoutRound(cup, nextNum);
+        }
+        // If still no new round was generated, bail to emergency.
+        if (!cup.rounds.some(r => r.numero === nextNum)) break;
+      }
+    }
+
+    // Emergency fallback: crown the winner from the latest round that has one.
+    if ((cup.status as string) !== 'finalizada') {
+      const allWinners = [...cup.rounds]
+        .sort((a, b) => b.numero - a.numero)
+        .flatMap(r => r.matches.map(m => m.winnerTeamId))
+        .filter((id): id is number => id !== null);
+      cup.championTeamId = allWinners[0] ?? cup.participantTeamIds[0] ?? null;
+      cup.status = 'finalizada';
+      crownChampion(s, cup);
+    }
+  }
+}
+
 // Save templates from completed recurring cups and recreate them for next season.
 export function saveRecurringCupTemplates(s: GameState): void {
   // Remove old templates and save new ones from this season's completed recurring cups.
@@ -443,9 +486,20 @@ export function saveRecurringCupTemplates(s: GameState): void {
 // Recreate recurring cups from templates. Called at the start of each new pretemporada.
 export function recreateRecurringCups(s: GameState): void {
   if (s.cupTemplates.length === 0) return;
+  // All teams currently competing in the player's league — used to add newcomers.
+  const allCompetingIds = new Set(
+    s.teams
+      .filter(t => t.federationId === s.playerFederationId && t.divisionOrden !== null)
+      .map(t => t.id),
+  );
+
   for (const tmpl of s.cupTemplates) {
-    // Filter to only team IDs that still exist in the game (teams may have been removed).
-    const validIds = tmpl.participantTeamIds.filter((id) => s.teams.some((t) => t.id === id));
+    // Keep original participants that still exist, plus any new competing teams
+    // not yet in the list (so the recurring cup grows as the league grows).
+    const validIds = [
+      ...tmpl.participantTeamIds.filter(id => allCompetingIds.has(id)),
+      ...[...allCompetingIds].filter(id => !tmpl.participantTeamIds.includes(id)),
+    ];
     if (validIds.length < 2) continue;
     // Use the createCup logic inline to avoid re-charging treasury.
     let firstRound: CupMatch[];

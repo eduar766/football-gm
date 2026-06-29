@@ -50,6 +50,20 @@
       "when": 1782069226212,
       "tag": "0006_reflective_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782698271742,
+      "tag": "0007_abnormal_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782704930576,
+      "tag": "0008_far_layla_miller",
+      "breakpoints": true
     }
   ]
 }

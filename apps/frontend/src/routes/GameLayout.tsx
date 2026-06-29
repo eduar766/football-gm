@@ -1,6 +1,7 @@
 import {
   Badge,
   Box,
+  Button,
   Container,
   Group,
   Paper,
@@ -25,6 +26,7 @@ import {
   IconClipboardList,
   IconCoin,
   IconExchange,
+  IconGlobe,
   IconHome,
   IconHierarchy,
   IconHistory,
@@ -33,9 +35,11 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 const TAB_ICONS = {
   dashboard: IconHome,
+  world: IconGlobe,
   teams: IconUsers,
   federations: IconBuildingBank,
   market: IconBuildingStore,
@@ -53,7 +57,10 @@ const TAB_ICONS = {
 const NAV_SECTIONS = [
   {
     title: 'RESUMEN',
-    items: [{ value: 'dashboard', label: 'Resumen' }],
+    items: [
+      { value: 'dashboard', label: 'Resumen' },
+      { value: 'world', label: 'Mundo' },
+    ],
   },
   {
     title: 'GESTIÓN',
@@ -95,6 +102,7 @@ export function GameLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width: 768px)');
+  const { logout } = useAuth();
 
   const summary = useQuery({
     queryKey: ['summary', id],
@@ -126,7 +134,9 @@ export function GameLayout() {
                         ? 'teams'
                         : p.includes('/history')
                           ? 'history'
-                          : 'dashboard';
+                          : p.includes('/world')
+                            ? 'world'
+                            : 'dashboard';
 
   const go = (value: string | null) => {
     const params = { gameId };
@@ -153,6 +163,8 @@ export function GameLayout() {
       navigate({ to: '/games/$gameId/prizes', params });
     else if (value === 'history')
       navigate({ to: '/games/$gameId/history', params });
+    else if (value === 'world')
+      navigate({ to: '/games/$gameId/world', params });
     else navigate({ to: '/games/$gameId', params });
   };
 
@@ -469,6 +481,26 @@ export function GameLayout() {
           ) : (
             statPills
           )}
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            fullWidth
+            mt="sm"
+            onClick={() => { navigate({ to: '/' }); }}
+          >
+            ← Mis partidas
+          </Button>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            fullWidth
+            mt={4}
+            onClick={logout}
+          >
+            Cerrar sesión
+          </Button>
         </Box>
       </Paper>
 

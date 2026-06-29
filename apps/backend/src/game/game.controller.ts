@@ -1,12 +1,15 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import {
   AddNormRequest,
@@ -26,25 +29,36 @@ import {
   SetOfferValueRequest,
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { AuthUser } from '../auth/jwt.strategy';
 import { GameService } from './game.service';
 
 @Controller('games')
+@UseGuards(JwtAuthGuard)
 export class GameController {
   constructor(private readonly games: GameService) {}
 
   @Post()
-  create(@Body(new ZodValidationPipe(CreateGameRequest)) body: CreateGameRequest) {
-    return this.games.createGame(body);
+  create(
+    @Body(new ZodValidationPipe(CreateGameRequest)) body: CreateGameRequest,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.games.createGame(body, req.user);
   }
 
   @Get()
-  list() {
-    return this.games.list();
+  list(@Req() req: { user: AuthUser }) {
+    return this.games.list(req.user);
   }
 
   @Get(':id')
-  summary(@Param('id', ParseIntPipe) id: number) {
-    return this.games.getSummary(id);
+  summary(@Param('id', ParseIntPipe) id: number, @Req() req: { user: AuthUser }) {
+    return this.games.getSummary(id, req.user);
+  }
+
+  @Delete(':id')
+  deleteGame(@Param('id', ParseIntPipe) id: number, @Req() req: { user: AuthUser }) {
+    return this.games.deleteGame(id, req.user);
   }
 
   @Post(':id/start-season')
@@ -304,6 +318,11 @@ export class GameController {
     return this.games.getWorldRanking(id);
   }
 
+  @Get(':id/world-standings')
+  worldStandings(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getWorldStandings(id);
+  }
+
   @Get(':id/export')
   exportGame(@Param('id', ParseIntPipe) id: number) {
     return this.games.exportGame(id);
@@ -312,8 +331,9 @@ export class GameController {
   @Post('import')
   importGame(
     @Body(new ZodValidationPipe(ImportGameRequest)) body: ImportGameRequest,
+    @Req() req: { user: AuthUser },
   ) {
-    return this.games.importGame(body.name, body.state);
+    return this.games.importGame(body.name, body.state, req.user);
   }
 
   @Get(':id/federations')

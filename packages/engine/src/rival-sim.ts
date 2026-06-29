@@ -366,6 +366,7 @@ export function finalizeRivalSeason(s: GameState): void {
       runnerUpName,
       topScorer,
       relegated,
+      points: champion.points,
       cupWinner,
     });
   }

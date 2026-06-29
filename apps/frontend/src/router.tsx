@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import { Loader } from '@mantine/core';
+import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
+import { Center, Loader } from '@mantine/core';
 import { RootLayout } from './App';
 import { GamesPage } from './routes/GamesPage';
 import { GameLayout } from './routes/GameLayout';
@@ -17,6 +17,14 @@ import { EventsPage } from './routes/EventsPage';
 import { CupsPage } from './routes/CupsPage';
 import { TransfersPage } from './routes/TransfersPage';
 import { PrizesPage } from './routes/PrizesPage';
+import { WorldPage } from './routes/WorldPage';
+import { LoginPage } from './routes/LoginPage';
+import { ChangePasswordPage } from './routes/ChangePasswordPage';
+import { ResetPasswordPage } from './routes/ResetPasswordPage';
+import { RequestAccessPage } from './routes/RequestAccessPage';
+import { AdminPage } from './routes/AdminPage';
+
+const TOKEN_KEY = 'fgm_token';
 
 const EconomyPage = lazy(() =>
   import('./routes/EconomyPage').then((m) => ({ default: m.EconomyPage }))
@@ -26,19 +34,61 @@ const HistoryPage = lazy(() =>
 );
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<Loader />}>{children}</Suspense>;
+  return <Suspense fallback={<Center h="100vh"><Loader /></Center>}>{children}</Suspense>;
+}
+
+// Guard wrapper used by protected routes
+function AuthGuard() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) throw redirect({ to: '/login' });
+  return <Outlet />;
 }
 
 const rootRoute = createRootRoute({ component: RootLayout });
 
-const gamesRoute = createRoute({
+/* ---- public routes ---- */
+const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
+  path: 'login',
+  component: LoginPage,
+});
+const requestAccessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'request-access',
+  component: RequestAccessPage,
+});
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'reset-password',
+  component: ResetPasswordPage,
+});
+const changePasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'change-password',
+  component: ChangePasswordPage,
+});
+
+/* ---- protected root ---- */
+const protectedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'protected',
+  component: AuthGuard,
+});
+
+const gamesRoute = createRoute({
+  getParentRoute: () => protectedRoute,
   path: '/',
   component: GamesPage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: 'admin',
+  component: AdminPage,
+});
+
 const gameRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => protectedRoute,
   path: 'games/$gameId',
   component: GameLayout,
 });
@@ -123,26 +173,39 @@ const prizesRoute = createRoute({
   path: 'prizes',
   component: PrizesPage,
 });
+const worldRoute = createRoute({
+  getParentRoute: () => gameRoute,
+  path: 'world',
+  component: WorldPage,
+});
 
 const routeTree = rootRoute.addChildren([
-  gamesRoute,
-  gameRoute.addChildren([
-    dashboardRoute,
-    teamsRoute,
-    teamDetailRoute,
-    federationRoute,
-    federationsRoute,
-    federationDetailRoute,
-    marketRoute,
-    negotiationsRoute,
-    structureRoute,
-    economyRoute,
-    normsRoute,
-    eventsRoute,
-    cupsRoute,
-    historyRoute,
-    transfersRoute,
-    prizesRoute,
+  loginRoute,
+  requestAccessRoute,
+  resetPasswordRoute,
+  changePasswordRoute,
+  protectedRoute.addChildren([
+    gamesRoute,
+    adminRoute,
+    gameRoute.addChildren([
+      dashboardRoute,
+      teamsRoute,
+      teamDetailRoute,
+      federationRoute,
+      federationsRoute,
+      federationDetailRoute,
+      marketRoute,
+      negotiationsRoute,
+      structureRoute,
+      economyRoute,
+      normsRoute,
+      eventsRoute,
+      cupsRoute,
+      historyRoute,
+      transfersRoute,
+      prizesRoute,
+      worldRoute,
+    ]),
   ]),
 ]);
 

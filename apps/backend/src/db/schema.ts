@@ -29,6 +29,7 @@ import {
 
 /* ------------------------------------------------------------------ enums */
 
+export const userRole = pgEnum('user_role', ['admin', 'beta']);
 export const playerPosition = pgEnum('player_position', ['POR', 'DEF', 'MED', 'DEL']);
 export const competitionType = pgEnum('competition_type', [
   'liga',
@@ -58,10 +59,49 @@ export const awardType = pgEnum('award_type', [
   'mejor_portero',
 ]);
 
+/* ------------------------------------------------------------------ users */
+
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: userRole('role').notNull().default('beta'),
+  approved: boolean('approved').notNull().default(false),
+  forcePasswordChange: boolean('force_password_change').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
+});
+
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+});
+
+export const accessRequestStatus = pgEnum('access_request_status', [
+  'pending',
+  'approved',
+  'rejected',
+]);
+
+export const accessRequests = pgTable('access_requests', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  reason: text('reason').notNull(),
+  status: accessRequestStatus('status').notNull().default('pending'),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewedByUserId: integer('reviewed_by_user_id').references(() => users.id),
+});
+
 /* ------------------------------------------------------- save root: Game */
 
 export const games = pgTable('games', {
   id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   name: text('name').notNull(),
   seed: bigint('seed', { mode: 'number' }).notNull(),
   currentYear: integer('current_year').notNull().default(1),

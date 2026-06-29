@@ -515,6 +515,7 @@ export interface RivalSeasonRecord {
   runnerUpName: string | null;
   topScorer: { playerId: number; name: string; teamName: string; goals: number } | null;
   relegated: string[];
+  points: number; // champion's final league points
   // Fase 11.4: winner of the top-4 mini-cup simulated at closeSeason.
   cupWinner?: { name: string; teamId: number };
 }

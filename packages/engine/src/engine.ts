@@ -27,7 +27,7 @@ import {
 } from './awards';
 import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { buildChronicle } from './headlines';
-import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups } from './cups';
+import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import {
@@ -1010,6 +1010,10 @@ export function closeSeason(prev: GameState): GameState {
   s.eventCapacityPenaltyPct = 0;
   s.eventImpulseLoss = 0;
   s.eventTreasuryInjection = 0;
+  // Force-complete any cups that were not finished during the season
+  // (e.g. scheduling edge cases). Must run BEFORE saving templates so
+  // recurring cups are always captured regardless of scheduling issues.
+  forceCompleteIncompleteCups(s);
   // Save recurring cup templates for next season.
   saveRecurringCupTemplates(s);
   // Recreate recurring cups from templates for the new season.

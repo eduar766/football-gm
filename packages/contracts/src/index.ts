@@ -427,6 +427,30 @@ export const WorldRankingResponse = z.object({
 });
 export type WorldRankingResponse = z.infer<typeof WorldRankingResponse>;
 
+// Batch 12.1: live world standings
+export const WorldDivisionStanding = z.object({
+  orden: z.number().int(),
+  name: z.string(),
+  standings: z.array(StandingRowDto),
+});
+export type WorldDivisionStanding = z.infer<typeof WorldDivisionStanding>;
+
+export const WorldFederationStanding = z.object({
+  federationId: z.number().int(),
+  federationName: z.string(),
+  confederationName: z.string().optional(),
+  prestige: z.number().int(),
+  tier: Tier,
+  matchdayProgress: z.number().int(),
+  divisions: z.array(WorldDivisionStanding),
+});
+export type WorldFederationStanding = z.infer<typeof WorldFederationStanding>;
+
+export const WorldStandingsResponse = z.object({
+  federations: z.array(WorldFederationStanding),
+});
+export type WorldStandingsResponse = z.infer<typeof WorldStandingsResponse>;
+
 export const ImportGameRequest = z.object({
   name: z.string().min(1).max(80),
   state: z.any(),
@@ -963,3 +987,77 @@ export type LeagueFormat = z.infer<typeof LeagueFormat>;
 
 export const SetLeagueFormatRequest = z.object({ format: LeagueFormat });
 export type SetLeagueFormatRequest = z.infer<typeof SetLeagueFormatRequest>;
+
+// ── Beta.1: Auth ──────────────────────────────────────────────────────────────
+
+export const AuthUserDto = z.object({
+  id: Id,
+  email: z.string().email(),
+  role: z.enum(['admin', 'beta']),
+  forcePasswordChange: z.boolean(),
+});
+export type AuthUserDto = z.infer<typeof AuthUserDto>;
+
+export const LoginRequest = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+export type LoginRequest = z.infer<typeof LoginRequest>;
+
+export const LoginResponse = z.object({
+  accessToken: z.string(),
+  user: AuthUserDto,
+});
+export type LoginResponse = z.infer<typeof LoginResponse>;
+
+export const ChangePasswordRequest = z.object({
+  currentPassword: z.string(),
+  newPassword: z.string().min(8),
+});
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequest>;
+
+export const ResetPasswordRequest = z.object({
+  token: z.string(),
+  newPassword: z.string().min(8),
+});
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequest>;
+
+export const RequestAccessRequest = z.object({
+  name: z.string().min(2).max(80),
+  email: z.string().email(),
+  reason: z.string().min(20).max(300),
+});
+export type RequestAccessRequest = z.infer<typeof RequestAccessRequest>;
+
+export const AccessRequestDto = z.object({
+  id: Id,
+  name: z.string(),
+  email: z.string(),
+  reason: z.string(),
+  status: z.enum(['pending', 'approved', 'rejected']),
+  requestedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+  reviewedByUserId: Id.nullable(),
+});
+export type AccessRequestDto = z.infer<typeof AccessRequestDto>;
+
+export const AdminUserDto = z.object({
+  id: Id,
+  email: z.string(),
+  role: z.enum(['admin', 'beta']),
+  approved: z.boolean(),
+  createdAt: z.string(),
+  lastActiveAt: z.string().nullable(),
+  gameCount: z.number().int(),
+});
+export type AdminUserDto = z.infer<typeof AdminUserDto>;
+
+export const ApproveRequestBody = z.object({
+  temporaryPassword: z.string().min(8).optional(),
+});
+export type ApproveRequestBody = z.infer<typeof ApproveRequestBody>;
+
+export const RejectRequestBody = z.object({
+  reason: z.string().optional(),
+});
+export type RejectRequestBody = z.infer<typeof RejectRequestBody>;
