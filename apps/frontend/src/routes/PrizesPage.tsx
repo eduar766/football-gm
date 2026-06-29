@@ -14,12 +14,13 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconDeviceFloppy, IconMedal, IconMinus, IconPlus, IconTrophy, IconTrash, IconX } from '@tabler/icons-react';
+import { IconDeviceFloppy, IconMedal, IconMinus, IconPlus, IconTrophy, IconTrash } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { money } from '../utils/format';
 
 const POSITION_MEDALS = ['#F59E0B', '#9CA3AF', '#D97706'];
@@ -168,16 +169,10 @@ function ShareEditor({
 export function PrizesPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
-  const prizes = useQuery({ queryKey: ['prizes', id], queryFn: () => api.prizes(id) });
-  const cups = useQuery({ queryKey: ['cups', id], queryFn: () => api.cups(id) });
-
-  const invalidate = () =>
-    qc.invalidateQueries({
-      predicate: (q) => ['prizes', 'economy', 'summary'].includes(q.queryKey[0] as string),
-    });
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
+  const prizes = useQuery({ queryKey: QK.prizes(id), queryFn: () => api.prizes(id) });
+  const cups = useQuery({ queryKey: QK.cups(id), queryFn: () => api.cups(id) });
 
   const isPreseason = summary.data?.phase === 'pretemporada';
 
@@ -196,38 +191,23 @@ export function PrizesPage() {
     }
   }, [prizes.data]);
 
-  const saveLeague = useMutation({
+  const saveLeague = useMutationWithFeedback({
     mutationFn: () => api.setLeaguePrize(id, leaguePool, leagueShares),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Premio de liga guardado' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['prizes', 'economy', 'summary'],
+    successMessage: 'Premio de liga guardado',
   });
-  const saveCup = useMutation({
+  const saveCup = useMutationWithFeedback({
     mutationFn: () => {
       if (!selectedCup) throw new Error('Elige una copa');
       return api.setCupPrize(id, Number(selectedCup), cupPool, cupShares);
     },
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Premio de copa guardado' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['prizes', 'economy', 'summary'],
+    successMessage: 'Premio de copa guardado',
   });
-  const remove = useMutation({
+  const remove = useMutationWithFeedback({
     mutationFn: (prizeId: number) => api.removePrize(id, prizeId),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Premio eliminado' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['prizes', 'economy', 'summary'],
+    successMessage: 'Premio eliminado',
   });
 
   if (prizes.isLoading || !prizes.data) {
@@ -314,7 +294,7 @@ export function PrizesPage() {
               />
               <Group>
                 <Button
-                  onClick={() => saveLeague.mutate()}
+                  onClick={() => saveLeague.mutate(undefined as void)}
                   loading={saveLeague.isPending}
                   disabled={!isPreseason}
                   leftSection={<IconDeviceFloppy size={16} />}
@@ -416,7 +396,7 @@ export function PrizesPage() {
                 color="#8B5CF6"
               />
               <Button
-                onClick={() => saveCup.mutate()}
+                onClick={() => saveCup.mutate(undefined as void)}
                 loading={saveCup.isPending}
                 disabled={!isPreseason || !selectedCup}
                 leftSection={<IconDeviceFloppy size={16} />}

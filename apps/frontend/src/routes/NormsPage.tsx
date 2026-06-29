@@ -13,13 +13,14 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconGavel, IconPlus, IconTrash, IconX } from '@tabler/icons-react';
+import { IconGavel, IconPlus, IconTrash } from '@tabler/icons-react';
 import type { NormType } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { money } from '../utils/format';
 
 const TIPO_LABEL: Record<NormType, string> = {
@@ -46,48 +47,26 @@ const formatValor = (tipo: NormType, valor: number) =>
 export function NormsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const norms = useQuery({ queryKey: ['norms', id], queryFn: () => api.norms(id) });
+  const norms = useQuery({ queryKey: QK.norms(id), queryFn: () => api.norms(id) });
 
   const [tipo, setTipo] = useState<NormType>('tope_plantilla');
   const [valor, setValor] = useState(65);
 
-  const invalidate = () =>
-    qc.invalidateQueries({
-      predicate: (q) =>
-        ['norms', 'summary', 'standings', 'compliance'].includes(q.queryKey[0] as string),
-    });
-
-  const add = useMutation({
+  const add = useMutationWithFeedback({
     mutationFn: () => api.addNorm(id, tipo, valor),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Norma guardada correctamente' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
+    successMessage: 'Norma guardada correctamente',
   });
-  const remove = useMutation({
+  const remove = useMutationWithFeedback({
     mutationFn: (normId: number) => api.removeNorm(id, normId),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Norma eliminada' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
+    successMessage: 'Norma eliminada',
   });
-  const sanction = useMutation({
+  const sanction = useMutationWithFeedback({
     mutationFn: (v: { teamId: number; normId: number }) => api.sanction(id, v.teamId, v.normId),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Sanción aplicada' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
+    successMessage: 'Sanción aplicada',
   });
 
   if (norms.isLoading) {
@@ -213,7 +192,7 @@ export function NormsPage() {
                 />
               )}
               <Button
-                onClick={() => add.mutate()}
+                onClick={() => add.mutate(undefined as void)}
                 loading={add.isPending}
                 leftSection={<IconPlus size={16} />}
                 variant="gradient"

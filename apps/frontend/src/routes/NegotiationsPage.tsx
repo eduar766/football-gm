@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Box, Button, Group, NumberInput, Paper, Skeleton, Stack, Tabs, Text, Tooltip } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import {
   IconArrowsExchange,
@@ -11,10 +10,11 @@ import {
   IconClock,
   IconHistory,
   IconRefresh,
-  IconX,
 } from '@tabler/icons-react';
 import type { EngineNegotiationState, NegotiationDto, NegotiationRequirementDto } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 const LABEL: Record<EngineNegotiationState, string> = {
   gathering_requirements: 'Recogiendo requisitos',
@@ -354,39 +354,23 @@ function NegotiationCard({
 export function NegotiationsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
   const negs = useQuery({
-    queryKey: ['negotiations', id],
+    queryKey: QK.negotiations(id),
     queryFn: () => api.negotiations(id),
   });
 
-  const invalidate = () =>
-    qc.invalidateQueries({
-      predicate: (q) => ['negotiations', 'market', 'summary'].includes(q.queryKey[0] as string),
-    });
-
-  const retry = useMutation({
+  const retry = useMutationWithFeedback({
     mutationFn: (targetTeamId: number) => api.startNegotiation(id, targetTeamId),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Negociación reintentada' });
-      invalidate();
-    },
-    onError: (e: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
-    },
+    queryKeyToInvalidate: ['negotiations', 'market', 'summary'],
+    successMessage: 'Negociación reintentada',
   });
 
-  const setOffer = useMutation({
+  const setOffer = useMutationWithFeedback({
     mutationFn: ({ negId, offerValue }: { negId: number; offerValue: number }) =>
       api.setOfferValue(id, negId, offerValue),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Oferta de reparto guardada' });
-      invalidate();
-    },
-    onError: (e: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
-    },
+    queryKeyToInvalidate: ['negotiations', 'market', 'summary'],
+    successMessage: 'Oferta de reparto guardada',
   });
 
   if (negs.isLoading) {

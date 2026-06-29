@@ -1,39 +1,21 @@
 import { Box, Button, Group, Paper, Skeleton, Table, Text } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconUserPlus, IconX } from '@tabler/icons-react';
+import { IconUserPlus } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 export function MarketPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const market = useQuery({ queryKey: ['market', id], queryFn: () => api.market(id) });
+  const market = useQuery({ queryKey: QK.market(id), queryFn: () => api.market(id) });
 
-  const start = useMutation({
+  const start = useMutationWithFeedback({
     mutationFn: (teamId: number) => api.startNegotiation(id, teamId),
-    onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Negociación iniciada',
-      });
-      qc.invalidateQueries({
-        predicate: (q) =>
-          ['market', 'negotiations', 'summary'].includes(q.queryKey[0] as string),
-      });
-    },
-    onError: (error: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: error.message,
-      });
-    },
+    queryKeyToInvalidate: ['market', 'negotiations', 'summary'],
+    successMessage: 'Negociación iniciada',
   });
 
   if (market.isLoading) {

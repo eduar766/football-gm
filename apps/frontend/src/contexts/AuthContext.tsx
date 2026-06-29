@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { AuthUserDto } from '@football-gm/contracts';
-
-const TOKEN_KEY = 'fgm_token';
+import { TOKEN_KEY, API } from '../constants';
 
 interface AuthState {
   token: string | null;
@@ -14,8 +13,6 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null);
-
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 async function fetchMe(token: string): Promise<AuthUserDto | null> {
   try {

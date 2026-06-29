@@ -13,21 +13,20 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import {
-  IconCheck,
   IconFileInvoice,
   IconPlayerPlay,
-  IconX,
   IconArrowUp,
   IconArrowDown,
   IconArrowRight,
 } from '@tabler/icons-react';
 import type { FinancialHealth } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { money } from '../utils/format';
 import { EconomyChart } from '../components/EconomyChart';
 
@@ -53,15 +52,14 @@ function contractColor(tipo: string) {
 export function EconomyPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const eco = useQuery({ queryKey: ['economy', id], queryFn: () => api.economy(id) });
+  const eco = useQuery({ queryKey: QK.economy(id), queryFn: () => api.economy(id) });
   const compliance = useQuery({
-    queryKey: ['compliance', id],
+    queryKey: QK.compliance(id),
     queryFn: () => api.compliance(id),
   });
   const transfersData = useQuery({
-    queryKey: ['transfers', id],
+    queryKey: QK.transfers(id),
     queryFn: () => api.transfers(id),
   });
 
@@ -72,74 +70,21 @@ export function EconomyPage() {
     }
   }, [eco.data]);
 
-  const invalidate = () =>
-    qc.invalidateQueries({
-      predicate: (q) =>
-        ['economy', 'summary', 'structure', 'teams'].includes(
-          q.queryKey[0] as string,
-        ),
-    });
-
-  const savePolicy = useMutation({
+  const savePolicy = useMutationWithFeedback({
     mutationFn: () =>
       api.setEconomyPolicy(id, { talentInvestment: talent }),
-    onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Política económica guardada',
-      });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: error.message,
-      });
-    },
+    queryKeyToInvalidate: ['economy', 'summary', 'structure', 'teams'],
+    successMessage: 'Política económica guardada',
   });
-  const sign = useMutation({
+  const sign = useMutationWithFeedback({
     mutationFn: (offerId: number) => api.signContract(id, offerId),
-    onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Contrato firmado',
-      });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: error.message,
-      });
-    },
+    queryKeyToInvalidate: ['economy', 'summary', 'structure', 'teams'],
+    successMessage: 'Contrato firmado',
   });
-  const cancel = useMutation({
+  const cancel = useMutationWithFeedback({
     mutationFn: (contractId: number) => api.cancelContract(id, contractId),
-    onSuccess: () => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Contrato cancelado',
-      });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({
-        color: 'red',
-        icon: <IconX size={18} />,
-        title: 'Error',
-        message: error.message,
-      });
-    },
+    queryKeyToInvalidate: ['economy', 'summary', 'structure', 'teams'],
+    successMessage: 'Contrato cancelado',
   });
 
   if (eco.isLoading || !eco.data) {
@@ -404,7 +349,7 @@ export function EconomyPage() {
               />
               <Group>
                 <Button
-                  onClick={() => savePolicy.mutate()}
+                  onClick={() => savePolicy.mutate(undefined as void)}
                   loading={savePolicy.isPending}
                   leftSection={<IconFileInvoice size={16} />}
                   variant="gradient"

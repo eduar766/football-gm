@@ -16,18 +16,18 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
-  IconCheck,
   IconDownload,
   IconPlus,
   IconShield,
   IconTrash,
   IconUpload,
-  IconX,
 } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { useAuth } from '../contexts/AuthContext';
 import { ExportReminderBanner } from '../components/ExportReminderBanner';
 import { FirstLoginModal, useOnboardingModal } from '../components/FirstLoginModal';
@@ -36,7 +36,6 @@ const ACCENT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#
 const GAME_LIMIT = 3;
 
 export function GamesPage() {
-  const qc = useQueryClient();
   const navigate = useNavigate();
   const { user, isAdmin, logout } = useAuth();
   const [name, setName] = useState('');
@@ -47,64 +46,52 @@ export function GamesPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const onboarding = useOnboardingModal();
 
-  const games = useQuery({ queryKey: ['games'], queryFn: api.listGames });
+  const games = useQuery({ queryKey: QK.games(), queryFn: api.listGames });
 
   const activeCount = games.data?.length ?? 0;
   const atLimit = !isAdmin && activeCount >= GAME_LIMIT;
 
-  const create = useMutation({
+  const create = useMutationWithFeedback({
     mutationFn: () =>
       api.createGame({
         name: name.trim() || 'Mi competición',
         seed: seed ? Number(seed) : undefined,
       }),
-    onSuccess: async ({ id }) => {
-      notifications.show({
-        color: 'green',
-        icon: <IconCheck size={18} />,
-        title: 'Éxito',
-        message: 'Partida creada',
-      });
-      await qc.invalidateQueries({ queryKey: ['games'] });
+    queryKeyToInvalidate: ['games'],
+    successMessage: 'Partida creada',
+    onSuccess: ({ id }) => {
       navigate({ to: '/games/$gameId', params: { gameId: String(id) } });
     },
     onError: (error: Error) => {
-      const msg = error.message.includes('GAME_LIMIT_REACHED')
-        ? 'Límite de 3 partidas alcanzado. Borra una para crear otra.'
-        : error.message;
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: msg });
+      if (error.message.includes('GAME_LIMIT_REACHED')) {
+        error.message = 'Límite de 3 partidas alcanzado. Borra una para crear otra.';
+      }
     },
   });
 
-  const importMutation = useMutation({
+  const importMutation = useMutationWithFeedback({
     mutationFn: async (file: File) => {
       const text = await file.text();
       const payload = JSON.parse(text) as { name: string; state: unknown };
       return api.importGame(payload.name, payload.state);
     },
-    onSuccess: async ({ id }) => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Importado', message: 'Partida importada correctamente' });
-      await qc.invalidateQueries({ queryKey: ['games'] });
+    queryKeyToInvalidate: ['games'],
+    successMessage: 'Partida importada correctamente',
+    onSuccess: ({ id }) => {
       navigate({ to: '/games/$gameId', params: { gameId: String(id) } });
     },
     onError: (error: Error) => {
-      const msg = error.message.includes('GAME_LIMIT_REACHED')
-        ? 'Límite de 3 partidas alcanzado. Borra una para importar otra.'
-        : error.message;
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error al importar', message: msg });
+      if (error.message.includes('GAME_LIMIT_REACHED')) {
+        error.message = 'Límite de 3 partidas alcanzado. Borra una para importar otra.';
+      }
     },
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutationWithFeedback({
     mutationFn: (id: number) => api.deleteGame(id),
-    onSuccess: async () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, message: 'Partida eliminada' });
-      setDeleteTarget(null);
-      await qc.invalidateQueries({ queryKey: ['games'] });
-    },
-    onError: () => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, message: 'Error al eliminar la partida' });
-    },
+    queryKeyToInvalidate: ['games'],
+    successMessage: 'Partida eliminada',
+    onSuccess: () => setDeleteTarget(null),
   });
 
   const handleExport = async (gameId: number, gameName: string) => {
@@ -220,7 +207,7 @@ export function GamesPage() {
             <Group>
               <Tooltip label={atLimit ? 'Límite alcanzado' : ''} disabled={!atLimit}>
                 <Button
-                  onClick={() => create.mutate()}
+                  onClick={() => create.mutate(undefined as void)}
                   loading={create.isPending}
                   leftSection={<IconPlus size={16} />}
                   variant="gradient"

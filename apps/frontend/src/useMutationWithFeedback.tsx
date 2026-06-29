@@ -22,45 +22,46 @@ export function useMutationWithFeedback<TData, TVariables>(
   options: UseMutationWithFeedbackOptions<TData, TVariables>,
 ) {
   const qc = useQueryClient();
+  const { queryKeyToInvalidate, successMessage, errorMessage, onSuccess: userOnSuccess, onError: userOnError, confirmModal, ...mutationOptions } = options;
 
   const mutation = useMutation({
-    ...options,
+    ...mutationOptions,
     onSuccess: (data, variables, context) => {
       notifications.show({
         color: 'green',
         icon: <IconCheck size={18} />,
         title: 'Éxito',
-        message: options.successMessage ?? 'Operación completada',
+        message: successMessage ?? 'Operación completada',
       });
-      if (options.queryKeyToInvalidate) {
-        const keys = Array.isArray(options.queryKeyToInvalidate)
-          ? options.queryKeyToInvalidate
-          : [options.queryKeyToInvalidate];
+      if (queryKeyToInvalidate) {
+        const keys = Array.isArray(queryKeyToInvalidate)
+          ? queryKeyToInvalidate
+          : [queryKeyToInvalidate];
         keys.forEach((key) => qc.invalidateQueries({ queryKey: [key] }));
       }
-      options.onSuccess?.(data, variables, context);
+      userOnSuccess?.(data, variables, context);
     },
     onError: (error, variables, context) => {
       notifications.show({
         color: 'red',
         icon: <IconX size={18} />,
         title: 'Error',
-        message: options.errorMessage ?? error.message ?? 'Algo salió mal',
+        message: errorMessage ?? error.message ?? 'Algo salió mal',
       });
-      options.onError?.(error, variables, context);
+      userOnError?.(error, variables, context);
     },
   });
 
   const mutateWithConfirm = (variables: TVariables) => {
-    if (options.confirmModal) {
+    if (confirmModal) {
       modals.openConfirmModal({
-        title: options.confirmModal.title,
-        children: options.confirmModal.message,
+        title: confirmModal.title,
+        children: confirmModal.message,
         labels: {
-          confirm: options.confirmModal.labels?.confirm ?? 'Confirmar',
-          cancel: options.confirmModal.labels?.cancel ?? 'Cancelar',
+          confirm: confirmModal.labels?.confirm ?? 'Confirmar',
+          cancel: confirmModal.labels?.cancel ?? 'Cancelar',
         },
-        confirmProps: { color: options.confirmModal.confirmColor ?? 'red' },
+        confirmProps: { color: confirmModal.confirmColor ?? 'red' },
         onConfirm: () => mutation.mutate(variables),
       });
     } else {

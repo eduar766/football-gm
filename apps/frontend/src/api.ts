@@ -28,9 +28,8 @@ import type {
   WorldRankingResponse,
   WorldStandingsResponse,
 } from '@football-gm/contracts';
-
-const TOKEN_KEY = 'fgm_token';
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+import { TOKEN_KEY, API } from './constants';
+import { ApiError } from './api-error';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -43,13 +42,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (res.status === 401) {
     localStorage.removeItem(TOKEN_KEY);
-    // Hard redirect so AuthContext re-initialises cleanly
     window.location.href = '/login';
-    throw new Error('Unauthorized');
+    throw new ApiError(401, null, 'Unauthorized');
   }
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+    throw new ApiError(res.status, body, `${res.status} ${res.statusText}: ${body}`);
   }
   return res.json() as Promise<T>;
 }

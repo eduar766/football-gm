@@ -1,11 +1,12 @@
 import { Box, Button, Group, Paper, Skeleton, Stack, Table, Text } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconAlertTriangle, IconCheck, IconEye, IconEyeOff, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEye, IconEyeOff } from '@tabler/icons-react';
 import type { EventAction, EventStatus, EventType } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 const TIPO_LABEL: Record<EventType, string> = {
   arbitraje_dudoso: 'Polémica arbitral',
@@ -52,23 +53,14 @@ const STATUS_CONFIG: Record<EventStatus, { color: string; gradient: string }> = 
 export function EventsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const evs = useQuery({ queryKey: ['events', id], queryFn: () => api.events(id) });
+  const evs = useQuery({ queryKey: QK.events(id), queryFn: () => api.events(id) });
 
-  const resolve = useMutation({
+  const resolve = useMutationWithFeedback({
     mutationFn: (v: { eventId: number; action: EventAction }) =>
       api.resolveEvent(id, v.eventId, v.action),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Evento resuelto' });
-      qc.invalidateQueries({
-        predicate: (q) =>
-          ['events', 'summary', 'economy', 'teams', 'federation'].includes(q.queryKey[0] as string),
-      });
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['events', 'summary', 'economy', 'teams', 'federation'],
+    successMessage: 'Evento resuelto',
   });
 
   if (evs.isLoading) {

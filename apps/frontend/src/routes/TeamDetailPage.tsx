@@ -12,11 +12,12 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconHeart, IconTrophy, IconTrophyOff, IconX } from '@tabler/icons-react';
+import { IconHeart, IconTrophy, IconTrophyOff } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { money as fmtMoney } from '../utils/format';
 
 interface PlayerWithAge {
@@ -61,21 +62,15 @@ export function TeamDetailPage() {
   const id = Number(gameId);
   const tid = Number(teamId);
   const team = useQuery({
-    queryKey: ['team', id, tid],
+    queryKey: QK.team(id, tid),
     queryFn: () => api.team(id, tid),
   });
-  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
-  const qc = useQueryClient();
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
 
-  const cultivate = useMutation({
+  const cultivate = useMutationWithFeedback({
     mutationFn: () => api.cultivateArraigo(id, tid),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Arraigo cultivado correctamente' });
-      qc.invalidateQueries({ predicate: (q) => ['team', 'summary'].includes(q.queryKey[0] as string) });
-    },
-    onError: (e: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: e.message });
-    },
+    queryKeyToInvalidate: ['team', 'summary'],
+    successMessage: 'Arraigo cultivado correctamente',
   });
 
   if (team.isLoading || !team.data) {
@@ -269,7 +264,7 @@ export function TeamDetailPage() {
               color="blue"
               leftSection={<IconHeart size={14} />}
               loading={cultivate.isPending}
-              onClick={() => cultivate.mutate()}
+              onClick={() => cultivate.mutate(undefined as void)}
             >
               Cultivar arraigo (2M€, +5-10)
             </Button>

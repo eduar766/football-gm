@@ -16,14 +16,12 @@ import {
   Text,
   Tooltip,
 } from '@mantine/core';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { notifications } from '@mantine/notifications';
+import { useQuery } from '@tanstack/react-query';
 import { modals } from '@mantine/modals';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import {
   IconAlertTriangle,
   IconCalendarOff,
-  IconCheck,
   IconCircleCheck,
   IconClipboardCheck,
   IconClipboardList,
@@ -37,9 +35,10 @@ import {
   IconTrophy,
   IconUsers,
   IconWorld,
-  IconX,
 } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 interface MatchGoalScorer {
   minute: number;
@@ -65,120 +64,86 @@ interface ExtendedSummary {
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
   const navigate = useNavigate();
 
   const [division, setDivision] = useState(1);
   const [reviewMatchKey, setReviewMatchKey] = useState<string | null>(null);
   const [emergencyTeamId, setEmergencyTeamId] = useState<string | null>(null);
-  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
   const phase = summary.data?.phase;
   const isPreseason = phase === 'pretemporada';
 
   const standings = useQuery({
-    queryKey: ['standings', id, division],
+    queryKey: QK.standings(id, division),
     queryFn: () => api.standings(id, division),
     enabled: !isPreseason,
   });
   const nextFixtures = useQuery({
-    queryKey: ['nextFixtures', id],
+    queryKey: QK.nextFixtures(id),
     queryFn: () => api.nextFixtures(id),
     enabled: !isPreseason,
   });
   const structure = useQuery({
-    queryKey: ['structure', id],
+    queryKey: QK.structure(id),
     queryFn: () => api.structure(id),
     enabled: !isPreseason,
   });
   const cups = useQuery({
-    queryKey: ['cups', id],
+    queryKey: QK.cups(id),
     queryFn: () => api.cups(id),
     enabled: !isPreseason,
   });
 
-  const refresh = () =>
-    qc.invalidateQueries({
-      predicate: (q) =>
-        [
-          'summary',
-          'standings',
-          'history',
-          'teams',
-          'nextFixtures',
-          'cups',
-          'structure',
-          'economy',
-          'events',
-        ].includes(q.queryKey[0] as string),
-    });
+  const REFRESH_KEYS = ['summary', 'standings', 'history', 'teams', 'nextFixtures', 'cups', 'structure', 'economy', 'events'];
 
-  const handleSuccess = (message: string) => {
-    notifications.show({
-      color: 'green',
-      icon: <IconCheck size={18} />,
-      title: 'Éxito',
-      message,
-    });
-    refresh();
-  };
-
-  const handleError = (error: Error) => {
-    notifications.show({
-      color: 'red',
-      icon: <IconX size={18} />,
-      title: 'Error',
-      message: error.message,
-    });
-  };
-
-  const mImpulse = useMutation({
+  const mImpulse = useMutationWithFeedback({
     mutationFn: (v: { home: number; away: number; fav: number }) =>
       api.applyImpulse(id, v.home, v.away, v.fav),
-    onSuccess: () => handleSuccess('Impulso aplicado'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Impulso aplicado',
   });
 
-  const mStart = useMutation({
+  const mStart = useMutationWithFeedback({
     mutationFn: () => api.startSeason(id),
-    onSuccess: () => handleSuccess('Temporada comenzada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Temporada comenzada',
   });
 
-  const mAdvanceMd = useMutation({
+  const mAdvanceMd = useMutationWithFeedback({
     mutationFn: () => api.advanceMatchday(id),
-    onSuccess: () => handleSuccess('Jornada avanzada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Jornada avanzada',
   });
 
-  const mAdvanceSeason = useMutation({
+  const mAdvanceSeason = useMutationWithFeedback({
     mutationFn: () => api.advanceSeason(id),
-    onSuccess: () => handleSuccess('Temporada avanzada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Temporada avanzada',
   });
 
-  const mClose = useMutation({
+  const mClose = useMutationWithFeedback({
     mutationFn: () => api.closeSeason(id),
-    onSuccess: () => handleSuccess('Temporada cerrada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Temporada cerrada',
   });
 
-  const mCallReview = useMutation({
+  const mCallReview = useMutationWithFeedback({
     mutationFn: (v: { matchday: number; homeTeamId: number; awayTeamId: number }) =>
       api.callReview(id, v.matchday, v.homeTeamId, v.awayTeamId),
-    onSuccess: () => handleSuccess('Revisión convocada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Revisión convocada',
   });
 
-  const mEmergencyMeeting = useMutation({
+  const mEmergencyMeeting = useMutationWithFeedback({
     mutationFn: (teamId: number) => api.emergencyMeeting(id, teamId),
-    onSuccess: () => handleSuccess('Reunión de emergencia convocada'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Reunión de emergencia convocada',
   });
 
-  const mPostponeMatchday = useMutation({
+  const mPostponeMatchday = useMutationWithFeedback({
     mutationFn: () => api.postponeMatchday(id),
-    onSuccess: () => handleSuccess('Jornada pospuesta'),
-    onError: handleError,
+    queryKeyToInvalidate: REFRESH_KEYS,
+    successMessage: 'Jornada pospuesta',
   });
 
   const over = summary.data?.seasonOver ?? false;
@@ -226,7 +191,7 @@ export function DashboardPage() {
               <Button
                 size="lg"
                 leftSection={<IconPlayerPlay size={18} />}
-                onClick={() => mStart.mutate()}
+                onClick={() => mStart.mutate(undefined as void)}
                 loading={mStart.isPending}
                 variant="gradient"
                 gradient={{ from: '#10B981', to: '#059669' }}
@@ -367,7 +332,7 @@ export function DashboardPage() {
               <Button
                 size="lg"
                 leftSection={<IconPlayerPlay size={18} />}
-                onClick={() => mAdvanceMd.mutate()}
+                onClick={() => mAdvanceMd.mutate(undefined as void)}
                 disabled={over || busy || blocked}
                 loading={mAdvanceMd.isPending}
                 variant="gradient"
@@ -379,7 +344,7 @@ export function DashboardPage() {
               <Button
                 variant="outline"
                 leftSection={<IconSparkles size={16} />}
-                onClick={() => mAdvanceSeason.mutate()}
+                onClick={() => mAdvanceSeason.mutate(undefined as void)}
                 disabled={over || busy || blocked}
                 loading={mAdvanceSeason.isPending}
                 style={{ borderColor: '#10B981', color: '#10B981' }}
@@ -401,7 +366,7 @@ export function DashboardPage() {
                     ),
                     labels: { confirm: 'Cerrar temporada', cancel: 'Cancelar' },
                     confirmProps: { color: 'red' },
-                    onConfirm: () => mClose.mutate(),
+                    onConfirm: () => mClose.mutate(undefined as void),
                   })
                 }
                 disabled={!over || busy}
@@ -823,7 +788,7 @@ export function DashboardPage() {
                     variant="outline"
                     size="sm"
                     leftSection={<IconCalendarOff size={14} />}
-                    onClick={() => mPostponeMatchday.mutate()}
+                    onClick={() => mPostponeMatchday.mutate(undefined as void)}
                     disabled={over || busy || blocked || phase !== 'temporada'}
                     loading={mPostponeMatchday.isPending}
                     style={{ borderColor: '#8B5CF6', color: '#8B5CF6', alignSelf: 'flex-start' }}

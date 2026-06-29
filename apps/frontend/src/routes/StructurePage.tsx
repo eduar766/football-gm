@@ -11,13 +11,14 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconPlus, IconRefresh, IconX } from '@tabler/icons-react';
+import { IconPlus, IconRefresh } from '@tabler/icons-react';
 import type { StructureTeam } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 const TIER_COLORS: Record<number, string> = {
   1: '#F59E0B',
@@ -74,63 +75,34 @@ function TeamRows({ teams }: { teams: StructureTeam[] }) {
 export function StructurePage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
   const structure = useQuery({
-    queryKey: ['structure', id],
+    queryKey: QK.structure(id),
     queryFn: () => api.structure(id),
   });
   const summary = useQuery({
-    queryKey: ['summary', id],
+    queryKey: QK.summary(id),
     queryFn: () => api.summary(id),
   });
 
-  const invalidate = () =>
-    qc.invalidateQueries({
-      predicate: (q) =>
-        [
-          'structure',
-          'standings',
-          'summary',
-          'teams',
-          'federations',
-          'economy',
-        ].includes(q.queryKey[0] as string),
-    });
-
-  const level = useMutation({
+  const level = useMutationWithFeedback({
     mutationFn: () => api.runLevelingLeague(id),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Liga de nivelación ejecutada' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
+    successMessage: 'Liga de nivelación ejecutada',
   });
 
-  const setFormat = useMutation({
+  const setFormat = useMutationWithFeedback({
     mutationFn: (format: 'ida' | 'ida_vuelta') => api.setLeagueFormat(id, format),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Formato de liga actualizado' });
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
+    successMessage: 'Formato de liga actualizado',
   });
 
   const [teamName, setTeamName] = useState('');
-  const create = useMutation({
+  const create = useMutationWithFeedback({
     mutationFn: () => api.createOwnTeam(id, teamName.trim()),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Equipo propio creado' });
-      setTeamName('');
-      invalidate();
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
+    successMessage: 'Equipo propio creado',
+    onSuccess: () => setTeamName(''),
   });
 
   if (structure.isLoading || summary.isLoading) {
@@ -186,7 +158,7 @@ export function StructurePage() {
                 ),
                 labels: { confirm: 'Confirmar', cancel: 'Cancelar' },
                 confirmProps: { color: 'yellow' },
-                onConfirm: () => level.mutate(),
+                onConfirm: () => level.mutate(undefined as void),
               })
             }
             loading={level.isPending}
@@ -254,7 +226,7 @@ export function StructurePage() {
             style={{ flex: 1 }}
           />
           <Button
-            onClick={() => create.mutate()}
+            onClick={() => create.mutate(undefined as void)}
             loading={create.isPending}
             disabled={teamName.trim().length === 0 || !isPreseason}
             leftSection={<IconPlus size={16} />}

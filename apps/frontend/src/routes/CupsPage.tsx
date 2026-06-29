@@ -15,10 +15,9 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconCheck, IconLayoutGrid, IconTrophy, IconX } from '@tabler/icons-react';
+import { IconLayoutGrid, IconTrophy } from '@tabler/icons-react';
 import type {
   CupCategory,
   CupFormat,
@@ -28,6 +27,8 @@ import type {
   CupType,
 } from '@football-gm/contracts';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { BracketView } from '../components/BracketView';
 
 const TIPO_LABEL: Record<CupType, string> = {
@@ -298,11 +299,10 @@ function EliminationCupCard({ cup }: { cup: CupDto }) {
 export function CupsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
-  const qc = useQueryClient();
 
-  const cups = useQuery({ queryKey: ['cups', id], queryFn: () => api.cups(id) });
-  const structure = useQuery({ queryKey: ['structure', id], queryFn: () => api.structure(id) });
-  const summary = useQuery({ queryKey: ['summary', id], queryFn: () => api.summary(id) });
+  const cups = useQuery({ queryKey: QK.cups(id), queryFn: () => api.cups(id) });
+  const structure = useQuery({ queryKey: QK.structure(id), queryFn: () => api.structure(id) });
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
   const isPreseason = summary.data?.phase === 'pretemporada';
 
   const teamOptions = useMemo(() => {
@@ -320,21 +320,16 @@ export function CupsPage() {
   const [participants, setParticipants] = useState<string[]>([]);
   const [recurring, setRecurring] = useState(false);
 
-  const create = useMutation({
+  const create = useMutationWithFeedback({
     mutationFn: () =>
       api.createCup(id, {
         name, tipo, formato, categoria,
         participantTeamIds: participants.map(Number),
         recurring,
       }),
-    onSuccess: () => {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Éxito', message: 'Copa creada correctamente' });
-      setParticipants([]);
-      qc.invalidateQueries({ predicate: (q) => ['cups', 'summary', 'history'].includes(q.queryKey[0] as string) });
-    },
-    onError: (error: Error) => {
-      notifications.show({ color: 'red', icon: <IconX size={18} />, title: 'Error', message: error.message });
-    },
+    queryKeyToInvalidate: ['cups', 'summary', 'history'],
+    successMessage: 'Copa creada correctamente',
+    onSuccess: () => setParticipants([]),
   });
 
   if (cups.isLoading || summary.isLoading) {
@@ -475,7 +470,7 @@ export function CupsPage() {
           />
           <Group>
             <Button
-              onClick={() => create.mutate()}
+              onClick={() => create.mutate(undefined as void)}
               disabled={participants.length < 2 || name.trim().length === 0 || !isPreseason}
               loading={create.isPending}
               leftSection={<IconTrophy size={16} />}
