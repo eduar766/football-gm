@@ -154,6 +154,48 @@ describe('unified calendar (Fase 6.2): cups interleaved with the league', () => 
   });
 });
 
+describe('eliminatoria ida y vuelta', () => {
+  it('8-team cup creates correct initial rounds and crowns a champion', () => {
+    let g = createGame(20, { teams: players(10) });
+    const ids = g.teams.slice(0, 8).map((t) => t.id);
+    g = createCup(g, 'Copa IV', 'copa', 'eliminatoria_ida_vuelta', 'primer_equipo', ids);
+    // 8 teams (power of 2): R1=ida(4 matches), R2=vuelta(4 matches) — no BYEs
+    expect(g.cups[0].rounds[0].matches).toHaveLength(4);
+    expect(g.cups[0].rounds[1].matches).toHaveLength(4);
+    g = closeSeason(advanceSeason(startSeason(g)));
+    expect(g.cups[0].status).toBe('finalizada');
+    expect(ids).toContain(g.cups[0].championTeamId!);
+  });
+
+  it('10-team cup has no BYE-BYE pairs and crowns a champion', () => {
+    let g = createGame(21, { teams: players(10) });
+    const ids = g.teams.map((t) => t.id);
+    g = createCup(g, 'Copa 10', 'copa', 'eliminatoria_ida_vuelta', 'primer_equipo', ids);
+    // 10 teams: byes=6 => ida round has 8 matches (6 BYE + 2 real), vuelta same
+    expect(g.cups[0].rounds[0].matches).toHaveLength(8);
+    // No BYE-BYE pairs: all matches must have at least one real team
+    const r1 = g.cups[0].rounds[0].matches;
+    expect(r1.every((m) => m.homeTeamId !== -1 || m.awayTeamId !== -1)).toBe(true);
+    g = closeSeason(advanceSeason(startSeason(g)));
+    expect(g.cups[0].status).toBe('finalizada');
+    expect(ids).toContain(g.cups[0].championTeamId!);
+  });
+
+  it('progresses through QF/SF/Final rounds dynamically', () => {
+    let g = createGame(22, { teams: players(8) });
+    const ids = g.teams.map((t) => t.id);
+    g = createCup(g, 'Copa Prog', 'copa', 'eliminatoria_ida_vuelta', 'primer_equipo', ids);
+    g = startSeason(g);
+    // Initially only R1 (ida) and R2 (vuelta) exist
+    expect(g.cups[0].rounds).toHaveLength(2);
+    // After playing all scheduled rounds, all 6 rounds (ida+vuelta for QF/SF/Final) exist
+    while (!g.seasonOver) g = advanceMatchday(g);
+    expect(g.cups[0].rounds.length).toBeGreaterThanOrEqual(6);
+    expect(g.cups[0].status).toBe('finalizada');
+    expect(ids).toContain(g.cups[0].championTeamId!);
+  });
+});
+
 describe('determinism with cups', () => {
   it('same seed + same creation => identical bracket and champion', () => {
     const run = () => {

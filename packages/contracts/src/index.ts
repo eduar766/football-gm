@@ -395,6 +395,7 @@ export const SeasonRecordDto = z.object({
   championTeamId: Id,
   championName: z.string(),
   divisionName: z.string().nullable(),
+  cupName: z.string().nullable(),
 });
 export type SeasonRecordDto = z.infer<typeof SeasonRecordDto>;
 
@@ -1005,8 +1006,20 @@ export const CupDto = z.object({
 });
 export type CupDto = z.infer<typeof CupDto>;
 
+export const CupScheduleEntryDto = z.object({
+  matchday: z.number().int(),
+  cupId: z.number().int(),
+  cupName: z.string(),
+  roundNumero: z.number().int(),
+  leg: z.enum(['ida', 'vuelta']).optional(),
+});
+export type CupScheduleEntryDto = z.infer<typeof CupScheduleEntryDto>;
+
 export const CupsResponse = z.object({
   cups: z.array(CupDto),
+  schedule: z.array(CupScheduleEntryDto),
+  currentMatchday: z.number().int(),
+  totalMatchdays: z.number().int(),
 });
 export type CupsResponse = z.infer<typeof CupsResponse>;
 

@@ -109,16 +109,25 @@ export function createCup(
       buildMatch(f.homeId, f.awayId),
     );
   } else {
-    const padded = [...unique];
-    while (padded.length < nextPowerOf2(unique.length)) padded.push(BYE);
-    const shuffled = shuffle(padded, s.cupsRng);
+    // Shuffle real teams, then pair the first `byes` each with a BYE (auto-advance),
+    // and pair the remaining teams against each other. This guarantees no BYE-BYE pairs,
+    // which would otherwise produce winners=null and corrupt the bracket structure.
+    const shuffled = shuffle([...unique], s.cupsRng);
+    const byes = nextPowerOf2(shuffled.length) - shuffled.length;
+    const isIV = formato === 'eliminatoria_ida_vuelta';
     firstRound = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
-      firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], 'ida'));
+    for (let i = 0; i < byes; i++) {
+      firstRound.push(buildMatch(shuffled[i], BYE, isIV ? 'ida' : undefined));
     }
-    if (formato === 'eliminatoria_ida_vuelta') {
+    for (let i = byes; i < shuffled.length; i += 2) {
+      firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], isIV ? 'ida' : undefined));
+    }
+    if (isIV) {
       secondRound = [];
-      for (let i = 0; i < shuffled.length; i += 2) {
+      for (let i = 0; i < byes; i++) {
+        secondRound.push(buildMatch(BYE, shuffled[i], 'vuelta'));
+      }
+      for (let i = byes; i < shuffled.length; i += 2) {
         secondRound.push(buildMatch(shuffled[i + 1], shuffled[i], 'vuelta'));
       }
     }
@@ -344,6 +353,14 @@ export function playCupRound(s: GameState, cupId: number, roundNumero: number): 
       if (matchingIda) {
         computeTwoLegWinner(matchingIda.matches, currentRound.matches, s, cup.categoria);
       }
+      // Create the next logical round's ida+vuelta from aggregate winners.
+      // Only when there are >=2 winners (the final produces exactly 1 winner).
+      const aggregateWinners = currentRound.matches
+        .map((m) => m.winnerTeamId)
+        .filter((id): id is number => id !== null);
+      if (aggregateWinners.length >= 2) {
+        ensureNextKnockoutRound(cup, roundNumero + 1);
+      }
     } else {
       // This is an ida leg — just play it (vuelta will come on next matchday).
       playPendingInRound(s, currentRound, cup.categoria);
@@ -509,16 +526,22 @@ export function recreateRecurringCups(s: GameState): void {
         buildMatch(f.homeId, f.awayId),
       );
     } else {
-      const padded = [...validIds];
-      while (padded.length < nextPowerOf2(validIds.length)) padded.push(BYE);
-      const shuffled = shuffle(padded, s.cupsRng);
+      const shuffled = shuffle([...validIds], s.cupsRng);
+      const byes = nextPowerOf2(shuffled.length) - shuffled.length;
+      const isIV = tmpl.formato === 'eliminatoria_ida_vuelta';
       firstRound = [];
-      for (let i = 0; i < shuffled.length; i += 2) {
-        firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], 'ida'));
+      for (let i = 0; i < byes; i++) {
+        firstRound.push(buildMatch(shuffled[i], BYE, isIV ? 'ida' : undefined));
       }
-      if (tmpl.formato === 'eliminatoria_ida_vuelta') {
+      for (let i = byes; i < shuffled.length; i += 2) {
+        firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], isIV ? 'ida' : undefined));
+      }
+      if (isIV) {
         secondRound = [];
-        for (let i = 0; i < shuffled.length; i += 2) {
+        for (let i = 0; i < byes; i++) {
+          secondRound.push(buildMatch(BYE, shuffled[i], 'vuelta'));
+        }
+        for (let i = byes; i < shuffled.length; i += 2) {
           secondRound.push(buildMatch(shuffled[i + 1], shuffled[i], 'vuelta'));
         }
       }

@@ -1,4 +1,4 @@
-import { Box, Grid, Group, Paper, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
+import { Badge, Box, Grid, Group, Paper, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { IconHistory, IconMedal, IconTrophy, IconWorld } from '@tabler/icons-react';
@@ -106,7 +106,7 @@ export function HistoryPage() {
                       <Table.Tr>
                         <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año</Table.Th>
                         <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campeón</Table.Th>
-                        <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>División</Table.Th>
+                        <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Competición</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -150,7 +150,21 @@ export function HistoryPage() {
                               </Group>
                             </Link>
                           </Table.Td>
-                          <Table.Td c="dimmed">{r.divisionName ?? '—'}</Table.Td>
+                          <Table.Td>
+                            {r.cupName ? (
+                              <Badge
+                                size="sm"
+                                variant="light"
+                                color="yellow"
+                                leftSection={<IconTrophy size={10} />}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {r.cupName}
+                              </Badge>
+                            ) : (
+                              <Text size="sm" c="dimmed">{r.divisionName ?? '—'}</Text>
+                            )}
+                          </Table.Td>
                         </Table.Tr>
                       ))}
                     </Table.Tbody>

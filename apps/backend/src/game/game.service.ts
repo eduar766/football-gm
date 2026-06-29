@@ -830,10 +830,14 @@ export class GameService {
     const state = await this.repo.loadState(gameId);
     const map = await this.repo.engineToDbTeam(gameId);
     const div =
-      state.divisions.find((d) => d.orden === divisionOrden) ??
-      state.divisions[0];
+      state.divisions.find(
+        (d) => d.orden === divisionOrden && d.federationId === state.playerFederationId,
+      ) ??
+      state.divisions.find((d) => d.federationId === state.playerFederationId);
     const orden = div?.orden ?? 1;
-    const divTeams = state.teams.filter((t) => t.divisionOrden === orden);
+    const divTeams = state.teams.filter(
+      (t) => t.divisionOrden === orden && t.federationId === state.playerFederationId,
+    );
     const divResults = state.results.filter((r) => r.divisionOrden === orden);
     const rows = applyPointPenalties(
       computeStandings(divTeams, divResults),
@@ -1413,10 +1417,12 @@ export class GameService {
         championTeamId: s.seasonRecords.championTeamId,
         championName: s.teams.name,
         divisionName: s.divisions.name,
+        cupName: s.cups.name,
       })
       .from(s.seasonRecords)
       .leftJoin(s.teams, eq(s.seasonRecords.championTeamId, s.teams.id))
       .leftJoin(s.divisions, eq(s.seasonRecords.divisionId, s.divisions.id))
+      .leftJoin(s.cups, eq(s.seasonRecords.cupId, s.cups.id))
       .where(eq(s.seasonRecords.gameId, gameId))
       .orderBy(desc(s.seasonRecords.anio));
 
@@ -1514,6 +1520,7 @@ export class GameService {
         championTeamId: r.championTeamId,
         championName: r.championName ?? '—',
         divisionName: r.divisionName ?? null,
+        cupName: r.cupName ?? null,
       })),
       palmares: palmares.map((p) => ({
         teamId: p.teamId,
@@ -2289,6 +2296,7 @@ export class GameService {
     const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
     const dbTeamId = (id: number) => (id === -1 ? -1 : (map.get(id) ?? id));
     const name = (id: number) => (id === -1 ? 'BYE' : (teamName.get(id) ?? '—'));
+    const cupById = new Map(state.cups.map((c) => [c.id, c]));
     return {
       cups: state.cups.map((c) => ({
         id: c.id,
@@ -2320,6 +2328,19 @@ export class GameService {
         })),
         recurring: c.recurring,
       })),
+      schedule: state.cupSchedule.map((e) => {
+        const cup = cupById.get(e.cupId);
+        const round = cup?.rounds.find((r) => r.numero === e.roundNumero);
+        return {
+          matchday: e.matchday,
+          cupId: e.cupId,
+          cupName: cup?.name ?? '—',
+          roundNumero: e.roundNumero,
+          ...(round?.leg ? { leg: round.leg } : {}),
+        };
+      }),
+      currentMatchday: state.currentMatchday,
+      totalMatchdays: state.totalMatchdays,
     };
   }
 

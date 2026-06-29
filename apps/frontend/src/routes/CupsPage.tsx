@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Card,
@@ -12,17 +13,20 @@ import {
   Skeleton,
   Stack,
   Table,
+  Tabs,
   Text,
   TextInput,
+  Timeline,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconLayoutGrid, IconTrophy } from '@tabler/icons-react';
+import { IconCalendar, IconLayoutGrid, IconTrophy } from '@tabler/icons-react';
 import type {
   CupCategory,
   CupFormat,
   CupDto,
   CupMatchDto,
+  CupScheduleEntryDto,
   CupStatus,
   CupType,
 } from '@football-gm/contracts';
@@ -52,18 +56,16 @@ function groupRounds(cup: CupDto): RoundGroup[] {
   const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
   const groups: RoundGroup[] = [];
   if (isIdaVuelta) {
-    const seen = new Set<number>();
+    const processed = new Set<number>();
     for (const r of cup.rounds) {
-      if (seen.has(r.numero)) continue;
-      const logicalNumero = r.numero;
-      const ida = cup.rounds.find((x) => x.numero === logicalNumero && x.leg === 'ida');
-      const vuelta = cup.rounds.find((x) => x.numero === logicalNumero + 1 && x.leg === 'vuelta');
-      const legs: RoundGroup['legs'] = [];
-      if (ida) legs.push({ numero: ida.numero, label: 'Ida', matches: ida.matches });
+      if (processed.has(r.numero)) continue;
+      if (r.leg !== 'ida') { processed.add(r.numero); continue; }
+      const vuelta = cup.rounds.find((x) => x.numero === r.numero + 1 && x.leg === 'vuelta');
+      const legs: RoundGroup['legs'] = [{ numero: r.numero, label: 'Ida', matches: r.matches }];
       if (vuelta) legs.push({ numero: vuelta.numero, label: 'Vuelta', matches: vuelta.matches });
-      groups.push({ logicalNumero, legs });
-      seen.add(logicalNumero);
-      if (vuelta) seen.add(vuelta.numero);
+      groups.push({ logicalNumero: groups.length + 1, legs });
+      processed.add(r.numero);
+      if (vuelta) processed.add(vuelta.numero);
     }
   } else {
     for (const r of cup.rounds) {
@@ -295,6 +297,92 @@ function EliminationCupCard({ cup }: { cup: CupDto }) {
   );
 }
 
+/* ── Season Calendar ─────────────────────────────────────────────────── */
+
+function SeasonCalendar({
+  schedule,
+  currentMatchday,
+  totalMatchdays,
+}: {
+  schedule: CupScheduleEntryDto[];
+  currentMatchday: number;
+  totalMatchdays: number;
+}) {
+  if (totalMatchdays === 0) {
+    return (
+      <Text c="dimmed" size="sm" ta="center" py="xl">
+        El calendario se genera al iniciar la temporada.
+      </Text>
+    );
+  }
+
+  // Group schedule entries by matchday
+  const byMatchday = new Map<number, CupScheduleEntryDto[]>();
+  for (const entry of schedule) {
+    const existing = byMatchday.get(entry.matchday) ?? [];
+    existing.push(entry);
+    byMatchday.set(entry.matchday, existing);
+  }
+
+  // Get sorted unique matchdays that have cup events
+  const cupMatchdays = [...byMatchday.keys()].sort((a, b) => a - b);
+
+  if (cupMatchdays.length === 0) {
+    return (
+      <Text c="dimmed" size="sm" ta="center" py="xl">
+        No hay copas programadas esta temporada.
+      </Text>
+    );
+  }
+
+  return (
+    <Timeline active={cupMatchdays.filter((md) => md < currentMatchday).length} bulletSize={28} lineWidth={2}>
+      {cupMatchdays.map((md) => {
+        const entries = byMatchday.get(md) ?? [];
+        const isPast = md < currentMatchday;
+        const isCurrent = md === currentMatchday;
+        return (
+          <Timeline.Item
+            key={md}
+            bullet={
+              <Text fw={700} size="xs" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: isCurrent ? '#10B981' : isPast ? '#6B7280' : '#F9FAFB' }}>
+                J{md}
+              </Text>
+            }
+            title={
+              <Group gap="xs" align="center">
+                <Text fw={isCurrent ? 700 : 500} size="sm" c={isPast ? 'dimmed' : isCurrent ? 'green' : undefined}>
+                  Jornada {md}
+                </Text>
+                {isCurrent && (
+                  <Badge size="xs" color="green" variant="light">Actual</Badge>
+                )}
+                {isPast && (
+                  <Badge size="xs" color="gray" variant="light">Jugada</Badge>
+                )}
+              </Group>
+            }
+          >
+            <Stack gap={4} mt={4}>
+              {entries.map((entry, i) => (
+                <Group key={i} gap="xs" align="center">
+                  <IconTrophy size={12} color="#F59E0B" />
+                  <Text size="xs" c={isPast ? 'dimmed' : undefined}>
+                    <Text span fw={600}>{entry.cupName}</Text>
+                    {' · '}
+                    Ronda {entry.roundNumero}
+                    {entry.leg ? ` (${entry.leg})` : ''}
+                  </Text>
+                </Group>
+              ))}
+            </Stack>
+          </Timeline.Item>
+        );
+      })}
+    </Timeline>
+  );
+}
+
 /* ── Main page ────────────────────────────────────────────────────────── */
 
 export function CupsPage() {
@@ -464,45 +552,69 @@ export function CupsPage() {
         </Stack>
       </Card>
 
-      {list.length === 0 ? (
-        <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-          <Text c="dimmed" size="sm">Sin copas todavía.</Text>
-        </Paper>
-      ) : (
-        <>
-          {/* ── Elimination Brackets ──────────────────────────── */}
-          {elimCups.length > 0 && (
-            <Box mb="md">
-              <Group gap="sm" mb="sm">
-                <IconTrophy size={16} color="#F59E0B" />
-                <Text fw={700} size="lg">Brackets de Eliminación</Text>
-              </Group>
-              <Text size="xs" c="dimmed" mb="md" ml={24}>
-                Fase eliminatoria directa — el perdedor queda fuera.
-              </Text>
-              {elimCups.map((cup) => (
-                <EliminationCupCard key={cup.id} cup={cup} />
-              ))}
-            </Box>
-          )}
+      <Tabs defaultValue="copas" keepMounted={false}>
+        <Tabs.List mb="md">
+          <Tabs.Tab value="copas" leftSection={<IconTrophy size={14} />}>
+            Copas {list.length > 0 && `(${list.length})`}
+          </Tabs.Tab>
+          <Tabs.Tab value="calendario" leftSection={<IconCalendar size={14} />}>
+            Calendario de la temporada
+          </Tabs.Tab>
+        </Tabs.List>
 
-          {/* ── Group Stage (Liga) ────────────────────────────── */}
-          {ligaCups.length > 0 && (
-            <Box>
-              <Group gap="sm" mb="sm">
-                <IconLayoutGrid size={16} color="#10B981" />
-                <Text fw={700} size="lg">Fase de Grupos</Text>
-              </Group>
-              <Text size="xs" c="dimmed" mb="md" ml={24}>
-                Liga todos contra todos — el líder alza la copa.
-              </Text>
-              {ligaCups.map((cup) => (
-                <LigaCupCard key={cup.id} cup={cup} />
-              ))}
-            </Box>
+        <Tabs.Panel value="copas">
+          {list.length === 0 ? (
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Text c="dimmed" size="sm">Sin copas todavía.</Text>
+            </Paper>
+          ) : (
+            <>
+              {elimCups.length > 0 && (
+                <Box mb="md">
+                  <Group gap="sm" mb="sm">
+                    <IconTrophy size={16} color="#F59E0B" />
+                    <Text fw={700} size="lg">Brackets de Eliminación</Text>
+                  </Group>
+                  <Text size="xs" c="dimmed" mb="md" ml={24}>
+                    Fase eliminatoria directa — el perdedor queda fuera. Los equipos sin rival en la primera ronda tienen pase directo.
+                  </Text>
+                  {elimCups.map((cup) => (
+                    <EliminationCupCard key={cup.id} cup={cup} />
+                  ))}
+                </Box>
+              )}
+              {ligaCups.length > 0 && (
+                <Box>
+                  <Group gap="sm" mb="sm">
+                    <IconLayoutGrid size={16} color="#10B981" />
+                    <Text fw={700} size="lg">Fase de Grupos</Text>
+                  </Group>
+                  <Text size="xs" c="dimmed" mb="md" ml={24}>
+                    Liga todos contra todos — el líder alza la copa.
+                  </Text>
+                  {ligaCups.map((cup) => (
+                    <LigaCupCard key={cup.id} cup={cup} />
+                  ))}
+                </Box>
+              )}
+            </>
           )}
-        </>
-      )}
+        </Tabs.Panel>
+
+        <Tabs.Panel value="calendario">
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Text fw={600} mb="md" size="sm" c="dimmed">
+              Jornadas de liga: {cups.data?.totalMatchdays ?? 0} ·
+              Rondas de copa programadas: {cups.data?.schedule.length ?? 0}
+            </Text>
+            <SeasonCalendar
+              schedule={cups.data?.schedule ?? []}
+              currentMatchday={cups.data?.currentMatchday ?? 0}
+              totalMatchdays={cups.data?.totalMatchdays ?? 0}
+            />
+          </Paper>
+        </Tabs.Panel>
+      </Tabs>
     </div>
   );
 }
