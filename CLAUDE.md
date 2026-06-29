@@ -45,16 +45,37 @@ pnpm --filter @football-gm/backend db:generate            # generate migration f
 pnpm --filter @football-gm/backend db:migrate             # apply migrations
 ```
 
+### Testing strategy
+
+Three distinct test types in `packages/engine/test/`:
+
+- **Golden master** (`golden.test.ts`) — runs 6 seasons with seed 777 and compares `state.history` to a snapshot. If engine logic changes observable outputs, this test fails intentionally. Review the diff carefully before rerunning with `--update` to accept.
+- **Property-based** (`invariants.test.ts`) — uses `fast-check` over random seeds to assert structural invariants. Failures indicate broken invariants, not just changed numbers.
+- **Unit tests** (one file per engine module: `cups.test.ts`, `economy.test.ts`, `norms.test.ts`, etc.) — scenario-driven tests for specific engine functions.
+
+`advanceSeason(state)` is an exported engine helper that loops `advanceMatchday` until the season ends or a pending event blocks it. Tests use it to simulate full seasons in one call. The HTTP backend uses `advanceMatchday` for the per-matchday `POST /games/:id/advance` endpoint — these are different.
+
 ## Ports
 
 | Service  | URL                     | Notes                                   |
 |----------|-------------------------|-----------------------------------------|
 | Frontend | http://localhost:5290   | **Open this in the browser**            |
-| Backend  | http://localhost:3000   | Routes under `/games/...`. `GET /` 404s by design |
+| Backend  | http://localhost:3000   | Routes under `/games/...`, `/auth/...`, `/admin/...` |
 | Postgres | localhost:**5544**      | Docker (`5544:5432` to avoid clashing with a local Postgres on 5432) |
 
 The frontend reads `VITE_API_URL` (default `http://localhost:3000`) from `apps/frontend/.env.local`.
-The backend reads `DATABASE_URL` (port 5544) from `apps/backend/.env`.
+
+The backend reads from `apps/backend/.env` (see `.env.example`):
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | Yes | `postgresql://postgres:postgres@localhost:5544/football_gm` |
+| `JWT_SECRET` | Yes | Random string ≥ 32 chars — `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `ADMIN_EMAIL` | Yes | Initial admin account email |
+| `ADMIN_PASSWORD` | Yes | Initial admin account password (change on first login) |
+| `RESEND_API_KEY` | No | Transactional emails (password reset, access requests). Leave empty for dry-run (logs to console) in dev |
+| `APP_URL` / `FRONTEND_ORIGIN` | No | Default `http://localhost:5290`. Used in email links and CORS header |
+| `PORT` | No | Default `3000` |
 
 ## Architecture
 
@@ -75,22 +96,28 @@ return this.db.transaction(async (tx) => {
 });
 ```
 
-### Forward-compatibility pattern
+### Forward-compatibility and schema migrations
 
-When you add a new field to `GameState`, always add a default in `loadState()` so old saves don't break:
+`GameStateRepository.loadState()` calls `migrateState(state)` automatically after deserializing. `migrateState` is the single place for all structural GameState patches; `CURRENT_SCHEMA_VERSION` in `migrations.ts` is the authoritative version number.
+
+**When you add a new field to `GameState`:**
+1. Add it to `types.ts` as optional or with a default.
+2. Add a migration patch in `migrations.ts` under the current or a new version bump:
 
 ```ts
 if (!state.newField) state.newField = defaultValue;
 ```
 
-### RNG determinism — never mix the two RNGs
+Do **not** add ad-hoc defaults in `loadState()` — all backward-compat patches live in `migrations.ts`.
 
-`GameState` has **two independent RNG streams**:
-- `state.rng` — drives the match engine, norms, events, cups, negotiations, mandates, headlines, etc.
-- `state.rivalRng` — drives rival league simulation only.
-- `state.mandatesRng` — independent stream for board mandate generation (seeded from game seed).
+### RNG determinism — never mix the three RNGs
 
-These must never cross. Any new simulation code that touches player leagues uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`. This keeps the golden snapshot deterministic.
+`GameState` has **three independent RNG streams**:
+- `state.rng` — drives the match engine, norms, events, cups, negotiations, headlines, etc.
+- `state.rivalRng` — drives rival league simulation only (used exclusively in `rival-sim.ts`).
+- `state.mandatesRng` — independent stream for board mandate generation (seeded from game seed via XOR constant).
+
+These must never cross. Player-league simulation uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`; mandate generation uses `state.mandatesRng`. This keeps the golden snapshot deterministic.
 
 ### Core entity model
 
@@ -110,13 +137,14 @@ Key modeling invariants:
 
 ### Key types (packages/engine/src/types.ts)
 
-- `GameState` — the full serializable simulation state.
+- `GameState` — the full serializable simulation state. Has `schemaVersion: number` used by the migration system.
 - `SeasonPhase` — `'pretemporada'` (setup window) | `'temporada'` (playable).
 - `CupFormat` — `'eliminatoria'` | `'eliminatoria_ida_vuelta'` | `'liga'`.
 - `NormType` — `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'`.
 - `NegotiationState` — `'gathering_requirements' | 'offer' | 'accepted' | 'effective' | 'rejected'`.
 - `NegotiationRequirement` — `{ tipo: 'prestigio'|'estadio'|'reparto', objetivo, cumplido, revealed }`. Requirements are revealed one per season during `gathering_requirements`; acceptance requires ≥75% of revealed reqs met.
 - `BoardMandate` — `{ id, objetivo, target, deadline, met, year }`. One mandate per season; 2 consecutive failures reduce impulses.
+- `MatchReport` — `{ matchday, divisionOrden, homeId, awayId, homeGoals, awayGoals, goalscorers, homeYellowCards, awayYellowCards, homeRedCards, awayRedCards }`. Stored in `state.matchReports[]`.
 - `RecordBook` — `{ biggestWin, longestWinStreak }`. Accumulated in `state.recordBook` at each `closeSeason`.
 - `FederationCoefficient` — `{ federationId, name, cumulativeScore, lastRank, seasonsRanked }`. Stored in `state.federationCoefficients`.
 - `SeasonChronicle` — narrative summary written at `closeSeason` (champion, best player, revelation, disappointment).
@@ -124,6 +152,41 @@ Key modeling invariants:
 - `Rivalry` — pair of teams detected as rivals from trajectory history (contiguous positions over N seasons).
 - `CupTemplate` — blueprint for recurring cups; saved at `closeSeason`, recreated in `pretemporada`.
 - `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks.
+
+### Backend architecture
+
+The `game/` module controllers are split by domain to keep files manageable:
+
+| Controller | Routes | Responsibility |
+|------------|--------|----------------|
+| `game.controller.ts` | `POST /games`, `GET /games`, `GET /games/:id`, `DELETE /games/:id` | Core CRUD |
+| `season.controller.ts` | `POST /games/:id/start-season`, `POST /games/:id/advance`, `POST /games/:id/close-season` | Season lifecycle |
+| `competition.controller.ts` | `GET /games/:id/structure`, cups, own team | League structure & cups |
+| `economy.controller.ts` | Commercial actions | Revenue & spending |
+| `governance.controller.ts` | Norms, sanctions | Governance actions |
+| `negotiation.controller.ts` | Negotiation lifecycle | Adhesion negotiations |
+| `history.controller.ts` | Records, trajectories, chronicles | Read-only history |
+| `io.controller.ts` | `GET /games/:id/export`, `POST /games/import` | Save file export/import |
+
+All game routes are guarded by `JwtAuthGuard` + `GameOwnerGuard`. Admins bypass ownership checks.
+
+**Auth system** (`auth/`):
+- JWT-based; token issued at `POST /auth/login` and sent as `Authorization: Bearer` on every request.
+- Rate limiting: 5 login attempts per 15 minutes per IP (brute force protection via `@nestjs/throttler`).
+- `POST /auth/request-access` → sends approval email to admin; `POST /auth/reset-password`, `POST /auth/change-password`.
+- `AdminGuard` restricts `GET /admin/requests`, `POST /admin/requests/:id/approve`, etc. to admin users.
+- Email delivery via Resend (`email/email.service.ts`). If `RESEND_API_KEY` is unset, emails are logged to the console (dry-run mode — safe for local dev).
+
+**DB schema** (`db/schema.ts`) — Drizzle ORM table definitions. `game_engine_states` holds the JSONB blob; all other tables are read/history projections written at season close.
+
+**GameStateRepository** (`game/game-state.repository.ts`):
+- Owns all `loadState` / `saveState` operations.
+- Calls `migrateState()` automatically on every load — no callers need to worry about schema version.
+
+**World generator** (`game/world-generator.ts`):
+- Deterministic: same seed → same world (uses the engine's Mulberry32 PRNG).
+- Generates full player squads, team attributes, and rival team rosters at game creation.
+- Runs once; the engine then owns its own RNG stream.
 
 ### Contracts (packages/contracts/src/index.ts)
 
@@ -133,19 +196,26 @@ Single source of truth for the back/front contract. Backend validates incoming r
 
 Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`. `GameLayout.tsx` is the shell for all in-game pages — it carries the phase chip, sidebar navigation with urgency badges (pending events, norm breaches), and stat pills. `GamesPage.tsx` is the lobby (list/create/export/import games).
 
-All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper with no extra abstractions.
+Auth pages (`LoginPage`, `RequestAccessPage`, `ResetPasswordPage`, `ChangePasswordPage`) sit outside `GameLayout` and don't require authentication. `AdminPage` is behind `JwtAuthGuard` + `AdminGuard`.
+
+In-game pages: `DashboardPage`, `TeamsPage`, `TeamDetailPage`, `FederationsPage`, `FederationPage`, `NegotiationsPage`, `CupsPage`, `NormsPage`, `EventsPage`, `EconomyPage`, `PrizesPage`, `HistoryPage`, `StructurePage`, `MarketPage`, `TransfersPage`, `WorldPage`.
+
+All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper that automatically attaches the JWT token from `localStorage`.
 
 ### Engine module responsibilities
 
 | Module | Responsibility |
 |--------|---------------|
 | `engine.ts` | `createGame`, `startSeason`, `advanceMatchday`, `closeSeason` — the main season loop; mandate generation/check; record book; federation coefficients |
-| `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers |
+| `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
+| `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
+| `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION`. Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
 | `events.ts` | Event spawning (including chained arcs via `chainedFromId`), resolution, type-specific consequences |
-| `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic |
+| `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic, participant management |
 | `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige`, `runRivalNegotiations` |
 | `headlines.ts` | `generateHeadlines`, `buildChronicle` — narrative layer from match results and history |
 | `awards.ts` | Individual awards (MVP, top scorer, best young player) at season close |
@@ -176,16 +246,26 @@ If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, t
 - **Federation coefficients:** `state.federationCoefficients` accumulates each federation's global ranking score over time. Visible in Federations → "Ranking Mundial" tab.
 - **Export/import:** full `GameState` serialized as JSON (download/upload from the Games lobby).
 - **Team autonomy:** teams manage their own squads. The player never signs players for a club.
-- **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`.
+- **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`. Participant lists are editable via `EditCupParticipantsRequest`. Deduplication runs at `migrateState` v2 for saves affected by the double-template bug.
 - **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
+- **Match reports:** every simulated match appends a `MatchReport` to `state.matchReports` (matchday, goals, goalscorers, cards). Used by history and dashboard views.
+
+## CI/CD
+
+**GitHub Actions** (`.github/workflows/`):
+- `ci.yml` — runs on push/PR to `main`: `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm audit`. Must pass before merging.
+- `deploy.yml` — placeholder triggered on push to `main`. Configure after choosing a host (Fly.io, Render, Railway, etc.). Required secrets: `JWT_SECRET`, `DATABASE_URL`, `RESEND_API_KEY`, `FRONTEND_ORIGIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+
+**Docker** — Dockerfiles for both apps + nginx config are present for container-based deployments.
 
 ## Adding a new game action (checklist)
 
 1. Add pure function to the relevant engine module (takes + returns `GameState`).
 2. Export it from `packages/engine/src/index.ts`.
 3. Add request/response Zod schemas to `packages/contracts/src/index.ts`.
-4. Add the endpoint to `apps/backend/src/game/game.controller.ts`.
+4. Add the endpoint to the appropriate controller under `apps/backend/src/game/` (pick the one matching the domain, or `game.controller.ts` for new categories). Auth is automatic — all game routes already carry `JwtAuthGuard` + `GameOwnerGuard`.
 5. Implement the `db.transaction(loadState → engine fn → saveState)` flow in `game.service.ts`.
 6. Add the API call to `apps/frontend/src/api.ts`.
 7. Wire up `useMutation` in the relevant frontend page.
 8. Add engine tests in `packages/engine/test/`.
+9. If you added a new field to `GameState`, add the migration patch in `packages/engine/src/migrations.ts` (bump `CURRENT_SCHEMA_VERSION` if it's a breaking structural change).

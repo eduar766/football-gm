@@ -86,26 +86,43 @@ pnpm install
 # 2. Levantar la base de datos (Postgres 16 en el puerto 5544)
 docker compose up -d
 
-# 3. Aplicar las migraciones
+# 3. Configurar variables de entorno del backend
+cp apps/backend/.env.example apps/backend/.env
+# Edita apps/backend/.env y pon:
+#   JWT_SECRET=<cadena aleatoria ≥ 32 chars>
+#   ADMIN_EMAIL=<tu email>
+#   ADMIN_PASSWORD=<contraseña inicial>
+
+# 4. Aplicar las migraciones
 pnpm --filter @football-gm/backend db:migrate
 
-# 4. Arrancar todo (backend, frontend y los watchers de engine/contracts)
+# 5. Arrancar todo (backend, frontend y los watchers de engine/contracts)
 pnpm dev
 ```
 
-Luego abre **http://localhost:5290** en el navegador. ¡A jugar!
+Luego abre **http://localhost:5290** en el navegador, inicia sesión con las credenciales de admin y empieza a jugar.
 
 | Servicio  | URL                    | Notas |
 |-----------|------------------------|-------|
 | 🖥️ Frontend | http://localhost:5290 | **La app** — ábrela aquí |
-| 🔌 Backend  | http://localhost:3000 | Solo API, rutas bajo `/games/...` |
+| 🔌 Backend  | http://localhost:3000 | API bajo `/games/...`, `/auth/...`, `/admin/...` |
 | 🐘 Postgres | localhost:5544        | Docker (`5544:5432` para no chocar con un Postgres local) |
 
 <details>
-<summary>Variables de entorno</summary>
+<summary>Variables de entorno del backend</summary>
 
-- `apps/backend/.env` → `DATABASE_URL` (puerto 5544) y `PORT` (3000). Plantilla en `.env.example`.
-- `apps/frontend/.env.local` → `VITE_API_URL` (por defecto `http://localhost:3000`). Plantilla en `.env.example`.
+Copia `apps/backend/.env.example` a `apps/backend/.env` y rellena:
+
+| Variable | Obligatoria | Descripción |
+|----------|-------------|-------------|
+| `DATABASE_URL` | Sí | `postgresql://postgres:postgres@localhost:5544/football_gm` |
+| `JWT_SECRET` | Sí | Cadena aleatoria ≥ 32 chars (`node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`) |
+| `ADMIN_EMAIL` | Sí | Email de la cuenta admin inicial |
+| `ADMIN_PASSWORD` | Sí | Contraseña de la cuenta admin inicial |
+| `RESEND_API_KEY` | No | Emails transaccionales (reset de contraseña). Sin esta clave los emails se loguean en consola (modo dry-run) |
+| `APP_URL` / `FRONTEND_ORIGIN` | No | Por defecto `http://localhost:5290` |
+
+El frontend solo necesita `VITE_API_URL` en `apps/frontend/.env.local` (por defecto `http://localhost:3000`).
 
 </details>
 
@@ -161,23 +178,25 @@ Season         →  Matchday    →  Match (2 teams)
 - Las tablas relacionales (`teams`, `federations`, `season_records`, `trajectories`, etc.) son proyecciones de lectura/historial, escritas al cerrar la temporada. Nunca son fuente de verdad.
 - La federación del jugador y las rivales comparten el mismo modelo; distinguidas por el flag `isPlayer`.
 - Nada se borra en duro; la historia es append-only.
-- Dos RNGs independientes: `state.rng` (motor del jugador) y `state.rivalRng` (ligas rivales). **Nunca se mezclan.**
+- Tres RNGs independientes: `state.rng` (motor de partidos), `state.rivalRng` (ligas rivales), `state.mandatesRng` (mandatos de la junta). **Nunca se mezclan.**
 
 ### Sistemas implementados
 
 | Sistema | Descripción |
 |---------|-------------|
-| Motor de partidos | Poisson-distributed goals, tarjetas, goleadores |
+| Motor de partidos | Goles Poisson, tarjetas, goleadores, reportes por jornada |
 | Economía | Contratos comerciales, merchandise, reparto de derechos, tope salarial |
 | Negociación de adhesión | Requisitos revelados por temporada, oferta con % de reparto, cooldown de rechazo |
 | Normas y sanciones | 6 tipos de norma, `governanceBonus` por cumplimiento |
-| Copas | Eliminatoria simple / ida y vuelta / liga, copas recurrentes |
+| Copas | Eliminatoria simple / ida y vuelta / liga, copas recurrentes con participantes editables |
 | Rivalidades | Detección automática desde trayectorias (posiciones contiguas N temporadas) |
 | Rivales | Ligas internas completas, 132 equipos UEFA reales, inversión, represalia selectiva, negociaciones entre rivales |
 | Mandatos de la junta | Objetivo por temporada, fail-state acumulativo |
 | Narrativa | Titulares por temporada, crónica de cierre |
 | Historial | Libro de récords, trayectorias con gráfico, ranking mundial de federaciones |
+| Autenticación | JWT, registro por solicitud de acceso, reset de contraseña, panel de admin |
 | Export/Import | Save game como JSON descargable/importable |
+| Migraciones de estado | `migrateState()` actualiza saves antiguos al esquema actual automáticamente |
 
 El diseño completo está en [`diseno-simulador-liga.md`](./diseno-simulador-liga.md) (español).
 
