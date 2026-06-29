@@ -24,7 +24,6 @@ import {
   IconPlus,
   IconShield,
   IconTrash,
-  IconTrophy,
   IconUpload,
   IconX,
 } from '@tabler/icons-react';
@@ -166,20 +165,8 @@ export function GamesPage() {
           }}
         >
           <Group justify="center" mb="sm">
-            <IconTrophy size={48} color="#10B981" />
+            <img src="/logo.png" alt="Football GM" style={{ width: 120, height: 120, objectFit: 'contain' }} />
           </Group>
-          <Title
-            order={1}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontWeight: 800,
-              fontSize: '40px',
-              letterSpacing: '-0.02em',
-              color: '#F9FAFB',
-            }}
-          >
-            FOOTBALL GM
-          </Title>
           <Text c="dimmed" size="sm" mt="xs" fs="italic">
             Eres el comisionado. Dirige una competición y hazla crecer.
           </Text>

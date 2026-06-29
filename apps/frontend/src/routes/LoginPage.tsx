@@ -14,10 +14,11 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from '@tanstack/react-router';
-import { IconTrophy, IconX } from '@tabler/icons-react';
+import { IconX } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function LoginPage() {
+
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -55,19 +56,8 @@ export function LoginPage() {
       <Stack gap="lg">
         <Box ta="center">
           <Group justify="center" mb="sm">
-            <IconTrophy size={40} color="#10B981" />
+            <img src="/logo.png" alt="Football GM" style={{ width: 100, height: 100, objectFit: 'contain' }} />
           </Group>
-          <Title
-            order={1}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontWeight: 800,
-              fontSize: 32,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            FOOTBALL GM
-          </Title>
           <Text c="dimmed" size="sm" mt={4}>
             Beta
           </Text>

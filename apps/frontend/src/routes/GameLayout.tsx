@@ -209,14 +209,21 @@ export function GameLayout() {
   ) : null;
 
   const headerContent = (
-    <div>
-      <Text fw={700} style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
-        {summary.data?.federation.name ?? '...'}
-      </Text>
-      <Text size="sm" c="dimmed">
-        {summary.data?.name ?? ''}
-      </Text>
-    </div>
+    <Group gap="xs" wrap="nowrap" align="center">
+      <img
+        src="/logo.png"
+        alt="Football GM"
+        style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }}
+      />
+      <div>
+        <Text fw={700} size="sm" style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
+          {summary.data?.federation.name ?? '...'}
+        </Text>
+        <Text size="xs" c="dimmed">
+          {summary.data?.name ?? ''}
+        </Text>
+      </div>
+    </Group>
   );
 
   const statPills = (
