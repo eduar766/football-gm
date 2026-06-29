@@ -494,6 +494,49 @@ export interface SeasonRecord {
   delta: number;
 }
 
+// Fase 11.2: thin virtual player for rival leagues (no salary/position tracking).
+export interface RivalPlayer {
+  id: number;
+  name: string;
+  teamId: number;
+  goals: number; // current season; reset at generateRivalPlayers each startSeason
+}
+
+// Fase 11.2: season summary for one rival federation — champion, top scorer, relegated.
+export interface RivalSeasonRecord {
+  year: number;
+  federationId: number;
+  federationName: string;
+  championId: number;
+  championName: string;
+  runnerUpName: string | null;
+  topScorer: { playerId: number; name: string; teamName: string; goals: number } | null;
+  relegated: string[];
+}
+
+// Fase 11: individual rival fixture (pre-generated at startSeason).
+export interface RivalFixture {
+  homeId: number;
+  awayId: number;
+  matchday: number;
+  federationId: number;
+  divisionOrden: number;
+}
+
+// Fase 11: result of one rival match (stored for Dashboard display).
+export interface RivalMatchResult {
+  matchday: number;
+  federationId: number;
+  divisionOrden: number;
+  homeId: number;
+  homeName: string;
+  awayId: number;
+  awayName: string;
+  homeGoals: number;
+  awayGoals: number;
+  isShock: boolean; // weaker team won — used for headlines
+}
+
 // Standings row for rival leagues (simulated off-screen).
 export interface RivalStandingRow {
   teamId: number;
@@ -589,6 +632,14 @@ export interface GameState {
   rivalStandings: Record<string, RivalStandingRow[]>;
   // Rival champions per year (appended each closeSeason).
   rivalChampions: SeasonRecord[];
+  // Fase 11: incremental rival simulation.
+  rivalFixtures: RivalFixture[];           // generated at startSeason, cleared at closeSeason
+  rivalCurrentMatchday: number;            // how far rivals have been simulated this season
+  rivalLastMatchdayResults: RivalMatchResult[]; // last processed matchday (for Dashboard)
+  // Fase 11.2: virtual rival players + season history.
+  rivalPlayers: RivalPlayer[];
+  nextRivalPlayerId: number;
+  rivalSeasonRecords: RivalSeasonRecord[];
   // Board mandates (Batch 4): one per season, issued at startSeason.
   mandates: BoardMandate[];
   nextMandateId: number;

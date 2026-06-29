@@ -112,6 +112,12 @@ export class GameService {
     if (!state.rivalRng) state.rivalRng = { s: 0 };
     if (!state.rivalStandings) state.rivalStandings = {};
     if (!state.rivalChampions) state.rivalChampions = [];
+    if (!state.rivalFixtures) state.rivalFixtures = [];
+    if (state.rivalCurrentMatchday === undefined) state.rivalCurrentMatchday = 0;
+    if (!state.rivalLastMatchdayResults) state.rivalLastMatchdayResults = [];
+    if (!state.rivalPlayers) state.rivalPlayers = [];
+    if (state.nextRivalPlayerId === undefined) state.nextRivalPlayerId = 1;
+    if (!state.rivalSeasonRecords) state.rivalSeasonRecords = [];
     if (!state.mandates) state.mandates = [];
     if (state.nextMandateId === undefined) state.nextMandateId = 1;
     if (state.consecutiveMandateFails === undefined) state.consecutiveMandateFails = 0;
@@ -327,6 +333,16 @@ export class GameService {
       lastChronicle: state.seasonChronicles.length > 0
         ? state.seasonChronicles[state.seasonChronicles.length - 1]
         : null,
+      rivalLastMatchday: state.rivalLastMatchdayResults.map(r => ({
+        matchday: r.matchday,
+        federationId: r.federationId,
+        homeName: r.homeName,
+        awayName: r.awayName,
+        homeGoals: r.homeGoals,
+        awayGoals: r.awayGoals,
+        isShock: r.isShock,
+        federationName: state.federations.find(f => f.id === r.federationId)?.name ?? '',
+      })),
     };
   }
 
@@ -1401,6 +1417,21 @@ export class GameService {
           .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo }))
       : undefined;
 
+    const seasonHistory = !isPlayer
+      ? state.rivalSeasonRecords
+          .filter(r => r.federationId === federationId)
+          .sort((a, b) => b.year - a.year)
+          .map(r => ({
+            year: r.year,
+            federationId: r.federationId,
+            federationName: r.federationName,
+            championName: r.championName,
+            runnerUpName: r.runnerUpName ?? null,
+            topScorer: r.topScorer ?? null,
+            relegated: r.relegated,
+          }))
+      : undefined;
+
     return {
       id: engFed.id,
       name: engFed.name,
@@ -1414,6 +1445,7 @@ export class GameService {
       confederationName: engFed.confederationId ? confNames.get(engFed.confederationId) : undefined,
       standings,
       teams: teamsForFed,
+      seasonHistory,
     };
   }
 

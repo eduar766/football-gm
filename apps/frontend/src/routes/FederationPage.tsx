@@ -1,7 +1,7 @@
-import { Badge, Box, Card, Group, Paper, SimpleGrid, Skeleton, Table, Text, Tooltip } from '@mantine/core';
+import { Badge, Box, Card, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconBuilding } from '@tabler/icons-react';
+import { IconBuilding, IconTrophy } from '@tabler/icons-react';
 import { api } from '../api';
 
 const TIER_CONFIG: Record<number, { label: string; color: string; gradient: string }> = {
@@ -223,6 +223,73 @@ export function FederationPage() {
                         {t.arraigo}
                       </Text>
                     </Tooltip>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+
+      {/* 11.2 — Season history (rival federations only) */}
+      {f.seasonHistory && f.seasonHistory.length > 0 && (
+        <Paper p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+          <Group gap="xs" mb="sm">
+            <IconTrophy size={16} color="#F59E0B" />
+            <Text fw={700}>Historial de temporadas</Text>
+          </Group>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                {['Año', 'Campeón', 'Subcampeón', 'Pichichi', 'Descensos'].map(h => (
+                  <Table.Th key={h} style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {h}
+                  </Table.Th>
+                ))}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {f.seasonHistory.map((r, i) => (
+                <Table.Tr
+                  key={r.year}
+                  className="stagger-item"
+                  style={{
+                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    animationDelay: `${i * 30}ms`,
+                  }}
+                >
+                  <Table.Td>
+                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                      {r.year}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Group gap={6}>
+                      <Box style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
+                      <Text fw={600} size="sm">{r.championName}</Text>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">{r.runnerUpName ?? '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    {r.topScorer ? (
+                      <Stack gap={0}>
+                        <Text size="sm" fw={500}>{r.topScorer.name}</Text>
+                        <Text size="xs" c="dimmed">
+                          {r.topScorer.teamName} · <Text span fw={700} style={{ color: '#10B981', fontFamily: '"Geist Mono", monospace' }}>{r.topScorer.goals}</Text> goles
+                        </Text>
+                      </Stack>
+                    ) : (
+                      <Text size="sm" c="dimmed">—</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {r.relegated.length > 0 ? (
+                      <Text size="xs" c="dimmed">{r.relegated.join(', ')}</Text>
+                    ) : (
+                      <Text size="xs" c="dimmed">—</Text>
+                    )}
                   </Table.Td>
                 </Table.Tr>
               ))}

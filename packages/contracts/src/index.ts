@@ -130,6 +130,19 @@ export const RivalryDto = z.object({
 });
 export type RivalryDto = z.infer<typeof RivalryDto>;
 
+// Fase 11.1: rival match result for Dashboard display.
+export const RivalMatchResultDto = z.object({
+  matchday: z.number().int(),
+  federationId: z.number().int(),
+  homeName: z.string(),
+  awayName: z.string(),
+  homeGoals: z.number().int(),
+  awayGoals: z.number().int(),
+  isShock: z.boolean(),
+  federationName: z.string().default(''),
+});
+export type RivalMatchResultDto = z.infer<typeof RivalMatchResultDto>;
+
 // Everything the dashboard header needs to render the current loop state.
 export const GameSummary = z.object({
   id: Id,
@@ -151,6 +164,7 @@ export const GameSummary = z.object({
   consecutiveMandateFails: z.number().int().default(0),
   headlines: z.array(HeadlineDto).default([]),
   lastChronicle: SeasonChronicleDto.nullable().default(null),
+  rivalLastMatchday: z.array(RivalMatchResultDto).default([]),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 
@@ -290,6 +304,22 @@ export const FederationTeamItem = z.object({
 });
 export type FederationTeamItem = z.infer<typeof FederationTeamItem>;
 
+// Fase 11.2: rich per-season record for a rival federation (defined before FederationOverview).
+export const RivalSeasonRecordDto = z.object({
+  year: z.number().int(),
+  federationId: z.number().int(),
+  federationName: z.string(),
+  championName: z.string(),
+  runnerUpName: z.string().nullable(),
+  topScorer: z.object({
+    name: z.string(),
+    teamName: z.string(),
+    goals: z.number().int(),
+  }).nullable(),
+  relegated: z.array(z.string()),
+});
+export type RivalSeasonRecordDto = z.infer<typeof RivalSeasonRecordDto>;
+
 export const FederationOverview = z.object({
   id: Id,
   name: z.string(),
@@ -303,6 +333,7 @@ export const FederationOverview = z.object({
   confederationName: z.string().optional(),
   standings: z.array(StandingRowDto).optional(),
   teams: z.array(FederationTeamItem).optional(),
+  seasonHistory: z.array(RivalSeasonRecordDto).optional(),
 });
 export type FederationOverview = z.infer<typeof FederationOverview>;
 

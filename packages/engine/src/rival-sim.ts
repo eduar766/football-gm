@@ -1,97 +1,101 @@
-// Fase 9: Rival league simulation. Simulates entire rival seasons at
-// closeSeason time using an independent RNG (rivalRng) so the player's
-// match engine stream stays golden-stable.
+// Fase 9/11: Rival league simulation.
+// Fase 9: simulated all at once at closeSeason.
+// Fase 11: split into three phases — generateRivalFixtures (startSeason),
+// stepRivalMatchdays (advanceMatchday), finalizeRivalSeason (closeSeason).
+// All functions use rivalRng exclusively; never touch state.rng.
 
-import { randInt, type RngState } from './rng';
+import { randInt } from './rng';
 import { generateFixtures } from './fixtures';
 import { simulateMatch } from './match';
-import type { GameState, RivalStandingRow, SeasonRecord, Team } from './types';
+import type { GameState, RivalFixture, RivalMatchResult, RivalSeasonRecord, RivalStandingRow, SeasonRecord, Team } from './types';
 
-// Simulate a full round-robin season for one rival division.
-function simulateRivalDivision(
-  teams: Team[],
-  divisionOrden: number,
-  _federationId: number,
-  rng: RngState,
-): RivalStandingRow[] {
-  if (teams.length < 2) return [];
+// ── Name generation ──────────────────────────────────────────────────────────
 
-  const teamIds = teams.map(t => t.id);
-  const fixtures = generateFixtures(teamIds, rng, divisionOrden, 2);
+const FIRST_NAMES = [
+  'Carlos', 'João', 'Mohammed', 'Lucas', 'David', 'Marco', 'Stefan', 'Luka',
+  'Ivan', 'Pierre', 'Antoine', 'Sergio', 'Pablo', 'Alexis', 'Felipe', 'Raúl',
+  'Andrés', 'Diego', 'Roberto', 'Julien', 'Tomáš', 'Marek', 'Ali', 'Omar',
+  'Yusuf', 'Kwame', 'Emeka', 'Mamadou', 'Cristian', 'Matías',
+];
+const LAST_NAMES = [
+  'Silva', 'Müller', 'García', 'Fernández', 'Rossi', 'Dupont', 'Petrov',
+  'Kovač', 'Santos', 'Costa', 'Martínez', 'López', 'González', 'Rodrigues',
+  'Carvalho', 'Oliveira', 'Kim', 'Park', 'Al-Hassan', 'Mbeki', 'Diallo',
+  'Traoré', 'Mensah', 'Okonkwo', 'Hernández', 'Ramírez', 'Torres', 'Jiménez',
+  'Novak', 'Horváth', 'Szabó', 'Černý', 'Popescu', 'Ionescu', 'Nkosi',
+  'Dembélé', 'Konaté', 'Cissé', 'Boateng', 'Asamoah',
+];
 
-  const results: Array<{ homeId: number; awayId: number; homeGoals: number; awayGoals: number }> = [];
-  const byId = new Map(teams.map(t => [t.id, t]));
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-  for (const fx of fixtures) {
-    const home = byId.get(fx.homeId);
-    const away = byId.get(fx.awayId);
-    if (!home || !away) continue;
-    const { homeGoals, awayGoals } = simulateMatch(home, away, rng);
-    results.push({ homeId: fx.homeId, awayId: fx.awayId, homeGoals, awayGoals });
-  }
-
-  // Compute standings from results
-  const standingMap = new Map<number, RivalStandingRow>();
-  for (const t of teams) {
-    standingMap.set(t.id, {
-      teamId: t.id,
-      name: t.name,
-      played: 0,
-      won: 0,
-      drawn: 0,
-      lost: 0,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDiff: 0,
-      points: 0,
-    });
-  }
-
-  for (const r of results) {
-    const home = standingMap.get(r.homeId);
-    const away = standingMap.get(r.awayId);
-    if (!home || !away) continue;
-    home.played++;
-    away.played++;
-    home.goalsFor += r.homeGoals;
-    home.goalsAgainst += r.awayGoals;
-    away.goalsFor += r.awayGoals;
-    away.goalsAgainst += r.homeGoals;
-    if (r.homeGoals > r.awayGoals) {
-      home.won++;
-      home.points += 3;
-      away.lost++;
-    } else if (r.homeGoals < r.awayGoals) {
-      away.won++;
-      away.points += 3;
-      home.lost++;
-    } else {
-      home.drawn++;
-      away.drawn++;
-      home.points++;
-      away.points++;
-    }
-  }
-
-  for (const row of standingMap.values()) {
-    row.goalDiff = row.goalsFor - row.goalsAgainst;
-  }
-
-  return [...standingMap.values()].sort(
-    (a, b) => b.points - a.points || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor,
-  );
+function emptyRow(team: Team): RivalStandingRow {
+  return {
+    teamId: team.id,
+    name: team.name,
+    played: 0, won: 0, drawn: 0, lost: 0,
+    goalsFor: 0, goalsAgainst: 0, goalDiff: 0, points: 0,
+  };
 }
 
-// Simulate all rival leagues and return standings + champions.
-export function simulateRivalLeagues(
-  s: GameState,
-): { standings: Record<string, RivalStandingRow[]>; champions: SeasonRecord[] } {
-  const rng = s.rivalRng;
-  const standings: Record<string, RivalStandingRow[]> = {};
-  const champions: SeasonRecord[] = [];
+function applyResult(
+  rows: RivalStandingRow[],
+  homeId: number,
+  awayId: number,
+  homeGoals: number,
+  awayGoals: number,
+): void {
+  const home = rows.find(r => r.teamId === homeId);
+  const away = rows.find(r => r.teamId === awayId);
+  if (!home || !away) return;
+  home.played++; away.played++;
+  home.goalsFor += homeGoals; home.goalsAgainst += awayGoals;
+  away.goalsFor += awayGoals; away.goalsAgainst += homeGoals;
+  if (homeGoals > awayGoals) { home.won++; home.points += 3; away.lost++; }
+  else if (awayGoals > homeGoals) { away.won++; away.points += 3; home.lost++; }
+  else { home.drawn++; away.drawn++; home.points++; away.points++; }
+  home.goalDiff = home.goalsFor - home.goalsAgainst;
+  away.goalDiff = away.goalsFor - away.goalsAgainst;
+}
 
-  // Group rival divisions by federationId
+function sortRows(rows: RivalStandingRow[]): void {
+  rows.sort((a, b) => b.points - a.points || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor);
+}
+
+// ── Fase 11.2: generateRivalPlayers ──────────────────────────────────────────
+
+// Called at startSeason. On the first call, generates 15 thin virtual players
+// per rival team. On subsequent calls, resets all goal tallies to 0.
+// Uses rivalRng for name picks (first call only — players persist across seasons).
+export function generateRivalPlayers(s: GameState): void {
+  // Reset goals for existing players.
+  for (const p of s.rivalPlayers) p.goals = 0;
+
+  const existingTeamIds = new Set(s.rivalPlayers.map(p => p.teamId));
   const rivalDivs = s.divisions.filter(d => d.federationId !== s.playerFederationId);
+
+  for (const div of rivalDivs) {
+    const divTeams = s.teams.filter(
+      t => t.federationId === div.federationId && t.divisionOrden === div.orden,
+    );
+    for (const team of divTeams) {
+      if (existingTeamIds.has(team.id)) continue;
+      for (let i = 0; i < 15; i++) {
+        const fn = FIRST_NAMES[randInt(s.rivalRng, 0, FIRST_NAMES.length - 1)];
+        const ln = LAST_NAMES[randInt(s.rivalRng, 0, LAST_NAMES.length - 1)];
+        s.rivalPlayers.push({ id: s.nextRivalPlayerId++, name: `${fn} ${ln}`, teamId: team.id, goals: 0 });
+      }
+      existingTeamIds.add(team.id);
+    }
+  }
+}
+
+// ── Fase 11.1: generateRivalFixtures ─────────────────────────────────────────
+
+// Called at startSeason. Generates the full round-robin calendar for every
+// rival division and resets standings to empty. Uses rivalRng.
+export function generateRivalFixtures(s: GameState): void {
+  const rivalDivs = s.divisions.filter(d => d.federationId !== s.playerFederationId);
+  const fixtures: RivalFixture[] = [];
 
   for (const div of rivalDivs) {
     const divTeams = s.teams.filter(
@@ -99,26 +103,167 @@ export function simulateRivalLeagues(
     );
     if (divTeams.length < 2) continue;
 
-    const rows = simulateRivalDivision(divTeams, div.orden, div.federationId, rng);
-    const key = `${div.federationId}:${div.orden}`;
-    standings[key] = rows;
-
-    if (rows.length > 0) {
-      const champion = rows[0];
-      champions.push({
-        year: s.year,
-        divisionOrden: div.orden,
-        championId: champion.teamId,
-        championName: champion.name,
-        points: champion.points,
-        prestigeBefore: 0,
-        prestigeAfter: 0,
-        delta: 0,
-      });
+    const teamIds = divTeams.map(t => t.id);
+    const generated = generateFixtures(teamIds, s.rivalRng, div.orden, 2);
+    for (const fx of generated) {
+      fixtures.push({ ...fx, federationId: div.federationId });
     }
+
+    // Reset standings to zero for this division
+    const key = `${div.federationId}:${div.orden}`;
+    s.rivalStandings[key] = divTeams.map(emptyRow);
   }
 
-  return { standings, champions };
+  s.rivalFixtures = fixtures;
+  s.rivalCurrentMatchday = 0;
+  s.rivalLastMatchdayResults = [];
+}
+
+// ── Fase 11.1: stepRivalMatchdays ────────────────────────────────────────────
+
+// Called from advanceMatchday. Advances rival leagues from rivalCurrentMatchday+1
+// up to targetMatchday (inclusive). Updates rivalStandings incrementally and
+// stores the last processed matchday's results for the Dashboard.
+export function stepRivalMatchdays(s: GameState, targetMatchday: number): void {
+  if (s.rivalFixtures.length === 0 || targetMatchday <= s.rivalCurrentMatchday) return;
+  const byId = new Map(s.teams.map(t => [t.id, t]));
+  let lastMdResults: RivalMatchResult[] = [];
+
+  for (let md = s.rivalCurrentMatchday + 1; md <= targetMatchday; md++) {
+    const mdFixtures = s.rivalFixtures.filter(f => f.matchday === md);
+    if (mdFixtures.length === 0) continue;
+
+    const mdResults: RivalMatchResult[] = [];
+    for (const fx of mdFixtures) {
+      const home = byId.get(fx.homeId);
+      const away = byId.get(fx.awayId);
+      if (!home || !away) continue;
+      const { homeGoals, awayGoals } = simulateMatch(home, away, s.rivalRng);
+
+      const key = `${fx.federationId}:${fx.divisionOrden}`;
+      if (!s.rivalStandings[key]) {
+        // Safety: initialize if somehow missing
+        const fedTeams = s.teams.filter(
+          t => t.federationId === fx.federationId && t.divisionOrden === fx.divisionOrden,
+        );
+        s.rivalStandings[key] = fedTeams.map(emptyRow);
+      }
+      applyResult(s.rivalStandings[key], fx.homeId, fx.awayId, homeGoals, awayGoals);
+      sortRows(s.rivalStandings[key]);
+
+      // 11.2 — Attribute goals to virtual players (rivalRng).
+      const homePlayers = s.rivalPlayers.filter(p => p.teamId === fx.homeId);
+      const awayPlayers = s.rivalPlayers.filter(p => p.teamId === fx.awayId);
+      if (homePlayers.length > 0) {
+        for (let g = 0; g < homeGoals; g++) {
+          homePlayers[randInt(s.rivalRng, 0, homePlayers.length - 1)].goals++;
+        }
+      }
+      if (awayPlayers.length > 0) {
+        for (let g = 0; g < awayGoals; g++) {
+          awayPlayers[randInt(s.rivalRng, 0, awayPlayers.length - 1)].goals++;
+        }
+      }
+
+      const isShock = homeGoals > awayGoals
+        ? home.strength < away.strength
+        : awayGoals > homeGoals
+          ? away.strength < home.strength
+          : false;
+
+      mdResults.push({
+        matchday: md,
+        federationId: fx.federationId,
+        divisionOrden: fx.divisionOrden,
+        homeId: fx.homeId,
+        homeName: home.name,
+        awayId: fx.awayId,
+        awayName: away.name,
+        homeGoals,
+        awayGoals,
+        isShock,
+      });
+    }
+    lastMdResults = mdResults; // keep only the last matchday's results
+  }
+
+  s.rivalLastMatchdayResults = lastMdResults;
+  s.rivalCurrentMatchday = targetMatchday;
+}
+
+// ── Fase 11.1: finalizeRivalSeason ───────────────────────────────────────────
+
+// Called at closeSeason instead of simulateRivalLeagues. Reads the already-
+// accumulated rivalStandings to determine champions, then runs post-season
+// adjustments (drift, invest, negotiations, prestige).
+export function finalizeRivalSeason(s: GameState): void {
+  const champions: SeasonRecord[] = [];
+  const rivalDivs = s.divisions.filter(d => d.federationId !== s.playerFederationId);
+  const fedById = new Map(s.federations.map(f => [f.id, f]));
+  const teamById = new Map(s.teams.map(t => [t.id, t]));
+
+  for (const div of rivalDivs) {
+    const key = `${div.federationId}:${div.orden}`;
+    const rows = s.rivalStandings[key];
+    if (!rows || rows.length === 0) continue;
+    const champion = rows[0];
+
+    champions.push({
+      year: s.year,
+      divisionOrden: div.orden,
+      championId: champion.teamId,
+      championName: champion.name,
+      points: champion.points,
+      prestigeBefore: 0,
+      prestigeAfter: 0,
+      delta: 0,
+    });
+
+    // 11.2 — Build rich season record.
+    const fed = fedById.get(div.federationId);
+    const runnerUpName = rows.length > 1 ? rows[1].name : null;
+
+    // Top scorer: highest-goals player whose team is in this division.
+    const divTeamIds = new Set(rows.map(r => r.teamId));
+    const divPlayers = s.rivalPlayers.filter(p => divTeamIds.has(p.teamId));
+    let topScorer: RivalSeasonRecord['topScorer'] = null;
+    if (divPlayers.length > 0) {
+      const best = divPlayers.reduce((a, b) => a.goals >= b.goals ? a : b);
+      if (best.goals > 0) {
+        topScorer = {
+          playerId: best.id,
+          name: best.name,
+          teamName: teamById.get(best.teamId)?.name ?? '',
+          goals: best.goals,
+        };
+      }
+    }
+
+    // Relegated: bottom 2 teams (or 1 if league has ≤ 6 teams).
+    const relegationCount = rows.length > 6 ? 2 : 1;
+    const relegated = rows.slice(-relegationCount).map(r => r.name);
+
+    s.rivalSeasonRecords.push({
+      year: s.year,
+      federationId: div.federationId,
+      federationName: fed?.name ?? '',
+      championId: champion.teamId,
+      championName: champion.name,
+      runnerUpName,
+      topScorer,
+      relegated,
+    });
+  }
+
+  s.rivalChampions.push(...champions);
+  s.rivalFixtures = []; // clear for next season
+  s.rivalLastMatchdayResults = [];
+
+  // Post-season rival adjustments (unchanged from Fase 9).
+  driftRivalStrengths(s, s.rivalStandings);
+  applyRivalInvestments(s);
+  runRivalNegotiations(s);
+  updateRivalPrestige(s);
 }
 
 // Apply strength drift to rival teams based on their performance.

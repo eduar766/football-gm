@@ -31,11 +31,10 @@ import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurrin
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import {
-  simulateRivalLeagues,
-  driftRivalStrengths,
-  updateRivalPrestige,
-  applyRivalInvestments,
-  runRivalNegotiations,
+  generateRivalFixtures,
+  generateRivalPlayers,
+  stepRivalMatchdays,
+  finalizeRivalSeason,
 } from './rival-sim';
 import type {
   BoardMandate,
@@ -301,6 +300,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     rivalRng: makeRng((seed ^ 0xabcd1234) >>> 0),
     rivalStandings: {},
     rivalChampions: [],
+    rivalFixtures: [],
+    rivalCurrentMatchday: 0,
+    rivalLastMatchdayResults: [],
+    rivalPlayers: [],
+    nextRivalPlayerId: 1,
+    rivalSeasonRecords: [],
     mandates: [],
     nextMandateId: 1,
     consecutiveMandateFails: 0,
@@ -478,6 +483,12 @@ export function startSeason(prev: GameState): GameState {
   // 5.4 — Chain events from the previous season (uses independent eventsRng).
   maybeChainEvents(s, s.year - 1);
 
+  // 11.1/11.2 — Pre-generate rival fixtures and virtual players (uses rivalRng).
+  if (s.confederations.length > 0) {
+    generateRivalPlayers(s); // resets goals; generates players first season only
+    generateRivalFixtures(s);
+  }
+
   return s;
 }
 
@@ -619,6 +630,19 @@ export function advanceMatchday(prev: GameState): GameState {
   maybeSpawnEvent(s, md);
   s.currentMatchday = md + 1;
   if (s.currentMatchday > s.totalMatchdays) s.seasonOver = true;
+
+  // 11.1 — Advance rival leagues proportionally (rivalRng, independent stream).
+  if (s.rivalFixtures.length > 0 && s.totalMatchdays > 0) {
+    const maxRivalMD = Math.max(...s.rivalFixtures.map(f => f.matchday));
+    const targetRivalMD = Math.min(
+      maxRivalMD,
+      Math.ceil(md * maxRivalMD / s.totalMatchdays),
+    );
+    if (targetRivalMD > s.rivalCurrentMatchday) {
+      stepRivalMatchdays(s, targetRivalMD);
+    }
+  }
+
   return s;
 }
 
@@ -906,18 +930,9 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
-  // Fase 9: simulate rival leagues (independent RNG, doesn't affect player's matches).
+  // 11.1: finalize rival leagues from accumulated standings (independent RNG).
   if (s.confederations.length > 0) {
-    const rivalResult = simulateRivalLeagues(s);
-    // Merge rival standings (keep previous years, overwrite current)
-    for (const [key, rows] of Object.entries(rivalResult.standings)) {
-      s.rivalStandings[key] = rows;
-    }
-    s.rivalChampions.push(...rivalResult.champions);
-    driftRivalStrengths(s, rivalResult.standings);
-    applyRivalInvestments(s);   // 6.1: struggling federations boost weakest teams
-    runRivalNegotiations(s);    // 6.3: strong rivals poach from weak rivals
-    updateRivalPrestige(s);     // 6.4: prestige has own inertia, decays slowly
+    finalizeRivalSeason(s); // determines champions, drifts strengths, runs negotiations
   }
 
   // Evaluate board mandate for the just-closed season (after prestige + economy settled).
