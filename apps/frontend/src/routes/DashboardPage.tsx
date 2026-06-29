@@ -15,6 +15,7 @@ import {
   Table,
   Text,
   Tooltip,
+  useMantineTheme,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { modals } from '@mantine/modals';
@@ -40,31 +41,11 @@ import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 
-interface MatchGoalScorer {
-  minute: number;
-  playerName: string;
-  teamName: string;
-}
-
-interface MatchReport {
-  matchday: number;
-  homeTeamName: string;
-  awayTeamName: string;
-  homeGoals: number;
-  awayGoals: number;
-  yellowCount: number;
-  redCount: number;
-  goalscorers: MatchGoalScorer[];
-}
-
-interface ExtendedSummary {
-  matchReports?: MatchReport[];
-}
-
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
   const navigate = useNavigate();
+  const theme = useMantineTheme();
 
   const [division, setDivision] = useState(1);
   const [reviewMatchKey, setReviewMatchKey] = useState<string | null>(null);
@@ -544,7 +525,7 @@ export function DashboardPage() {
                           <Group justify="space-between" align="center">
                             <Group gap="sm" style={{ flex: 1 }}>
                               <Text fw={600} size="sm" style={{ minWidth: 100, textAlign: 'right' }}>{f.homeTeamName}</Text>
-                              <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>vs</Text>
+                              <Text size="xs" c="dimmed" style={{ fontFamily: theme.fontFamilyMonospace }}>vs</Text>
                               <Text fw={600} size="sm" style={{ minWidth: 100 }}>{f.awayTeamName}</Text>
                             </Group>
                             <Group gap={4}>
@@ -584,11 +565,11 @@ export function DashboardPage() {
                                   if (realMatches.length === 0) return null;
                                   return (
                                     <Group key={r.numero} gap={4}>
-                                      <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 40 }}>R{r.numero}</Text>
+                                      <Text size="xs" c="dimmed" style={{ fontFamily: theme.fontFamilyMonospace, minWidth: 40 }}>R{r.numero}</Text>
                                       {realMatches.map((m, j) => (
                                         <Group key={j} gap={4}>
                                           <Text size="xs" fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} style={{ color: m.winnerTeamId === m.homeTeamId ? '#10B981' : undefined, textDecoration: m.winnerTeamId === m.awayTeamId ? 'line-through' : undefined, opacity: m.winnerTeamId === m.awayTeamId ? 0.5 : 1 }}>{m.homeTeamName}</Text>
-                                          <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>{m.homeGoals}-{m.awayGoals}</Text>
+                                          <Text size="xs" c="dimmed" style={{ fontFamily: theme.fontFamilyMonospace }}>{m.homeGoals}-{m.awayGoals}</Text>
                                           <Text size="xs" fw={m.winnerTeamId === m.awayTeamId ? 700 : 400} style={{ color: m.winnerTeamId === m.awayTeamId ? '#10B981' : undefined, textDecoration: m.winnerTeamId === m.homeTeamId ? 'line-through' : undefined, opacity: m.winnerTeamId === m.homeTeamId ? 0.5 : 1 }}>{m.awayTeamName}</Text>
                                         </Group>
                                       ))}
@@ -713,8 +694,7 @@ export function DashboardPage() {
                       label="Revisar partido"
                       placeholder="Selecciona un partido"
                       data={(() => {
-                        const ext = summary.data as unknown as ExtendedSummary;
-                        const reports = ext?.matchReports;
+                        const reports = summary.data?.matchReports;
                         if (!reports || reports.length === 0) return [];
                         return reports.map((r) => ({
                           value: `${r.matchday}:${r.homeTeamName}:${r.awayTeamName}`,
@@ -734,8 +714,7 @@ export function DashboardPage() {
                         leftSection={<IconScale size={14} />}
                         onClick={() => {
                           if (!reviewMatchKey) return;
-                          const ext = summary.data as unknown as ExtendedSummary;
-                          const reports = ext?.matchReports ?? [];
+                          const reports = summary.data?.matchReports ?? [];
                           const [mdStr, homeName, awayName] = reviewMatchKey.split(':');
                           const matchday = Number(mdStr);
                           const report = reports.find((r) => r.matchday === matchday && r.homeTeamName === homeName && r.awayTeamName === awayName);
@@ -800,8 +779,7 @@ export function DashboardPage() {
 
               {/* Last matchday match reports */}
               {summary.data && summary.data.currentMatchday > 0 && (() => {
-                const ext = summary.data as unknown as ExtendedSummary;
-                const reports = ext.matchReports;
+                const reports = summary.data.matchReports;
                 if (!reports || !Array.isArray(reports)) return null;
                 const matchdayReports = reports.filter((r) => r.matchday === summary.data!.currentMatchday);
                 if (matchdayReports.length === 0) return null;
@@ -814,7 +792,7 @@ export function DashboardPage() {
                           <Group justify="space-between" align="center" mb={report.goalscorers?.length ? 'xs' : 0}>
                             <Group gap="sm" style={{ flex: 1 }}>
                               <Text fw={600} size="sm" style={{ minWidth: 90, textAlign: 'right' }}>{report.homeTeamName ?? '—'}</Text>
-                              <Text fw={800} size="lg" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 50, textAlign: 'center' }}>
+                              <Text fw={800} size="lg" style={{ fontFamily: theme.fontFamilyMonospace, minWidth: 50, textAlign: 'center' }}>
                                 {report.homeGoals ?? 0}–{report.awayGoals ?? 0}
                               </Text>
                               <Text fw={600} size="sm" style={{ minWidth: 90 }}>{report.awayTeamName ?? '—'}</Text>
@@ -859,7 +837,7 @@ export function DashboardPage() {
                     <Group gap="xs" mb="sm">
                       <IconWorld size={16} color="#3B82F6" />
                       <Text fw={700} size="sm">Jornada en Europa</Text>
-                      <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                      <Text size="xs" c="dimmed" style={{ fontFamily: theme.fontFamilyMonospace }}>
                         J{rivalResults[0]?.matchday}
                       </Text>
                     </Group>
@@ -880,7 +858,7 @@ export function DashboardPage() {
                                   {r.homeName}
                                 </Text>
                                 <Text size="xs" fw={700} mx={6}
-                                  style={{ fontFamily: '"Geist Mono", monospace',
+                                  style={{ fontFamily: theme.fontFamilyMonospace,
                                     color: r.isShock ? '#F59E0B' : 'rgba(255,255,255,0.7)',
                                     minWidth: 36, textAlign: 'center' }}>
                                   {r.homeGoals}–{r.awayGoals}

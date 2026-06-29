@@ -116,6 +116,25 @@ export type BoardMandateDto = z.infer<typeof BoardMandateDto>;
 
 // ── Batch 5: Narrativa emergente ─────────────────────────────────────────────
 
+export const MatchReportScorerDto = z.object({
+  minute: z.number().int(),
+  playerName: z.string(),
+  teamName: z.string(),
+});
+export type MatchReportScorerDto = z.infer<typeof MatchReportScorerDto>;
+
+export const MatchReportDto = z.object({
+  matchday: z.number().int(),
+  homeTeamName: z.string(),
+  awayTeamName: z.string(),
+  homeGoals: z.number().int(),
+  awayGoals: z.number().int(),
+  yellowCount: z.number().int(),
+  redCount: z.number().int(),
+  goalscorers: z.array(MatchReportScorerDto),
+});
+export type MatchReportDto = z.infer<typeof MatchReportDto>;
+
 export const HeadlineDto = z.object({
   type: z.string(),
   text: z.string(),
@@ -190,6 +209,7 @@ export const GameSummary = z.object({
   headlines: z.array(HeadlineDto).default([]),
   lastChronicle: SeasonChronicleDto.nullable().default(null),
   rivalLastMatchday: z.array(RivalMatchResultDto).default([]),
+  matchReports: z.array(MatchReportDto).default([]),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 

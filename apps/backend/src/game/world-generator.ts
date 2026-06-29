@@ -154,7 +154,6 @@ export function generateWorld(seed: number): World {
   // Each league becomes a rival federation with its real teams.
   const usedNames = new Set<string>();
   const rivals: WorldRival[] = [];
-  let rivalIdx = 0;
   for (const conf of CONFEDERATIONS) {
     if (!conf.available) continue;
     for (const league of conf.leagues) {
@@ -182,7 +181,6 @@ export function generateWorld(seed: number): World {
           })),
         ),
       });
-      rivalIdx++;
     }
   }
 

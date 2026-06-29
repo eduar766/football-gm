@@ -199,6 +199,20 @@ export class GameService {
         isShock: r.isShock,
         federationName: state.federations.find(f => f.id === r.federationId)?.name ?? '',
       })),
+      matchReports: state.matchReports.map(r => ({
+        matchday: r.matchday,
+        homeTeamName: state.teams.find(t => t.id === r.homeId)?.name ?? '',
+        awayTeamName: state.teams.find(t => t.id === r.awayId)?.name ?? '',
+        homeGoals: r.homeGoals,
+        awayGoals: r.awayGoals,
+        yellowCount: r.homeYellowCards + r.awayYellowCards,
+        redCount: r.homeRedCards + r.awayRedCards,
+        goalscorers: r.goalscorers.map(g => ({
+          minute: g.minute,
+          playerName: state.players.find(p => p.id === g.playerId)?.name ?? '',
+          teamName: state.teams.find(t => t.id === state.players.find(p => p.id === g.playerId)?.teamId)?.name ?? '',
+        })),
+      })),
     };
   }
 

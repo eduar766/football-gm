@@ -10,6 +10,7 @@ import {
   Stack,
   Text,
   Tooltip,
+  useMantineTheme,
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
@@ -100,6 +101,25 @@ const NAV_SECTIONS = [
   },
 ] as const;
 
+const ROUTES: Record<string, string> = {
+  negotiations: '/games/$gameId/negotiations',
+  federations: '/games/$gameId/federations',
+  market: '/games/$gameId/market',
+  structure: '/games/$gameId/structure',
+  economy: '/games/$gameId/economy',
+  norms: '/games/$gameId/norms',
+  events: '/games/$gameId/events',
+  cups: '/games/$gameId/cups',
+  transfers: '/games/$gameId/transfers',
+  prizes: '/games/$gameId/prizes',
+  teams: '/games/$gameId/teams',
+  history: '/games/$gameId/history',
+  world: '/games/$gameId/world',
+  dashboard: '/games/$gameId',
+};
+
+const ROUTE_KEYS = Object.keys(ROUTES) as string[];
+
 export function GameLayout() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
@@ -108,6 +128,7 @@ export function GameLayout() {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { logout } = useAuth();
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const theme = useMantineTheme();
 
   const summary = useQuery({
     queryKey: ['summary', id],
@@ -115,62 +136,11 @@ export function GameLayout() {
   });
 
   const p = location.pathname;
-  const active = p.includes('/negotiations')
-    ? 'negotiations'
-    : p.includes('/federations')
-      ? 'federations'
-      : p.includes('/market')
-        ? 'market'
-        : p.includes('/structure')
-          ? 'structure'
-          : p.includes('/economy')
-            ? 'economy'
-            : p.includes('/norms')
-              ? 'norms'
-              : p.includes('/events')
-                ? 'events'
-                : p.includes('/cups')
-                  ? 'cups'
-                  : p.includes('/transfers')
-                    ? 'transfers'
-                    : p.includes('/prizes')
-                      ? 'prizes'
-                      : p.includes('/teams')
-                        ? 'teams'
-                        : p.includes('/history')
-                          ? 'history'
-                          : p.includes('/world')
-                            ? 'world'
-                            : 'dashboard';
+  const active = ROUTE_KEYS.find((k) => k !== 'dashboard' && p.includes(`/${k}`)) ?? 'dashboard';
 
   const go = (value: string | null) => {
-    const params = { gameId };
-    if (value === 'teams') navigate({ to: '/games/$gameId/teams', params });
-    else if (value === 'federations')
-      navigate({ to: '/games/$gameId/federations', params });
-    else if (value === 'market')
-      navigate({ to: '/games/$gameId/market', params });
-    else if (value === 'negotiations')
-      navigate({ to: '/games/$gameId/negotiations', params });
-    else if (value === 'structure')
-      navigate({ to: '/games/$gameId/structure', params });
-    else if (value === 'economy')
-      navigate({ to: '/games/$gameId/economy', params });
-    else if (value === 'norms')
-      navigate({ to: '/games/$gameId/norms', params });
-    else if (value === 'events')
-      navigate({ to: '/games/$gameId/events', params });
-    else if (value === 'cups')
-      navigate({ to: '/games/$gameId/cups', params });
-    else if (value === 'transfers')
-      navigate({ to: '/games/$gameId/transfers', params });
-    else if (value === 'prizes')
-      navigate({ to: '/games/$gameId/prizes', params });
-    else if (value === 'history')
-      navigate({ to: '/games/$gameId/history', params });
-    else if (value === 'world')
-      navigate({ to: '/games/$gameId/world', params });
-    else navigate({ to: '/games/$gameId', params });
+    const to = (value && ROUTES[value]) ?? ROUTES.dashboard;
+    navigate({ to, params: { gameId } });
   };
 
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
@@ -194,9 +164,9 @@ export function GameLayout() {
         fw={700}
         tt="uppercase"
         style={{
-          color: summary.data.phase === 'pretemporada' ? '#F59E0B' : '#10B981',
+          color: summary.data.phase === 'pretemporada' ? theme.colors.gold[5] : theme.colors.accent[4],
           letterSpacing: '0.04em',
-          fontFamily: '"Geist Mono", monospace',
+          fontFamily: theme.fontFamilyMonospace,
         }}
       >
         {summary.data.phase === 'pretemporada'
@@ -216,7 +186,7 @@ export function GameLayout() {
         style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }}
       />
       <div>
-        <Text fw={700} size="sm" style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
+        <Text fw={700} size="sm" style={{ fontFamily: theme.headings.fontFamily }}>
           {summary.data?.federation.name ?? '...'}
         </Text>
         <Text size="xs" c="dimmed">
@@ -237,7 +207,7 @@ export function GameLayout() {
         label="Prestigio"
         value={String(summary.data?.federation.prestige ?? '—')}
         extra={`Tier ${summary.data?.federation.tier ?? '?'}`}
-        color="#F59E0B"
+        color={theme.colors.gold[5]}
       />
       <Stat
         label="Jornada"
@@ -251,7 +221,7 @@ export function GameLayout() {
       <Stat
         label="Impulsos"
         value={`${summary.data?.impulsesRemaining ?? '?'}/${summary.data?.impulsesPerSeason ?? '?'}`}
-        color="#8B5CF6"
+        color={theme.colors.violet[5]}
       />
     </Stack>
   );
@@ -324,17 +294,17 @@ export function GameLayout() {
                         cursor: 'pointer',
                         borderRadius: 8,
                         background: isActive
-                          ? 'rgba(16,185,129,0.08)'
-                          : 'transparent',
-                        borderBottom: isActive
-                          ? '2px solid #10B981'
-                          : '2px solid transparent',
+                        ? `${theme.colors.accent[4]}14`
+                        : 'transparent',
+                      borderBottom: isActive
+                        ? `2px solid ${theme.colors.accent[4]}`
+                        : '2px solid transparent',
                         position: 'relative',
                       }}
                     >
                       <Icon
                         size={18}
-                        color={isActive ? '#10B981' : undefined}
+                        color={isActive ? theme.colors.accent[4] : undefined}
                       />
                       {isEvents && hasPending && (
                         <Badge
@@ -437,10 +407,10 @@ export function GameLayout() {
                       cursor: 'pointer',
                       borderRadius: 6,
                       borderLeft: isActive
-                        ? '3px solid #10B981'
+                        ? `3px solid ${theme.colors.accent[4]}`
                         : '3px solid transparent',
                       background: isActive
-                        ? 'rgba(16,185,129,0.08)'
+                        ? `${theme.colors.accent[4]}14`
                         : 'transparent',
                       transition: 'background 0.15s',
                     }}
@@ -456,7 +426,7 @@ export function GameLayout() {
                       }
                     }}
                   >
-                    <Icon size={18} color={isActive ? '#10B981' : undefined} />
+                    <Icon size={18} color={isActive ? theme.colors.accent[4] : undefined} />
                     <Text size="sm" fw={isActive ? 600 : 400}>
                       {item.label}
                     </Text>
@@ -552,6 +522,7 @@ function Stat({
   extra?: string;
   color?: string;
 }) {
+  const theme = useMantineTheme();
   return (
     <Box aria-label={`${label}: ${value}${extra ? ` (${extra})` : ''}`}>
       <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
@@ -561,7 +532,7 @@ function Stat({
         <Text
           fw={700}
           style={{
-            fontFamily: '"Geist Mono", monospace',
+            fontFamily: theme.fontFamilyMonospace,
             color: color ?? 'white',
           }}
         >
