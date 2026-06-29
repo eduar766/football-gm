@@ -38,7 +38,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
       border: '1px solid rgba(255,255,255,0.1)',
     }}>
       <Text size="sm" fw={600} c="dimmed">{label}</Text>
-      <Text size="sm" fw={700} style={{ fontFamily: '"Geist Mono", monospace' }}>
+      <Text size="sm" fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
         {value} títulos
       </Text>
     </Paper>
@@ -63,12 +63,12 @@ export function PalmaresChart({ data }: { data: PalmaresItem[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
           <XAxis
             type="number"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
           />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
             width={100}
           />
           <Tooltip content={<CustomTooltip />} />

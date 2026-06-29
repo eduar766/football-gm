@@ -14,11 +14,12 @@ import {
 import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconPlus, IconRefresh } from '@tabler/icons-react';
+import { IconLayoutGrid, IconPlus, IconRefresh } from '@tabler/icons-react';
 import type { StructureTeam } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+import { PageHero } from '../components/PageHero';
 
 const TIER_COLORS: Record<number, string> = {
   1: '#F59E0B',
@@ -56,12 +57,12 @@ function TeamRows({ teams }: { teams: StructureTeam[] }) {
           >
             <Table.Td fw={600}>{t.name}</Table.Td>
             <Table.Td ta="right">
-              <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+              <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
                 {t.strength}
               </Text>
             </Table.Td>
             <Table.Td ta="right">
-              <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981' }}>
+              <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981' }}>
                 {t.arraigo}
               </Text>
             </Table.Td>
@@ -124,66 +125,48 @@ export function StructurePage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group justify="space-between">
-          <div>
-            <Text
-              fw={800}
-              style={{
-                fontFamily: '"Plus Jakarta Sans", sans-serif',
-                fontSize: '28px',
-                color: '#F9FAFB',
-              }}
-            >
-              Estructura de la liga
-            </Text>
-            <Text size="sm" c="dimmed" mt="xs">
-              Antes de crecer o abrir una división nueva se celebra una liga de
-              nivelación que reparte los equipos por mérito.
-            </Text>
-          </div>
-          <Button
-            onClick={() =>
-              modals.openConfirmModal({
-                title: 'Celebrar liga de nivelación',
-                children: (
-                  <Text size="sm">Se ejecutará una liga de nivelación que repartirá los equipos por mérito entre las divisiones. ¿Continuar?</Text>
-                ),
-                labels: { confirm: 'Confirmar', cancel: 'Cancelar' },
-                confirmProps: { color: 'yellow' },
-                onConfirm: () => level.mutate(undefined as void),
-              })
-            }
-            loading={level.isPending}
-            disabled={!isPreseason}
-            variant="gradient"
-            gradient={{ from: '#F59E0B', to: '#D97706' }}
-            leftSection={<IconRefresh size={16} />}
-          >
-            Celebrar liga de nivelación
-          </Button>
-        </Group>
-        {!isPreseason && summary.data && (
-          <Alert color="gray" mt="md" title="Cambios estructurales bloqueados">
-            La temporada está en curso. Los cambios de estructura, formato, copas
-            y equipos solo pueden hacerse en pretemporada. Cierra la
-            temporada para volver a esta ventana.
-          </Alert>
-        )}
-        {pending.length > 0 && (
-          <Alert color="blue" mt="md" title="Equipos pendientes de integración">
-            {pending.map((t) => t.name).join(', ')} — adheridos por negociación.
-            Celebra una liga de nivelación para colocarlos en una división.
-          </Alert>
-        )}
-      </Paper>
+      <PageHero
+        icon={IconLayoutGrid}
+        title="Estructura de la liga"
+        subtitle="Antes de crecer o abrir una división nueva se celebra una liga de nivelación que reparte los equipos por mérito."
+      />
+
+      <Group justify="flex-end" mb="md">
+        <Button
+          onClick={() =>
+            modals.openConfirmModal({
+              title: 'Celebrar liga de nivelación',
+              children: (
+                <Text size="sm">Se ejecutará una liga de nivelación que repartirá los equipos por mérito entre las divisiones. ¿Continuar?</Text>
+              ),
+              labels: { confirm: 'Confirmar', cancel: 'Cancelar' },
+              confirmProps: { color: 'yellow' },
+              onConfirm: () => level.mutate(undefined as void),
+            })
+          }
+          loading={level.isPending}
+          disabled={!isPreseason}
+          variant="gradient"
+          gradient={{ from: '#F59E0B', to: '#D97706' }}
+          leftSection={<IconRefresh size={16} />}
+        >
+          Celebrar liga de nivelación
+        </Button>
+      </Group>
+
+      {!isPreseason && summary.data && (
+        <Alert color="gray" mb="md" title="Cambios estructurales bloqueados">
+          La temporada está en curso. Los cambios de estructura, formato, copas
+          y equipos solo pueden hacerse en pretemporada. Cierra la
+          temporada para volver a esta ventana.
+        </Alert>
+      )}
+      {pending.length > 0 && (
+        <Alert color="blue" mb="md" title="Equipos pendientes de integración">
+          {pending.map((t) => t.name).join(', ')} — adheridos por negociación.
+          Celebra una liga de nivelación para colocarlos en una división.
+        </Alert>
+      )}
 
       <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         <Group justify="space-between">
@@ -254,7 +237,7 @@ export function StructurePage() {
                 <Text fw={700}>
                   {d.name}
                 </Text>
-                <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                   {d.teams.length} equipos
                 </Text>
               </Group>
@@ -275,7 +258,7 @@ export function StructurePage() {
             >
               <Group justify="space-between" mb="sm">
                 <Text fw={700}>Pendientes de integración</Text>
-                <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                   {pending.length} equipos
                 </Text>
               </Group>

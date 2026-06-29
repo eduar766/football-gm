@@ -309,7 +309,7 @@ export function AdminPage() {
                   {users.data?.map((u) => (
                     <Table.Tr key={u.id}>
                       <Table.Td>
-                        <Text size="sm" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                        <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                           {u.email}
                         </Text>
                       </Table.Td>
@@ -401,7 +401,7 @@ export function AdminPage() {
                   <Text
                     fw={700}
                     size="lg"
-                    style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}
+                    style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}
                   >
                     {approvedPassword}
                   </Text>

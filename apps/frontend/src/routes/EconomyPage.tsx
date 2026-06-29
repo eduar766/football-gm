@@ -131,7 +131,7 @@ export function EconomyPage() {
             <Text
               fw={800}
               style={{
-                fontFamily: '"Geist Mono", monospace',
+                fontFamily: 'var(--mantine-font-family-monospace)',
                 fontSize: '36px',
                 color: e.treasury >= 0 ? '#10B981' : '#EF4444',
                 lineHeight: 1,
@@ -149,7 +149,7 @@ export function EconomyPage() {
             </Badge>
             <Text size="sm" c="dimmed" mt="md">
               Coste operativo actual:{' '}
-              <span style={{ fontFamily: '"Geist Mono", monospace' }}>
+              <span style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                 {money(e.operatingCostNow)}
               </span>{' '}
               / año (escala con equipos y divisiones).
@@ -180,7 +180,7 @@ export function EconomyPage() {
                     <Table.Td ta="right">
                       <Text
                         fw={600}
-                        style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}
+                        style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}
                       >
                         +{money(e.last.income)}
                       </Text>
@@ -196,7 +196,7 @@ export function EconomyPage() {
                     <Table.Td ta="right">
                       <Text
                         fw={600}
-                        style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}
+                        style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}
                       >
                         −{money(e.last.operatingCost)}
                       </Text>
@@ -212,7 +212,7 @@ export function EconomyPage() {
                     <Table.Td ta="right">
                       <Text
                         fw={600}
-                        style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}
+                        style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}
                       >
                         −{money(e.last.prizes)}
                       </Text>
@@ -228,7 +228,7 @@ export function EconomyPage() {
                     <Table.Td ta="right">
                       <Text
                         fw={600}
-                        style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}
+                        style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}
                       >
                         −{money(e.last.talent)}
                       </Text>
@@ -247,7 +247,7 @@ export function EconomyPage() {
                       ta="right"
                       fw={700}
                       style={{
-                        fontFamily: '"Geist Mono", monospace',
+                        fontFamily: 'var(--mantine-font-family-monospace)',
                         fontSize: '15px',
                         color: e.last.net >= 0 ? '#10B981' : '#EF4444',
                         background: e.last.net >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
@@ -280,16 +280,16 @@ export function EconomyPage() {
                   <Table.Tbody>
                     <Table.Tr>
                       <Table.Td><Group gap="xs"><IconArrowUp size={14} color="#10B981" />Ingresos (contratos activos)</Group></Table.Td>
-                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>+{money(projectedIncome)}</Text></Table.Td>
+                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>+{money(projectedIncome)}</Text></Table.Td>
                     </Table.Tr>
                     <Table.Tr>
                       <Table.Td><Group gap="xs"><IconArrowDown size={14} color="#EF4444" />Coste operativo</Group></Table.Td>
-                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>−{money(e.operatingCostNow)}</Text></Table.Td>
+                      <Table.Td ta="right"><Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}>−{money(e.operatingCostNow)}</Text></Table.Td>
                     </Table.Tr>
                     {e.policy.talentInvestment > 0 && (
                       <Table.Tr>
                         <Table.Td><Group gap="xs"><IconArrowDown size={14} color="#EF4444" />Inversión talento</Group></Table.Td>
-                        <Table.Td ta="right"><Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>−{money(e.policy.talentInvestment)}</Text></Table.Td>
+                        <Table.Td ta="right"><Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}>−{money(e.policy.talentInvestment)}</Text></Table.Td>
                       </Table.Tr>
                     )}
                     <Table.Tr>
@@ -301,13 +301,13 @@ export function EconomyPage() {
                           Neto estimado
                         </Group>
                       </Table.Td>
-                      <Table.Td ta="right" fw={700} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '15px', color: projectedNet >= 0 ? '#10B981' : '#EF4444', background: projectedNet >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
+                      <Table.Td ta="right" fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '15px', color: projectedNet >= 0 ? '#10B981' : '#EF4444', background: projectedNet >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
                         {projectedNet >= 0 ? '+' : '−'}{money(Math.abs(projectedNet))}
                       </Table.Td>
                     </Table.Tr>
                     <Table.Tr>
                       <Table.Td fw={700}>Tesorería estimada</Table.Td>
-                      <Table.Td ta="right" fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '15px', color: projectedTreasury >= 0 ? '#10B981' : '#EF4444' }}>
+                      <Table.Td ta="right" fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '15px', color: projectedTreasury >= 0 ? '#10B981' : '#EF4444' }}>
                         {projectedTreasury >= 0 ? '+' : '−'}{money(Math.abs(projectedTreasury))}
                       </Table.Td>
                     </Table.Tr>
@@ -344,7 +344,7 @@ export function EconomyPage() {
                 thousandSeparator="."
                 decimalSeparator=","
                 styles={{
-                  input: { fontFamily: '"Geist Mono", monospace' },
+                  input: { fontFamily: 'var(--mantine-font-family-monospace)' },
                 }}
               />
               <Group>
@@ -398,10 +398,10 @@ export function EconomyPage() {
                           {c.tipo}
                         </Badge>
                       </Table.Td>
-                      <Table.Td ta="right" fw={600} style={{ fontFamily: '"Geist Mono", monospace' }}>
+                      <Table.Td ta="right" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                         {money(c.valorAnual)}
                       </Table.Td>
-                      <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                      <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                         {c.yearsLeft}
                       </Table.Td>
                       <Table.Td ta="right">
@@ -465,10 +465,10 @@ export function EconomyPage() {
                         {o.tipo}
                       </Badge>
                     </Table.Td>
-                    <Table.Td ta="right" fw={600} style={{ fontFamily: '"Geist Mono", monospace' }}>
+                    <Table.Td ta="right" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                       {money(o.valorAnual)}
                     </Table.Td>
-                    <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                    <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                       {o.years}
                     </Table.Td>
                     <Table.Td ta="right">
@@ -512,7 +512,7 @@ export function EconomyPage() {
           ) : (
             <Badge color="grape" variant="light">
               Tope{' '}
-              <span style={{ fontFamily: '"Geist Mono", monospace' }}>
+              <span style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                 {money(compliance.data.cap)}
               </span>
             </Badge>
@@ -540,7 +540,7 @@ export function EconomyPage() {
                   <Table.Tr key={r.teamId} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
                     <Table.Td>{r.teamName}</Table.Td>
                     <Table.Td c="dimmed">{r.divisionName ?? '—'}</Table.Td>
-                    <Table.Td ta="right" fw={600} style={{ fontFamily: '"Geist Mono", monospace' }}>
+                    <Table.Td ta="right" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                       {money(r.wageBill)}
                     </Table.Td>
                     <Table.Td ta="right">
@@ -550,7 +550,7 @@ export function EconomyPage() {
                         <Badge color="green" variant="light" size="sm">Cumple</Badge>
                       ) : (
                         <Badge color="red" variant="light" size="sm">
-                          Excede +<span style={{ fontFamily: '"Geist Mono", monospace' }}>{money(r.wageBill - r.cap)}</span>
+                          Excede +<span style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{money(r.wageBill - r.cap)}</span>
                         </Badge>
                       )}
                     </Table.Td>
@@ -598,7 +598,7 @@ export function EconomyPage() {
                           {(() => {
                             const fee = Number((t as Record<string, unknown>).transferFee);
                             return fee > 0 ? (
-                              <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                              <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                                 {(fee / 1_000_000).toFixed(1)} M€
                               </Text>
                             ) : (
@@ -613,7 +613,7 @@ export function EconomyPage() {
                 {totalFeesPaid > 0 && (
                   <Group justify="flex-end" mt="sm">
                     <Text size="sm" c="dimmed">Total comisiones:</Text>
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                       {(totalFeesPaid / 1_000_000).toFixed(1)} M€
                     </Text>
                   </Group>
@@ -650,10 +650,10 @@ export function EconomyPage() {
               {compliance.data.rows.map((r, i) => (
                 <Table.Tr key={r.teamId} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
                   <Table.Td>{r.teamName}</Table.Td>
-                  <Table.Td ta="right" fw={600} style={{ fontFamily: '"Geist Mono", monospace' }}>
+                  <Table.Td ta="right" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                     {money(r.wageBill)}
                   </Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                     {r.cap != null ? money(r.cap) : '—'}
                   </Table.Td>
                   <Table.Td ta="right">

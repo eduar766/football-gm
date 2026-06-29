@@ -4,6 +4,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { IconBuilding, IconChartLine, IconWorld } from '@tabler/icons-react';
 import { api } from '../api';
 import type { FederationListItem } from '@football-gm/contracts';
+import { PageHero } from '../components/PageHero';
 
 const TIER_COLOR: Record<number, string> = {
   1: '#F59E0B',
@@ -61,7 +62,7 @@ function FedRow({ f, index, gameId }: { f: FederationListItem; index: number; ga
       </Table.Td>
       <Table.Td ta="right">
         <Group gap="xs" justify="flex-end" wrap="nowrap">
-          <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+          <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
             {f.prestige}
           </Text>
           <Box
@@ -93,7 +94,7 @@ function FedRow({ f, index, gameId }: { f: FederationListItem; index: number; ga
             borderRadius: 12,
             background: `${TIER_COLOR[f.tier] ?? '#6B7280'}20`,
             color: TIER_COLOR[f.tier] ?? '#6B7280',
-            fontFamily: '"Geist Mono", monospace',
+            fontFamily: 'var(--mantine-font-family-monospace)',
             fontWeight: 700,
             fontSize: '13px',
           }}
@@ -101,7 +102,7 @@ function FedRow({ f, index, gameId }: { f: FederationListItem; index: number; ga
           {f.tier}
         </Box>
       </Table.Td>
-      <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>
+      <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
         {f.teamCount}
       </Table.Td>
       <Table.Td ta="right">
@@ -160,32 +161,12 @@ export function FederationsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconBuilding size={22} color="#10B981" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Federaciones
-          </Text>
-        </Group>
-        <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Tu federación y las rivales son el mismo modelo. Robar un equipo
-          mueve prestigio de una a otra.
-        </Text>
-      </Paper>
+      <PageHero
+        icon={IconBuilding}
+        iconColor="#10B981"
+        title="Federaciones"
+        subtitle="Tu federación y las rivales son el mismo modelo. Robar un equipo mueve prestigio de una a otra."
+      />
 
       <Tabs defaultValue="federaciones" variant="pills" radius="md">
         <Tabs.List
@@ -286,7 +267,7 @@ export function FederationsPage() {
                       }}
                     >
                       <Table.Td>
-                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
+                        <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>
                           {i + 1}
                         </Text>
                       </Table.Td>
@@ -301,17 +282,17 @@ export function FederationsPage() {
                         </Group>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                        <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                           {row.cumulativeScore.toFixed(1)}
                         </Text>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.6)' }}>
+                        <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: 'rgba(255,255,255,0.6)' }}>
                           #{row.lastRank}
                         </Text>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Text style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.4)' }}>
+                        <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: 'rgba(255,255,255,0.4)' }}>
                           {row.seasonsRanked}
                         </Text>
                       </Table.Td>

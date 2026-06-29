@@ -85,7 +85,7 @@ export function FederationPage() {
               <Text
                 fw={800}
                 style={{
-                  fontFamily: '"Geist Mono", monospace',
+                  fontFamily: 'var(--mantine-font-family-monospace)',
                   fontSize: '32px',
                   color: '#F59E0B',
                   lineHeight: 1,
@@ -110,7 +110,7 @@ export function FederationPage() {
               <Text
                 fw={800}
                 style={{
-                  fontFamily: '"Geist Mono", monospace',
+                  fontFamily: 'var(--mantine-font-family-monospace)',
                   fontSize: '22px',
                   color: '#fff',
                   lineHeight: 1,
@@ -128,7 +128,7 @@ export function FederationPage() {
           <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>
             Equipos
           </Text>
-          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '24px', color: '#10B981' }}>
+          <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '24px', color: '#10B981' }}>
             {f.teamCount}
           </Text>
         </Paper>
@@ -136,7 +136,7 @@ export function FederationPage() {
           <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>
             Divisiones
           </Text>
-          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '24px', color: '#3B82F6' }}>
+          <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '24px', color: '#3B82F6' }}>
             {f.divisions.length}
           </Text>
         </Paper>
@@ -167,13 +167,13 @@ export function FederationPage() {
                 }}
               >
                 <Table.Td>
-                  <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.5)' }}>
+                  <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: 'rgba(255,255,255,0.5)' }}>
                     {d.orden}
                   </Text>
                 </Table.Td>
                 <Table.Td fw={600}>{d.name}</Table.Td>
-                <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{d.plazas}</Table.Td>
-                <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>{d.teamCount}</Table.Td>
+                <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{d.plazas}</Table.Td>
+                <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>{d.teamCount}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
@@ -204,12 +204,12 @@ export function FederationPage() {
                   }}
                 >
                   <Table.Td>
-                    <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>{i + 1}</Text>
+                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{i + 1}</Text>
                   </Table.Td>
                   <Table.Td fw={500}>{t.name}</Table.Td>
                   <Table.Td ta="right">
                     <Group gap="xs" justify="flex-end" wrap="nowrap">
-                      <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
                         {t.strength}
                       </Text>
                       <Box style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', flexShrink: 0 }}>
@@ -219,7 +219,7 @@ export function FederationPage() {
                   </Table.Td>
                   <Table.Td ta="right">
                     <Tooltip label="Lealtad del equipo (0-100)" fz="xs">
-                      <Text style={{ fontFamily: '"Geist Mono", monospace', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981', cursor: 'default' }}>
+                      <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981', cursor: 'default' }}>
                         {t.arraigo}
                       </Text>
                     </Tooltip>
@@ -259,7 +259,7 @@ export function FederationPage() {
                   }}
                 >
                   <Table.Td>
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                       {r.year}
                     </Text>
                   </Table.Td>
@@ -287,7 +287,7 @@ export function FederationPage() {
                       <Stack gap={0}>
                         <Text size="sm" fw={500}>{r.topScorer.name}</Text>
                         <Text size="xs" c="dimmed">
-                          {r.topScorer.teamName} · <Text span fw={700} style={{ color: '#10B981', fontFamily: '"Geist Mono", monospace' }}>{r.topScorer.goals}</Text> goles
+                          {r.topScorer.teamName} · <Text span fw={700} style={{ color: '#10B981', fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.topScorer.goals}</Text> goles
                         </Text>
                       </Stack>
                     ) : (
@@ -344,20 +344,20 @@ export function FederationPage() {
                   }}
                 >
                   <Table.Td>
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: i === 0 ? '#F59E0B' : 'rgba(255,255,255,0.5)' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: i === 0 ? '#F59E0B' : 'rgba(255,255,255,0.5)' }}>
                       {i + 1}
                     </Text>
                   </Table.Td>
                   <Table.Td fw={i < 3 ? 600 : 400}>{r.name}</Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.played}</Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.won}</Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.drawn}</Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace' }}>{r.lost}</Table.Td>
-                  <Table.Td ta="right" style={{ fontFamily: '"Geist Mono", monospace', color: r.goalDiff > 0 ? '#10B981' : r.goalDiff < 0 ? '#EF4444' : undefined }}>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.played}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.won}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.drawn}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.lost}</Table.Td>
+                  <Table.Td ta="right" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: r.goalDiff > 0 ? '#10B981' : r.goalDiff < 0 ? '#EF4444' : undefined }}>
                     {r.goalDiff > 0 ? `+${r.goalDiff}` : r.goalDiff}
                   </Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: i === 0 ? '#F59E0B' : '#10B981' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: i === 0 ? '#F59E0B' : '#10B981' }}>
                       {r.points}
                     </Text>
                   </Table.Td>

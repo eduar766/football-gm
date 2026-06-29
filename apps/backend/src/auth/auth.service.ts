@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -19,6 +20,8 @@ const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: Database,
     private readonly jwt: JwtService,
@@ -204,7 +207,7 @@ export class AuthService {
       approved: true,
       forcePasswordChange: false,
     });
-    console.log(`[Auth] Admin user created: ${email}`);
+    this.logger.log(`Admin user created: ${email}`);
   }
 
   // Used by AdminService to create beta users

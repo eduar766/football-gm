@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { IconArrowRight, IconWorld } from '@tabler/icons-react';
 import { api } from '../api';
+import { PageHero } from '../components/PageHero';
 
 export function TransfersPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -77,58 +78,35 @@ export function TransfersPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group justify="space-between">
-          <div>
-            <Group gap="sm">
-              <IconArrowRight size={22} color="#10B981" />
-              <Text
-                fw={800}
-                style={{
-                  fontFamily: '"Plus Jakarta Sans", sans-serif',
-                  fontSize: '28px',
-                  color: '#F9FAFB',
-                }}
-              >
-                Ventana de fichajes
-              </Text>
-            </Group>
-            <Text size="sm" c="dimmed" mt="xs" ml={34}>
-              Movimientos reales entre clubes en la pretemporada. Los
-              clubes son autónomos: el comisionado no firma fichajes, los observa.
-            </Text>
-          </div>
-          <Group gap="sm">
-            <Select
-              size="xs"
-              w={120}
-              data={years.map((y) => ({ value: String(y), label: `Año ${y}` }))}
-              value={activeYear != null ? String(activeYear) : null}
-              onChange={(v) => setYear(v ? Number(v) : null)}
-            />
-            <Box
-              style={{
-                padding: '4px 14px',
-                borderRadius: 14,
-                background: 'rgba(139,92,246,0.15)',
-                color: '#8B5CF6',
-                fontFamily: '"Geist Mono", monospace',
-                fontWeight: 700,
-                fontSize: '13px',
-              }}
-            >
-              {entries.length + internationalEntries.length} movimientos
-            </Box>
-          </Group>
-        </Group>
-      </Paper>
+      <PageHero
+        icon={IconArrowRight}
+        iconColor="#10B981"
+        title="Ventana de fichajes"
+        subtitle="Movimientos reales entre clubes en la pretemporada. Los clubes son autónomos: el comisionado no firma fichajes, los observa."
+      />
+
+      <Group justify="flex-end" mb="md">
+        <Select
+          size="xs"
+          w={120}
+          data={years.map((y) => ({ value: String(y), label: `Año ${y}` }))}
+          value={activeYear != null ? String(activeYear) : null}
+          onChange={(v) => setYear(v ? Number(v) : null)}
+        />
+        <Box
+          style={{
+            padding: '4px 14px',
+            borderRadius: 14,
+            background: 'rgba(139,92,246,0.15)',
+            color: '#8B5CF6',
+            fontFamily: 'var(--mantine-font-family-monospace)',
+            fontWeight: 700,
+            fontSize: '13px',
+          }}
+        >
+          {entries.length + internationalEntries.length} movimientos
+        </Box>
+      </Group>
 
       <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         {entries.length === 0 ? (
@@ -162,7 +140,7 @@ export function TransfersPage() {
                 >
                   <Table.Td fw={600}>{e.playerName}</Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: e.calidad >= 70 ? '#10B981' : e.calidad >= 50 ? '#F59E0B' : '#EF4444' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: e.calidad >= 70 ? '#10B981' : e.calidad >= 50 ? '#F59E0B' : '#EF4444' }}>
                       {e.calidad}
                     </Text>
                   </Table.Td>
@@ -241,7 +219,7 @@ export function TransfersPage() {
                 >
                   <Table.Td fw={700} style={{ color: '#E9D5FF' }}>{e.playerName}</Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: e.calidad >= 70 ? '#10B981' : e.calidad >= 50 ? '#F59E0B' : '#EF4444' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: e.calidad >= 70 ? '#10B981' : e.calidad >= 50 ? '#F59E0B' : '#EF4444' }}>
                       {e.calidad}
                     </Text>
                   </Table.Td>
@@ -270,7 +248,7 @@ export function TransfersPage() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="xs" style={{ fontFamily: '"Geist Mono", monospace', color: '#8B5CF6' }}>
+                    <Text size="xs" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#8B5CF6' }}>
                       {e.fromFederationName ?? '—'}
                     </Text>
                   </Table.Td>
@@ -302,7 +280,7 @@ export function TransfersPage() {
                 >
                   <Table.Td fw={600}>Año {y}</Table.Td>
                   <Table.Td ta="right">
-                    <Text style={{ fontFamily: '"Geist Mono", monospace', color: '#8B5CF6' }}>
+                    <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#8B5CF6' }}>
                       {count} movimientos
                     </Text>
                   </Table.Td>

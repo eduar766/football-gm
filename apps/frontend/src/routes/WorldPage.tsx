@@ -103,7 +103,7 @@ function FederationCard({
             <Table
               fz="xs"
               verticalSpacing={2}
-              style={{ fontFamily: '"Geist Mono", monospace' }}
+              style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}
             >
               <Table.Thead>
                 <Table.Tr>

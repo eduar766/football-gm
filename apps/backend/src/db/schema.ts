@@ -139,7 +139,7 @@ export const games = pgTable('games', {
 export const gameEngineStates = pgTable('game_engine_states', {
   gameId: integer('game_id')
     .primaryKey()
-    .references(() => games.id),
+    .references(() => games.id, { onDelete: 'cascade' }),
   state: jsonb('state').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -152,7 +152,7 @@ export const federations = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     // Stable link to the engine's in-state federation id (1 = player, 2.. rivals).
     engineFederationId: integer('engine_federation_id'),
     name: text('name').notNull(),
@@ -171,7 +171,7 @@ export const leagues = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     federationId: integer('federation_id')
       .notNull()
       .references(() => federations.id),
@@ -187,7 +187,7 @@ export const divisions = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     leagueId: integer('league_id')
       .notNull()
       .references(() => leagues.id),
@@ -207,7 +207,7 @@ export const teams = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     // Stable link to the engine's in-state team id (1..N). Nullable: teams not
     // backed by the simulation core (future) can exist without one.
@@ -241,7 +241,7 @@ export const players = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     teamId: integer('team_id').references(() => teams.id), // nullable: free agents
     // Stable link to the engine's in-state player id. Awards/rankings join
     // through this column to translate engine outputs into db rows.
@@ -264,7 +264,7 @@ export const cups = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     // Stable link to the engine's in-state cup id.
     engineCupId: integer('engine_cup_id'),
     federationId: integer('federation_id')
@@ -288,7 +288,7 @@ export const seasons = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     anio: integer('anio').notNull(),
     impulsosRestantes: integer('impulsos_restantes').notNull().default(5),
   },
@@ -303,7 +303,7 @@ export const matchdays = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     seasonId: integer('season_id')
       .notNull()
       .references(() => seasons.id),
@@ -324,7 +324,7 @@ export const matches = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     seasonId: integer('season_id')
       .notNull()
       .references(() => seasons.id),
@@ -360,7 +360,7 @@ export const negotiations = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     federationId: integer('federation_id')
       .notNull()
       .references(() => federations.id),
@@ -395,7 +395,7 @@ export const norms = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     federationId: integer('federation_id')
       .notNull()
       .references(() => federations.id),
@@ -411,7 +411,7 @@ export const sanctions = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     teamId: integer('team_id')
       .notNull()
       .references(() => teams.id),
@@ -430,7 +430,7 @@ export const impulses = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     seasonId: integer('season_id')
       .notNull()
       .references(() => seasons.id),
@@ -451,7 +451,7 @@ export const commercialContracts = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     federationId: integer('federation_id')
       .notNull()
       .references(() => federations.id),
@@ -472,7 +472,7 @@ export const seasonRecords = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     anio: integer('anio').notNull(),
     divisionId: integer('division_id').references(() => divisions.id),
     cupId: integer('cup_id').references(() => cups.id),
@@ -515,7 +515,7 @@ export const trajectories = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     teamId: integer('team_id')
       .notNull()
       .references(() => teams.id),
@@ -532,7 +532,7 @@ export const awards = pgTable(
     id: serial('id').primaryKey(),
     gameId: integer('game_id')
       .notNull()
-      .references(() => games.id),
+      .references(() => games.id, { onDelete: 'cascade' }),
     anio: integer('anio').notNull(),
     tipo: awardType('tipo').notNull(),
     playerId: integer('player_id')

@@ -60,7 +60,7 @@ function MatchCard({ match, isChampion }: { match: CupMatchDto; isChampion?: boo
           {match.homeTeamName}
         </Text>
         {match.played && (
-          <Text fw={800} size="xs" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 16, textAlign: 'center', color: homeWin ? '#F59E0B' : '#F9FAFB' }}>
+          <Text fw={800} size="xs" style={{ fontFamily: 'var(--mantine-font-family-monospace)', minWidth: 16, textAlign: 'center', color: homeWin ? '#F59E0B' : '#F9FAFB' }}>
             {match.homeGoals}
           </Text>
         )}
@@ -84,7 +84,7 @@ function MatchCard({ match, isChampion }: { match: CupMatchDto; isChampion?: boo
           {match.awayTeamName}
         </Text>
         {match.played && (
-          <Text fw={800} size="xs" style={{ fontFamily: '"Geist Mono", monospace', minWidth: 16, textAlign: 'center', color: awayWin ? '#F59E0B' : '#F9FAFB' }}>
+          <Text fw={800} size="xs" style={{ fontFamily: 'var(--mantine-font-family-monospace)', minWidth: 16, textAlign: 'center', color: awayWin ? '#F59E0B' : '#F9FAFB' }}>
             {match.awayGoals}
           </Text>
         )}

@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { api } from '../api';
 import { PalmaresChart } from '../components/PalmaresChart';
+import { PageHero } from '../components/PageHero';
 
 const AWARD_LABEL: Record<AwardType, string> = {
   max_goleador: 'Máximo goleador',
@@ -60,28 +61,11 @@ export function HistoryPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconHistory size={22} color="#10B981" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Historial
-          </Text>
-        </Group>
-      </Paper>
+      <PageHero
+        icon={IconHistory}
+        iconColor="#10B981"
+        title="Historial"
+      />
 
       <Tabs defaultValue="mi-liga" variant="pills" radius="md">
         <Tabs.List
@@ -137,7 +121,7 @@ export function HistoryPage() {
                           }}
                         >
                           <Table.Td>
-                            <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace' }}>{r.anio}</Text>
+                            <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.anio}</Text>
                           </Table.Td>
                           <Table.Td>
                             <Link
@@ -224,7 +208,7 @@ export function HistoryPage() {
                             </Group>
                           </Table.Td>
                           <Table.Td ta="right">
-                            <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                            <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                               {p.titles}
                             </Text>
                           </Table.Td>
@@ -282,7 +266,7 @@ export function HistoryPage() {
                           }}
                         >
                           <Table.Td>
-                            <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{a.year}</Text>
+                            <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{a.year}</Text>
                           </Table.Td>
                           <Table.Td>
                             <Box
@@ -303,7 +287,7 @@ export function HistoryPage() {
                           <Table.Td fw={500}>{a.playerName}</Table.Td>
                           <Table.Td c="dimmed">{a.teamName}</Table.Td>
                           <Table.Td ta="right">
-                            <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                            <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                               {a.valor}
                             </Text>
                           </Table.Td>
@@ -347,10 +331,10 @@ export function HistoryPage() {
                           <Table.Td fw={600}>{r.playerName}</Table.Td>
                           <Table.Td c="dimmed">{r.teamName}</Table.Td>
                           <Table.Td ta="right">
-                            <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{r.seasonsWon}</Text>
+                            <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.seasonsWon}</Text>
                           </Table.Td>
                           <Table.Td ta="right">
-                            <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                            <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                               {r.totalGoles}
                             </Text>
                           </Table.Td>
@@ -405,7 +389,7 @@ function TrajectoryChart({ data }: { data: TeamTrajectoryData[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
           <XAxis
             dataKey="year"
-            tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: '"Geist Mono", monospace' }}
+            tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: 'var(--mantine-font-family-monospace)' }}
             axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
             tickLine={false}
           />
@@ -470,7 +454,7 @@ function RecordBookPanel({ recordBook }: { recordBook: RecordBookDto }) {
               }}
             >
               <Text size="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>Mayor goleada</Text>
-              <Text fw={800} size="xl" style={{ fontFamily: '"Geist Mono", monospace', color: '#8B5CF6' }}>
+              <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#8B5CF6' }}>
                 {recordBook.biggestWin!.homeGoals} – {recordBook.biggestWin!.awayGoals}
               </Text>
               <Text size="sm" mt={2}>
@@ -491,7 +475,7 @@ function RecordBookPanel({ recordBook }: { recordBook: RecordBookDto }) {
               }}
             >
               <Text size="xs" c="dimmed" tt="uppercase" fw={700} mb={4}>Racha ganadora más larga</Text>
-              <Text fw={800} size="xl" style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+              <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                 {recordBook.longestWinStreak!.count} victorias
               </Text>
               <Text size="sm" mt={2}>{recordBook.longestWinStreak!.teamName}</Text>
@@ -595,11 +579,11 @@ function RivalChampionsPanel({ champions }: { champions: Array<{ year: number; f
                       borderTop: i > 0 ? '1px solid rgba(255,255,255,0.04)' : undefined,
                     }}
                   >
-                    <Text size="xs" style={{ fontFamily: '"Geist Mono", monospace', color: 'rgba(255,255,255,0.4)', minWidth: 28 }}>
+                    <Text size="xs" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: 'rgba(255,255,255,0.4)', minWidth: 28 }}>
                       {c.year}
                     </Text>
                     <Text size="xs" fw={500} style={{ flex: 1 }}>{c.championName}</Text>
-                    <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                       {c.points} pts
                     </Text>
                   </Group>

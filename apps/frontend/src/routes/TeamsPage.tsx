@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { IconBuilding, IconUsers } from '@tabler/icons-react';
 import { api } from '../api';
+import { PageHero } from '../components/PageHero';
 
 const divColors = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444'];
 
@@ -40,7 +41,7 @@ function TeamTable({
             >
               {groupName}
             </Text>
-            <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+            <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
               {groupTeams.length} equipos
             </Text>
           </Group>
@@ -92,7 +93,7 @@ function TeamTable({
                   )}
                   <Table.Td ta="right">
                     <Group gap="xs" justify="flex-end">
-                      <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
                         {t.strength}
                       </Text>
                       <Box
@@ -121,7 +122,7 @@ function TeamTable({
                     </Group>
                   </Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                    <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                       {t.prestige}
                     </Text>
                   </Table.Td>
@@ -174,31 +175,11 @@ export function TeamsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconUsers size={22} color="#10B981" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Equipos
-          </Text>
-          <Text size="sm" c="dimmed" ml="auto" style={{ fontFamily: '"Geist Mono", monospace' }}>
-            {allTeams.length} equipos
-          </Text>
-        </Group>
-      </Paper>
+      <PageHero
+        icon={IconUsers}
+        iconColor="#10B981"
+        title="Equipos"
+      />
 
       <Tabs defaultValue="mine" variant="pills" mb="md">
         <Tabs.List

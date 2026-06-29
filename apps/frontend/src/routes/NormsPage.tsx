@@ -22,6 +22,7 @@ import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { money } from '../utils/format';
+import { PageHero } from '../components/PageHero';
 
 const TIPO_LABEL: Record<NormType, string> = {
   tope_plantilla: 'Tope de plantilla',
@@ -90,32 +91,12 @@ export function NormsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconGavel size={22} color="#EF4444" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Normas
-          </Text>
-        </Group>
-        <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Los equipos son autónomos: pueden incumplir. Tú decides si sancionas
-          Dejar incumplimientos sin sancionar resta prestigio.
-        </Text>
-      </Paper>
+      <PageHero
+        icon={IconGavel}
+        iconColor="#EF4444"
+        title="Normas"
+        subtitle="Los equipos son autónomos: pueden incumplir. Tú decides si sancionas. Dejar incumplimientos sin sancionar resta prestigio."
+      />
 
       <Grid>
         <Grid.Col span={{ base: 12, md: 5 }}>
@@ -157,7 +138,7 @@ export function NormsPage() {
                   step={100_000}
                   thousandSeparator="."
                   decimalSeparator=","
-                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
                 />
               ) : tipo === 'tope_edad_media' ? (
                 <NumberInput
@@ -167,7 +148,7 @@ export function NormsPage() {
                   onChange={(v) => setValor(Number(v) || 0)}
                   min={16}
                   max={40}
-                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
                 />
               ) : tipo === 'tope_extrangeros' || tipo === 'minimo_cantera' ? (
                 <NumberInput
@@ -179,7 +160,7 @@ export function NormsPage() {
                   onChange={(v) => setValor(Number(v) || 0)}
                   min={1}
                   max={25}
-                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
                 />
               ) : (
                 <NumberInput
@@ -188,7 +169,7 @@ export function NormsPage() {
                   onChange={(v) => setValor(Number(v) || 0)}
                   min={1}
                   max={100}
-                  styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
                 />
               )}
               <Button
@@ -220,7 +201,7 @@ export function NormsPage() {
                     >
                       <Table.Td fw={600}>{TIPO_LABEL[n.tipo]}</Table.Td>
                       <Table.Td ta="right">
-                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                        <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                           {formatValor(n.tipo, n.valor)}
                         </Text>
                       </Table.Td>
@@ -283,11 +264,11 @@ export function NormsPage() {
                       <Table.Td c="dimmed">{TIPO_LABEL[b.tipo]}</Table.Td>
                       <Table.Td ta="right">
                         <Group gap={4} justify="flex-end">
-                          <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>
+                          <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}>
                             {formatValor(b.tipo, b.valorActual)}
                           </Text>
-                          <Text c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>/</Text>
-                          <Text style={{ fontFamily: '"Geist Mono", monospace' }}>
+                          <Text c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>/</Text>
+                          <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                             {formatValor(b.tipo, b.valor)}
                           </Text>
                         </Group>
@@ -363,12 +344,12 @@ export function NormsPage() {
                       }}
                     >
                       <Table.Td>
-                        <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{sa.year}</Text>
+                        <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{sa.year}</Text>
                       </Table.Td>
                       <Table.Td fw={600}>{sa.teamName}</Table.Td>
                       <Table.Td c="dimmed">{sa.motivo}</Table.Td>
                       <Table.Td ta="right">
-                        <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#EF4444' }}>
+                        <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#EF4444' }}>
                           {sa.castigo}
                         </Text>
                       </Table.Td>

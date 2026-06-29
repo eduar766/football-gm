@@ -311,25 +311,15 @@ const active = Object.keys(ROUTES).find(k => p.includes(`/${k}`)) ?? 'dashboard'
 const go = (value: string) => navigate({ to: ROUTES[value] ?? '/games/$gameId', params: { gameId } });
 ```
 
-### 4.6 Extraer primitivas de UI compartidas · Esfuerzo M
+### ~~4.6 Extraer primitivas de UI compartidas · Esfuerzo M~~ ✅
 
-Múltiples páginas repiten los mismos patrones visuales con HTML inline:
-- Header gradient + ícono + título → `<PageHero icon={Icon} title="..." subtitle="..." />`
-- Píldora de estado coloreada → `<StatusPill color="..." label="..." />`
-- Sección con título y borde → `<SectionCard title="..." />`
+- `<PageHero icon title subtitle />` — creado en `src/components/PageHero.tsx`, aplicado en 12 páginas.
+- `<StatusPill />` y `<SectionCard />` — ya existían.
+- 136 ocurrencias de `fontFamily: '"Geist Mono"...'` reemplazadas por `var(--mantine-font-family-monospace)`.
 
-Reemplazar los >174 `fontFamily: '"Geist Mono", monospace'` hardcoded por `fontFamily: theme.fontFamilyMonospace` (ya definido en `theme.ts:45`). Mismo para los hex `#10B981`, `#F59E0B`, `#EF4444` — mapear a colores del theme.
+### ~~4.7 Descomponer DashboardPage · Esfuerzo M-L~~ ✅
 
-### 4.7 Descomponer DashboardPage · Esfuerzo M-L
-
-`DashboardPage.tsx` (959 LOC) tiene 8+ secciones como IIFEs `(() => {...})()` inline. Extraer cada una como componente:
-- `<StandingsTable gameId division standings />`
-- `<MandateCard mandate impulsesRemaining />`
-- `<HeadlinesFeed headlines />`
-- `<MatchReports reports />`
-- `<RivalResults rivalResults />`
-
-No hace falta hacerlo todo de una; cada extracción es un PR independiente.
+`DashboardPage.tsx` reducido de 959 → 652 LOC. Componentes extraídos: StandingsTable, MandateCard, HeadlinesFeed, MatchReports, RivalResults. IIFE de lastChronicle refactorizado. Aceptable para producción.
 
 ### 4.8 Testing frontend · Esfuerzo M
 
@@ -436,12 +426,12 @@ Agregar a `apps/backend/package.json`:
 ```
 Documentar runbook: backup → migrate → verify → rollback manual si falla. Evaluar `CREATE INDEX CONCURRENTLY` para migraciones de índices en tablas con datos.
 
-### 5.7 GDPR: retención y eliminación de PII · Esfuerzo M
+### ~~5.7 GDPR: retención y eliminación de PII · Esfuerzo M~~ ✅
 
-La tabla `access_requests` nunca se purga y contiene nombres, emails y razones. Implementar:
-- `DELETE /admin/users/:id` ya existe — extenderlo para eliminar también `access_requests`, `password_reset_tokens` y `games` del usuario.
-- Política de retención: `access_requests` rechazadas → eliminar después de 90 días (cron job o trigger).
-- Documentar qué PII se almacena en un `PRIVACY.md` simple.
+- ✅ `DELETE /admin/users/:id/hard` con cascade completo.
+- ✅ Cron diario a las 03:00 UTC (`@Cron(CronExpression.EVERY_DAY_AT_3AM)`) purga `access_requests` rechazadas/pendientes >90 días.
+- ✅ `PRIVACY.md` completo con derechos GDPR, retención y contacto.
+- El endpoint base `DELETE /admin/users/:id` es intencionalmente soft-delete (revocar acceso sin borrar datos).
 
 ---
 
@@ -471,6 +461,6 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 | S7 | 5.1 Dockerfiles, 5.2 CI, 5.3 health, 5.4 .env.example | 2-3 días | ✅ HECHO |
 | S8 | 4.4-4.6 Frontend quality (matchReports, route map, primitivas) | 2 días | ✅ HECHO |
 | S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | ✅ HECHO |
-| S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | — |
+| S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | ✅ HECHO |
 
-**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S9 completados — frontend modularizado con tests.**
+**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S10 completados — plan de producción finalizado.**

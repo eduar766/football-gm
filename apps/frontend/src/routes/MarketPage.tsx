@@ -5,6 +5,7 @@ import { IconUserPlus } from '@tabler/icons-react';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+import { PageHero } from '../components/PageHero';
 
 export function MarketPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -29,46 +30,28 @@ export function MarketPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group justify="space-between">
-          <div>
-            <Text
-              fw={800}
-              style={{
-                fontFamily: '"Plus Jakarta Sans", sans-serif',
-                fontSize: '28px',
-                color: '#F9FAFB',
-              }}
-            >
-              Mercado de adhesiones
-            </Text>
-            <Text size="sm" c="dimmed" mt="xs">
-              Solo puedes negociar equipos de tu tier o inferior. Adherir un
-              equipo tarda años y mueve prestigio entre federaciones.
-            </Text>
-          </div>
-          <Box
-            style={{
-              padding: '6px 16px',
-              borderRadius: 16,
-              background: 'linear-gradient(135deg, #D97706, #F59E0B)',
-              color: '#fff',
-              fontFamily: '"Geist Mono", monospace',
-              fontWeight: 700,
-              fontSize: '14px',
-            }}
-          >
-            Tier {market.data?.playerTier ?? '—'}
-          </Box>
-        </Group>
-      </Paper>
+      <PageHero
+        icon={IconUserPlus}
+        iconColor="#10B981"
+        title="Mercado de adhesiones"
+        subtitle="Solo puedes negociar equipos de tu tier o inferior. Adherir un equipo tarda años y mueve prestigio entre federaciones."
+      />
+
+      <Group justify="flex-end" mb="md">
+        <Box
+          style={{
+            padding: '6px 16px',
+            borderRadius: 16,
+            background: 'linear-gradient(135deg, #D97706, #F59E0B)',
+            color: '#fff',
+            fontFamily: 'var(--mantine-font-family-monospace)',
+            fontWeight: 700,
+            fontSize: '14px',
+          }}
+        >
+          Tier {market.data?.playerTier ?? '—'}
+        </Box>
+      </Group>
 
       {market.data && market.data.teams.length === 0 ? (
         <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -119,7 +102,7 @@ export function MarketPage() {
                         borderRadius: 12,
                         background: 'rgba(107,114,128,0.15)',
                         color: '#9CA3AF',
-                        fontFamily: '"Geist Mono", monospace',
+                        fontFamily: 'var(--mantine-font-family-monospace)',
                         fontWeight: 700,
                         fontSize: '13px',
                       }}
@@ -128,7 +111,7 @@ export function MarketPage() {
                     </Box>
                   </Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
                       {t.strength}
                     </Text>
                   </Table.Td>
@@ -157,7 +140,7 @@ export function MarketPage() {
                           }}
                         />
                       </Box>
-                      <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '13px', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981' }}>
+                      <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '13px', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981' }}>
                         {t.arraigo}
                       </Text>
                     </Group>

@@ -163,7 +163,7 @@ export function TeamDetailPage() {
                   fw={800}
                   size="xl"
                   c={strengthColor(t.strength)}
-                  style={{ fontFamily: '"Geist Mono", monospace', lineHeight: 1 }}
+                  style={{ fontFamily: 'var(--mantine-font-family-monospace)', lineHeight: 1 }}
                 >
                   {t.strength}
                 </Text>
@@ -220,7 +220,7 @@ export function TeamDetailPage() {
                       fw={700}
                       size="sm"
                       style={{
-                        fontFamily: '"Geist Mono", monospace',
+                        fontFamily: 'var(--mantine-font-family-monospace)',
                         color: '#F9FAFB',
                       }}
                     >
@@ -332,7 +332,7 @@ export function TeamDetailPage() {
                         if (age == null) return <Text c="dimmed">—</Text>;
                         const color = age < 27 ? '#10B981' : age <= 31 ? '#F59E0B' : '#EF4444';
                         return (
-                          <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color }}>
+                          <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color }}>
                             {age}
                           </Text>
                         );
@@ -342,7 +342,7 @@ export function TeamDetailPage() {
                       <Group gap={6} justify="flex-end" wrap="nowrap">
                         <Text
                           fw={700}
-                          style={{ fontFamily: '"Geist Mono", monospace', color: qColor }}
+                          style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: qColor }}
                         >
                           {p.calidad}
                         </Text>
@@ -427,7 +427,7 @@ export function TeamDetailPage() {
                       <Table.Td
                         ta="right"
                         fw={600}
-                        style={{ fontFamily: '"Geist Mono", monospace' }}
+                        style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}
                       >
                         {r.puestoFinal}º
                       </Table.Td>
@@ -517,7 +517,7 @@ export function TeamDetailPage() {
                           fw={800}
                           size="sm"
                           style={{
-                            fontFamily: '"Geist Mono", monospace',
+                            fontFamily: 'var(--mantine-font-family-monospace)',
                             color: p.isYouth ? '#8B5CF6' : '#F59E0B',
                           }}
                         >
@@ -587,7 +587,7 @@ export function TeamDetailPage() {
                     <Text
                       size="sm"
                       fw={700}
-                      style={{ fontFamily: '"Geist Mono", monospace', color: col }}
+                      style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: col }}
                     >
                       {s.value}
                     </Text>
@@ -645,7 +645,7 @@ export function TeamDetailPage() {
                 <Text size="xs" fw={600} c="red">Sanciones</Text>
                 {t.requirements.sanctions.map((sa, i) => (
                   <Group key={i} gap="xs">
-                    <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>Año {sa.year}</Text>
+                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>Año {sa.year}</Text>
                     <Text size="xs">{sa.motivo}</Text>
                     <Badge size="xs" color="red" variant="light">{sa.castigo}</Badge>
                   </Group>

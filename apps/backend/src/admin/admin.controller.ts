@@ -60,4 +60,17 @@ export class AdminController {
   restoreUser(@Param('id', ParseIntPipe) id: number) {
     return this.admin.restoreUser(id);
   }
+
+  @Delete('users/:id/hard')
+  deleteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: { user: AuthUser },
+  ) {
+    return this.admin.deleteUser(id, req.user.id);
+  }
+
+  @Post('access-requests/purge')
+  purgeOldAccessRequests() {
+    return this.admin.purgeOldAccessRequests();
+  }
 }

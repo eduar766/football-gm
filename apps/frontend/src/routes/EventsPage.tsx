@@ -7,6 +7,7 @@ import type { EventAction, EventStatus, EventType } from '@football-gm/contracts
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+import { PageHero } from '../components/PageHero';
 
 const TIPO_LABEL: Record<EventType, string> = {
   arbitraje_dudoso: 'Polémica arbitral',
@@ -78,33 +79,12 @@ export function EventsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconAlertTriangle size={22} color="#F59E0B" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Eventos y polémicas
-          </Text>
-        </Group>
-        <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Conflictos puntuales que el comisionado resuelve. Actuar cuesta dinero
-          (1 M€) y arraigo del equipo; ignorar resta prestigio. Si los dejas
-          pendientes al cierre, caducan y la imagen sufre más.
-        </Text>
-      </Paper>
+      <PageHero
+        icon={IconAlertTriangle}
+        iconColor="#F59E0B"
+        title="Eventos y polémicas"
+        subtitle="Conflictos puntuales que el comisionado resuelve. Actuar cuesta dinero (1 M€) y arraigo del equipo; ignorar resta prestigio. Si los dejas pendientes al cierre, caducan y la imagen sufre más."
+      />
 
       <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
         <Group justify="space-between" mb="sm">
@@ -115,7 +95,7 @@ export function EventsPage() {
               borderRadius: 14,
               background: 'rgba(245,158,11,0.15)',
               color: '#F59E0B',
-              fontFamily: '"Geist Mono", monospace',
+              fontFamily: 'var(--mantine-font-family-monospace)',
               fontWeight: 700,
               fontSize: '13px',
             }}
@@ -151,7 +131,7 @@ export function EventsPage() {
                     }}
                   >
                     <Table.Td>
-                      <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{e.year} / J{e.matchday}</Text>
+                      <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{e.year} / J{e.matchday}</Text>
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
@@ -283,7 +263,7 @@ export function EventsPage() {
                     }}
                   >
                     <Table.Td>
-                      <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{e.year} / J{e.matchday}</Text>
+                      <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{e.year} / J{e.matchday}</Text>
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">

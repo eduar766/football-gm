@@ -30,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
       border: '1px solid rgba(255,255,255,0.1)',
     }}>
       <Text size="sm" fw={600} c="dimmed">{label}</Text>
-      <Text size="sm" c={value >= 0 ? 'green' : 'red'} style={{ fontFamily: '"Geist Mono", monospace' }}>
+      <Text size="sm" c={value >= 0 ? 'green' : 'red'} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
         {value >= 0 ? '+' : '−'}{money(Math.abs(value))}
       </Text>
     </Paper>
@@ -74,10 +74,10 @@ export function EconomyChart({ data }: { data: EconomyChartData }) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: '"Geist Mono", monospace' }}
+            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
             tickFormatter={(v) => money(v)}
             width={80}
           />

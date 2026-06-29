@@ -15,6 +15,7 @@ import type { EngineNegotiationState, NegotiationDto, NegotiationRequirementDto 
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+import { PageHero } from '../components/PageHero';
 
 const LABEL: Record<EngineNegotiationState, string> = {
   gathering_requirements: 'Recogiendo requisitos',
@@ -78,7 +79,7 @@ function RequirementRow({ req }: { req: NegotiationRequirementDto }) {
         size="xs"
         fw={700}
         style={{
-          fontFamily: '"Geist Mono", monospace',
+          fontFamily: 'var(--mantine-font-family-monospace)',
           color: req.cumplido ? '#10B981' : '#EF4444',
         }}
       >
@@ -208,7 +209,7 @@ function NegotiationCard({
                     <Text
                       fw={700}
                       style={{
-                        fontFamily: '"Geist Mono", monospace',
+                        fontFamily: 'var(--mantine-font-family-monospace)',
                         fontSize: '11px',
                         color,
                       }}
@@ -290,7 +291,7 @@ function NegotiationCard({
                 suffix="%"
                 size="xs"
                 style={{ flex: 1 }}
-                styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
               />
               <Tooltip label="Guardar oferta de reparto">
                 <Button
@@ -312,14 +313,14 @@ function NegotiationCard({
       <Group gap="md" mt="sm">
         <Text size="xs" c="dimmed">
           Inicio:{' '}
-          <span style={{ fontFamily: '"Geist Mono", monospace', color: '#F9FAFB' }}>
+          <span style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F9FAFB' }}>
             {n.startedYear}
           </span>
         </Text>
         {n.state === 'gathering_requirements' && (
           <Text size="xs" c="dimmed">
             Temporadas restantes:{' '}
-            <span style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+            <span style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
               {n.requirementsSeasonsLeft}
             </span>
           </Text>
@@ -327,7 +328,7 @@ function NegotiationCard({
         {n.acceptedYear && (
           <Text size="xs" c="dimmed">
             Aceptada:{' '}
-            <span style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+            <span style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
               {n.acceptedYear}
             </span>
           </Text>
@@ -335,7 +336,7 @@ function NegotiationCard({
         {n.effectiveYear && (
           <Text size="xs" c="dimmed">
             Efectiva:{' '}
-            <span style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+            <span style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
               {n.effectiveYear}
             </span>
           </Text>
@@ -387,47 +388,12 @@ export function NegotiationsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconArrowsExchange size={22} color="#10B981" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Negociaciones
-          </Text>
-          {history.length > 0 && (
-            <Box
-              style={{
-                padding: '2px 10px',
-                borderRadius: 12,
-                background: 'rgba(239,68,68,0.15)',
-                color: '#EF4444',
-                fontFamily: '"Geist Mono", monospace',
-                fontWeight: 700,
-                fontSize: '12px',
-              }}
-            >
-              {history.length} rechazadas
-            </Box>
-          )}
-        </Group>
-        <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Ciclo: requisitos (1–3 años) → oferta → aceptada → efectiva dos años
-          después de aceptar.
-        </Text>
-      </Paper>
+      <PageHero
+        icon={IconArrowsExchange}
+        iconColor="#10B981"
+        title="Negociaciones"
+        subtitle="Ciclo: requisitos (1–3 años) → oferta → aceptada → efectiva dos años después de aceptar."
+      />
 
       {negs.data && negs.data.length === 0 ? (
         <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>

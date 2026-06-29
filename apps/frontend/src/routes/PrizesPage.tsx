@@ -22,6 +22,7 @@ import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { money } from '../utils/format';
+import { PageHero } from '../components/PageHero';
 
 const POSITION_MEDALS = ['#F59E0B', '#9CA3AF', '#D97706'];
 const POSITION_LABELS = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º', '11º', '12º', '13º', '14º', '15º', '16º'];
@@ -59,7 +60,7 @@ function ShareEditor({
       <Group gap="xs" wrap="nowrap">
         {shares.map((s, i) => (
           <Box key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <Text size="xs" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+            <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
               {POSITION_LABELS[i] ?? `${i + 1}º`}
             </Text>
             <NumberInput
@@ -74,7 +75,7 @@ function ShareEditor({
                 input: {
                   width: 52,
                   textAlign: 'center',
-                  fontFamily: '"Geist Mono", monospace',
+                  fontFamily: 'var(--mantine-font-family-monospace)',
                   fontSize: '13px',
                   fontWeight: 700,
                   background: overBudget ? 'rgba(239,68,68,0.08)' : undefined,
@@ -140,7 +141,7 @@ function ShareEditor({
           size="xs"
           fw={600}
           style={{
-            fontFamily: '"Geist Mono", monospace',
+            fontFamily: 'var(--mantine-font-family-monospace)',
             color: overBudget ? '#EF4444' : total === 100 ? '#10B981' : '#9CA3AF',
           }}
         >
@@ -228,28 +229,11 @@ export function PrizesPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconTrophy size={22} color="#F59E0B" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Premios
-          </Text>
-        </Group>
-      </Paper>
+      <PageHero
+        icon={IconTrophy}
+        iconColor="#F59E0B"
+        title="Premios"
+      />
 
       {!isPreseason && (
         <Alert color="yellow" variant="light" mb="md">
@@ -284,7 +268,7 @@ export function PrizesPage() {
                 thousandSeparator="."
                 decimalSeparator=","
                 disabled={!isPreseason}
-                styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
               />
               <ShareEditor
                 shares={leagueShares}
@@ -328,7 +312,7 @@ export function PrizesPage() {
               {ligaPrize && (
                 <Group gap="xs">
                   <Text size="xs" c="dimmed">Activo:</Text>
-                  <Text size="xs" fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#F59E0B' }}>
+                  <Text size="xs" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F59E0B' }}>
                     {money(ligaPrize.pool)}
                   </Text>
                   <Text size="xs" c="dimmed">·</Text>
@@ -387,7 +371,7 @@ export function PrizesPage() {
                 thousandSeparator="."
                 decimalSeparator=","
                 disabled={!isPreseason}
-                styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
               />
               <ShareEditor
                 shares={cupShares}
@@ -427,7 +411,7 @@ export function PrizesPage() {
                 <Table.Tr key={p.id} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
                   <Table.Td fw={600}>{p.cupName ?? '—'}</Table.Td>
                   <Table.Td ta="right">
-                    <Text fw={600} style={{ fontFamily: '"Geist Mono", monospace', color: '#8B5CF6' }}>
+                    <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#8B5CF6' }}>
                       {money(p.pool)}
                     </Text>
                   </Table.Td>
@@ -490,7 +474,7 @@ export function PrizesPage() {
                 borderRadius: 14,
                 background: 'linear-gradient(135deg, #059669, #10B981)',
                 color: '#fff',
-                fontFamily: '"Geist Mono", monospace',
+                fontFamily: 'var(--mantine-font-family-monospace)',
                 fontWeight: 700,
                 fontSize: '12px',
               }}
@@ -526,17 +510,17 @@ export function PrizesPage() {
                     }}
                   >
                     <Table.Td>
-                      <Text style={{ fontFamily: '"Geist Mono", monospace' }}>{p.year}</Text>
+                      <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{p.year}</Text>
                     </Table.Td>
                     <Table.Td fw={500}>{p.competitionLabel}</Table.Td>
                     <Table.Td ta="right">
-                      <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: POSITION_MEDALS[p.position - 1] ?? '#F9FAFB' }}>
+                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: POSITION_MEDALS[p.position - 1] ?? '#F9FAFB' }}>
                         {p.position}º
                       </Text>
                     </Table.Td>
                     <Table.Td fw={600}>{p.teamName}</Table.Td>
                     <Table.Td ta="right">
-                      <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', color: '#10B981' }}>
+                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
                         {money(p.amount)}
                       </Text>
                     </Table.Td>

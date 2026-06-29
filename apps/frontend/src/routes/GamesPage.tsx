@@ -202,7 +202,7 @@ export function GamesPage() {
               onChange={(e) => setSeed(e.currentTarget.value.replace(/[^0-9]/g, ''))}
               w={160}
               disabled={atLimit}
-              styles={{ input: { fontFamily: '"Geist Mono", monospace' } }}
+              styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
             />
             <Group>
               <Tooltip label={atLimit ? 'Límite alcanzado' : ''} disabled={!atLimit}>
@@ -284,7 +284,7 @@ export function GamesPage() {
                         <Group gap="xs" mt={2}>
                           <Text size="sm" c="dimmed">Año {g.currentYear}</Text>
                           <Text size="sm" c="dimmed">·</Text>
-                          <Text size="sm" c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                          <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
                             Seed {g.seed}
                           </Text>
                         </Group>

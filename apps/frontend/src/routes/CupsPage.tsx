@@ -30,6 +30,7 @@ import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { BracketView } from '../components/BracketView';
+import { PageHero } from '../components/PageHero';
 
 const TIPO_LABEL: Record<CupType, string> = {
   copa: 'Copa',
@@ -199,7 +200,7 @@ function LigaCupCard({ cup }: { cup: CupDto }) {
                   justifyContent: 'center',
                 }}
               >
-                <Text fw={700} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '10px', color: '#10B981' }}>
+                <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '10px', color: '#10B981' }}>
                   {g.logicalNumero}
                 </Text>
               </Box>
@@ -218,16 +219,16 @@ function LigaCupCard({ cup }: { cup: CupDto }) {
                     <Table.Td ta="center">
                       {m.played ? (
                         <Group gap="xs" justify="center">
-                          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
+                          <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
                             {m.homeGoals}
                           </Text>
-                          <Text c="dimmed" style={{ fontFamily: '"Geist Mono", monospace' }}>–</Text>
-                          <Text fw={800} style={{ fontFamily: '"Geist Mono", monospace', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
+                          <Text c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>–</Text>
+                          <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '16px', color: '#F9FAFB', minWidth: 24, textAlign: 'center' }}>
                             {m.awayGoals}
                           </Text>
                         </Group>
                       ) : (
-                        <Text c="dimmed" size="sm" style={{ fontFamily: '"Geist Mono", monospace' }}>vs</Text>
+                        <Text c="dimmed" size="sm" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>vs</Text>
                       )}
                     </Table.Td>
                     <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>
@@ -348,32 +349,12 @@ export function CupsPage() {
 
   return (
     <div className="page-enter">
-      <Paper
-        p="xl"
-        mb="md"
-        style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
-        }}
-      >
-        <Group gap="sm">
-          <IconTrophy size={22} color="#F59E0B" />
-          <Text
-            fw={800}
-            style={{
-              fontFamily: '"Plus Jakarta Sans", sans-serif',
-              fontSize: '28px',
-              color: '#F9FAFB',
-            }}
-          >
-            Copas
-          </Text>
-        </Group>
-        <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Las copas se crean en pretemporada y el calendario las integra desde
-          el inicio. El campeón entra al historial / palmarés.
-        </Text>
-      </Paper>
+      <PageHero
+        icon={IconTrophy}
+        iconColor="#F59E0B"
+        title="Copas"
+        subtitle="Las copas se crean en pretemporada y el calendario las integra desde el inicio. El campeón entra al historial / palmarés."
+      />
 
       {!isPreseason && summary.data && (
         <Alert color="gray" mb="md" title="Pretemporada solo">

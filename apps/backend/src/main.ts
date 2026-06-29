@@ -1,9 +1,11 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import express from 'express';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './global-exception.filter';
 
 async function bootstrap() {
   // Disable NestJS default body parser so we can set our own 5mb limit.
@@ -23,6 +25,7 @@ async function bootstrap() {
   }
 
   app.use(helmet());
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const frontendOrigin =
     config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:5290';
@@ -30,7 +33,7 @@ async function bootstrap() {
 
   const port = Number(config.get<string>('PORT') ?? 3000);
   await app.listen(port);
-  console.log(`football-gm backend listening on http://localhost:${port}`);
+  Logger.log(`football-gm backend listening on http://localhost:${port}`, 'Bootstrap');
 }
 
 void bootstrap();
