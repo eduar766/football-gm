@@ -111,7 +111,7 @@ Beneficios:
 - Centraliza las migraciones de forward-compat (ver 2.3).
 - Cada servicio hijo lo inyecta; no duplican lógica de persistencia.
 
-### 2.2 Split del GameController · Esfuerzo S
+### ~~2.2 Split del GameController · Esfuerzo S~~ ✅
 
 55 endpoints en un solo controller. Separar por dominio dentro del mismo `GameModule`:
 
@@ -142,13 +142,13 @@ El split de controllers es mecánico (mover métodos + rutas) y de bajo riesgo. 
 
 Resultado: los reads subsecuentes no pagan el costo de migración.
 
-### 2.4 Curar el barrel del engine · Esfuerzo S
+### ~~2.4 Curar el barrel del engine · Esfuerzo S~~ ✅
 
 `packages/engine/src/index.ts` hace `export *` de 20 módulos. Todo es público; el backend puede usar helpers internos accidentalmente.
 
 Reemplazar con exports explícitos: solo las funciones del ciclo principal (`createGame`, `startSeason`, `advanceMatchday`, `closeSeason`), los helpers de lectura (`standings`, `generateHeadlines`, etc.), y los tipos de `types.ts`. Los helpers internos de cada módulo dejan de ser accesibles.
 
-### 2.5 Eliminar duplicación de enums engine ↔ contracts · Esfuerzo S
+### ~~2.5 Eliminar duplicación de enums engine ↔ contracts · Esfuerzo S~~ ✅
 
 `contracts/src/index.ts` re-declara `NormType`, `NegotiationState`, `SeasonPhase`, `MandateType` como strings literales sincronizadas a mano con las unions del engine.
 
@@ -465,7 +465,7 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 | S1 | 1.1 IDOR, 1.2 JWT secret, 1.3 Rate limiting, 1.4 CORS+Helmet | 2-3 días | ✅ HECHO |
 | S2 | 1.5 importGame validation, 1.6 Zod auth, 1.7 email escaping, 3.1 FOR UPDATE, 3.2 pool config | 2 días | ✅ HECHO |
 | S3 | 2.1 GameStateRepository, 2.3 migraciones versionadas | 2-3 días | ✅ HECHO |
-| S4 | 2.2 Split controllers, 2.4 engine barrel, 2.5 enum dedup | 1-2 días | — |
+| S4 | 2.2 Split controllers, 2.4 engine barrel, 2.5 enum dedup | 1-2 días | ✅ HECHO |
 | S5 | 3.3 Batch inserts, 3.4-3.7 indexes + constraints | 1-2 días | — |
 | S6 | 4.1 Lazy routes, 4.2 constants+ApiError, 4.3 useMutationWithFeedback | 1-2 días | — |
 | S7 | 5.1 Dockerfiles, 5.2 CI, 5.3 health, 5.4 .env.example | 2-3 días | — |
@@ -473,4 +473,4 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 | S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | — |
 | S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | — |
 
-**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S3 completados — arquitectura lista para escalar.**
+**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S4 completados — arquitectura lista para escalar.**

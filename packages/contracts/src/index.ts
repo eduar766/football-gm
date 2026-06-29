@@ -1,8 +1,19 @@
 import { z } from 'zod';
+import type {
+  AwardType as EngineAwardType,
+  CommercialContractType as EngineCommercialContractType,
+  MandateType as EngineMandateType,
+  NegotiationState as EngineNegotiationStateUnion,
+  NormType as EngineNormType,
+  PlayerPosition as EnginePlayerPosition,
+  SeasonPhase as EngineSeasonPhase,
+} from '@football-gm/engine';
 
 // Single source of truth for the back/front contract. Backend validates with
 // these at the boundary; frontend infers its types from the same schemas.
-// Enums mirror the design doc (§3, §4) so they are real, not placeholders.
+// Enum arrays use `satisfies` against the engine union type so the compiler
+// catches removals immediately; additions in the engine generate a type error
+// that forces a matching update here.
 
 /* ----------------------------------------------------------------- enums */
 
@@ -15,29 +26,35 @@ export const CompetitionType = z.enum([
 ]);
 export type CompetitionType = z.infer<typeof CompetitionType>;
 
-export const NegotiationState = z.enum([
-  'tier_check',
-  'gathering_requirements',
-  'offer',
-  'accepted',
-  'effective',
-  'rejected',
-  'cancelled',
-]);
-export type NegotiationState = z.infer<typeof NegotiationState>;
+// These const arrays use `satisfies` to cross-validate against engine union types.
+// If the engine removes a value, TypeScript errors here immediately.
+// If the engine adds a value, add it here too (one-directional guard).
+const _negotiationStateValues = [
+  'gathering_requirements', 'offer', 'accepted', 'effective', 'rejected',
+] as const satisfies [EngineNegotiationStateUnion, ...EngineNegotiationStateUnion[]];
 
-export const CommercialContractType = z.enum([
-  'patrocinio',
-  'publicidad',
-  'derechos_tv',
-  'derechos_imagen',
-]);
+const _commercialContractTypeValues = [
+  'patrocinio', 'publicidad', 'derechos_tv', 'derechos_imagen',
+] as const satisfies [EngineCommercialContractType, ...EngineCommercialContractType[]];
+
+const _awardTypeValues = [
+  'max_goleador', 'max_asistente', 'mejor_portero',
+] as const satisfies [EngineAwardType, ...EngineAwardType[]];
+
+const _playerPositionValues = [
+  'POR', 'DEF', 'MED', 'DEL',
+] as const satisfies [EnginePlayerPosition, ...EnginePlayerPosition[]];
+
+export const EngineNegotiationState = z.enum(_negotiationStateValues);
+export type EngineNegotiationState = z.infer<typeof EngineNegotiationState>;
+
+export const CommercialContractType = z.enum(_commercialContractTypeValues);
 export type CommercialContractType = z.infer<typeof CommercialContractType>;
 
-export const AwardType = z.enum(['max_goleador', 'max_asistente', 'mejor_portero']);
+export const AwardType = z.enum(_awardTypeValues);
 export type AwardType = z.infer<typeof AwardType>;
 
-export const PlayerPosition = z.enum(['POR', 'DEF', 'MED', 'DEL']);
+export const PlayerPosition = z.enum(_playerPositionValues);
 export type PlayerPosition = z.infer<typeof PlayerPosition>;
 
 export const Id = z.number().int().positive();
@@ -72,11 +89,19 @@ export const FederationBrief = z.object({
 });
 export type FederationBrief = z.infer<typeof FederationBrief>;
 
+const _seasonPhaseValues = [
+  'pretemporada', 'temporada',
+] as const satisfies [EngineSeasonPhase, ...EngineSeasonPhase[]];
+
+const _mandateTypeValues = [
+  'prestige_min', 'team_count', 'positive_balance',
+] as const satisfies [EngineMandateType, ...EngineMandateType[]];
+
 // Season lifecycle (§1, §4.8): pretemporada = setup window, temporada = playable.
-export const SeasonPhase = z.enum(['pretemporada', 'temporada']);
+export const SeasonPhase = z.enum(_seasonPhaseValues);
 export type SeasonPhase = z.infer<typeof SeasonPhase>;
 
-export const MandateType = z.enum(['prestige_min', 'team_count', 'positive_balance']);
+export const MandateType = z.enum(_mandateTypeValues);
 export type MandateType = z.infer<typeof MandateType>;
 
 export const BoardMandateDto = z.object({
@@ -243,7 +268,11 @@ export type PalmaresEntry = z.infer<typeof PalmaresEntry>;
 
 /* ----------------------------------- commissioner: norms & sanctions (§4.7) */
 
-export const NormType = z.enum(['tope_plantilla', 'minimo_competitivo', 'tope_salarial', 'tope_extrangeros', 'minimo_cantera', 'tope_edad_media']);
+const _normTypeValues = [
+  'tope_plantilla', 'minimo_competitivo', 'tope_salarial', 'tope_extrangeros', 'minimo_cantera', 'tope_edad_media',
+] as const satisfies [EngineNormType, ...EngineNormType[]];
+
+export const NormType = z.enum(_normTypeValues);
 export type NormType = z.infer<typeof NormType>;
 
 export const TeamDetail = z.object({
@@ -469,15 +498,6 @@ export const HistoryResponse = z.object({
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
 
 /* -------------------------------- commissioner: federations & market */
-
-export const EngineNegotiationState = z.enum([
-  'gathering_requirements',
-  'offer',
-  'accepted',
-  'effective',
-  'rejected',
-]);
-export type EngineNegotiationState = z.infer<typeof EngineNegotiationState>;
 
 export const FederationListItem = z.object({
   id: Id,

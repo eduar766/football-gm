@@ -200,6 +200,9 @@ importers:
       '@football-gm/config':
         specifier: workspace:*
         version: link:../config
+      '@football-gm/engine':
+        specifier: workspace:*
+        version: link:../engine
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(postcss@8.5.14)(typescript@5.9.3)
