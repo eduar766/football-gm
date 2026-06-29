@@ -470,7 +470,7 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 | S6 | 4.1 Lazy routes, 4.2 constants+ApiError, 4.3 useMutationWithFeedback | 1-2 días | ✅ HECHO |
 | S7 | 5.1 Dockerfiles, 5.2 CI, 5.3 health, 5.4 .env.example | 2-3 días | ✅ HECHO |
 | S8 | 4.4-4.6 Frontend quality (matchReports, route map, primitivas) | 2 días | ✅ HECHO |
-| S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | — |
+| S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | ✅ HECHO |
 | S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | — |
 
-**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S8 completados — frontend con contratos compartidos y patrones consistentes.**
+**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S9 completados — frontend modularizado con tests.**
