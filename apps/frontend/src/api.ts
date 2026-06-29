@@ -184,6 +184,10 @@ export const api = {
   cups: (id: number) => req<CupsResponse>(`/games/${id}/cups`),
   createCup: (id: number, body: CreateCupRequest) =>
     req<CupsResponse>(`/games/${id}/cups`, { method: 'POST', body: JSON.stringify(body) }),
+  editCup: (id: number, cupId: number, participantTeamIds: number[]) =>
+    req<CupsResponse>(`/games/${id}/cups/${cupId}`, { method: 'PATCH', body: JSON.stringify({ participantTeamIds }) }),
+  deleteCup: (id: number, cupId: number) =>
+    req<CupsResponse>(`/games/${id}/cups/${cupId}`, { method: 'DELETE' }),
   worldRanking: (id: number) => req<WorldRankingResponse>(`/games/${id}/world-ranking`),
   worldStandings: (id: number) => req<WorldStandingsResponse>(`/games/${id}/world-standings`),
   exportGame: (id: number) => req<{ name: string; state: unknown }>(`/games/${id}/export`),

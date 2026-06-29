@@ -49,6 +49,8 @@ import {
   wageBill,
   generateHeadlines,
   detectRivalries,
+  deleteCup as engineDeleteCup,
+  editCupParticipants as engineEditCupParticipants,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -733,6 +735,35 @@ export class GameService {
       // Cup actas (§4.4): a season_records row per cup finalised this year.
       // No positions table (single-elimination bracket has only one champion);
       // palmarés counts the title automatically via vw_palmares.
+
+      // Ensure all cups that finished this season have a DB row. Recurring cups
+      // are auto-created by the engine in startSeason with a new engine ID, so
+      // they never go through the createCup endpoint and lack a DB row. Without
+      // this upsert, engineToDbCup() misses them and season_records.cup_id stays
+      // null, causing "—" in the history JOIN.
+      const playerFedDbId = fedMap.get(finished.playerFederationId);
+      const finishedCupsThisYear = finished.cups.filter(
+        (c) => c.year === closedYear && c.status === 'finalizada' && c.championTeamId !== null,
+      );
+      if (playerFedDbId != null && finishedCupsThisYear.length > 0) {
+        await tx
+          .insert(s.cups)
+          .values(
+            finishedCupsThisYear.map((c) => ({
+              gameId,
+              engineCupId: c.id,
+              federationId: playerFedDbId,
+              name: c.name,
+              tipo: c.tipo as 'liga' | 'copa',
+              formato: c.formato,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [s.cups.gameId, s.cups.engineCupId],
+            set: { name: sql`excluded.name` },
+          });
+      }
+
       const cupMap = await this.repo.engineToDbCup(gameId, tx);
       const cupsThisYear = next.cups.filter(
         (c) => c.year === closedYear && c.status === 'finalizada' && c.championTeamId !== null,
@@ -2327,6 +2358,7 @@ export class GameService {
           })),
         })),
         recurring: c.recurring,
+        participantTeamIds: c.participantTeamIds.map((id) => map.get(id) ?? id),
       })),
       schedule: state.cupSchedule.map((e) => {
         const cup = cupById.get(e.cupId);
@@ -2400,6 +2432,28 @@ export class GameService {
         formato: input.formato,
       });
 
+      await this.repo.saveState(tx, gameId, next);
+      return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async editCupParticipants(gameId: number, cupId: number, teamIds: number[]): Promise<CupsResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      // teamIds from the frontend are DB IDs; invert engineToDb to convert
+      const engineToDb = await this.repo.engineToDbTeam(gameId, tx);
+      const dbToEngine = new Map([...engineToDb.entries()].map(([k, v]) => [v, k]));
+      const engineIds = teamIds.map((id) => dbToEngine.get(id) ?? id);
+      const next = engineEditCupParticipants(state, cupId, engineIds);
+      await this.repo.saveState(tx, gameId, next);
+      return this.cupsResponse(next, engineToDb);
+    });
+  }
+
+  async deleteCup(gameId: number, cupId: number): Promise<CupsResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineDeleteCup(state, cupId);
       await this.repo.saveState(tx, gameId, next);
       return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });

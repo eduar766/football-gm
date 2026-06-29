@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -88,6 +88,31 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 1;
+  }
+
+  // v1 → v2: deduplicate recurring cups that accumulated across seasons.
+  // saveRecurringCupTemplates was saving one template per past season instead of
+  // one per cup name, causing N copies of each recurring cup in season N+1.
+  if (v < 2) {
+    // Deduplicate cups by (year, name) — keep highest id (most recently created).
+    const cupKey = (c: { year: number; name: string }) => `${c.year}::${c.name}`;
+    const bestCup = new Map<string, (typeof state.cups)[0]>();
+    for (const c of state.cups) {
+      const key = cupKey(c);
+      if (!bestCup.has(key) || c.id > bestCup.get(key)!.id) bestCup.set(key, c);
+    }
+    state.cups = [...bestCup.values()].sort((a, b) => a.id - b.id);
+
+    // Deduplicate cupTemplates by name — keep highest cupId.
+    if (state.cupTemplates) {
+      const bestTmpl = new Map<string, (typeof state.cupTemplates)[0]>();
+      for (const t of state.cupTemplates) {
+        if (!bestTmpl.has(t.name) || t.cupId > bestTmpl.get(t.name)!.cupId) bestTmpl.set(t.name, t);
+      }
+      state.cupTemplates = [...bestTmpl.values()];
+    }
+
+    state.schemaVersion = 2;
   }
 
   return state;

@@ -1,15 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import {
   CreateCupRequest,
   CreateOwnTeamRequest,
+  EditCupParticipantsRequest,
   SetLeagueFormatRequest,
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -90,5 +93,22 @@ export class CompetitionController {
     @Body(new ZodValidationPipe(CreateCupRequest)) body: CreateCupRequest,
   ) {
     return this.games.createCup(id, body);
+  }
+
+  @Patch(':id/cups/:cupId')
+  editCup(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('cupId', ParseIntPipe) cupId: number,
+    @Body(new ZodValidationPipe(EditCupParticipantsRequest)) body: EditCupParticipantsRequest,
+  ) {
+    return this.games.editCupParticipants(id, cupId, body.participantTeamIds);
+  }
+
+  @Delete(':id/cups/:cupId')
+  deleteCup(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('cupId', ParseIntPipe) cupId: number,
+  ) {
+    return this.games.deleteCup(id, cupId);
   }
 }

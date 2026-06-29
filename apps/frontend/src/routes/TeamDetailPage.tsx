@@ -6,15 +6,28 @@ import {
   Grid,
   Group,
   Paper,
+  RingProgress,
   SimpleGrid,
   Skeleton,
   Stack,
   Table,
+  Tabs,
   Text,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconHeart, IconTrophy, IconTrophyOff } from '@tabler/icons-react';
+import {
+  IconBuildingStadium,
+  IconChartBar,
+  IconCoin,
+  IconHeart,
+  IconShieldHalf,
+  IconStar,
+  IconTrophy,
+  IconTrophyOff,
+  IconUsers,
+  IconBolt,
+} from '@tabler/icons-react';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
@@ -26,11 +39,11 @@ interface PlayerWithAge {
 
 const num = (n: number) => n.toLocaleString('es-ES');
 
-const POS_COLORS: Record<string, { bg: string; text: string }> = {
-  POR: { bg: '#FCD34D', text: '#78350F' },
-  DEF: { bg: '#60A5FA', text: '#1E3A5F' },
-  MID: { bg: '#34D399', text: '#064E3B' },
-  DEL: { bg: '#F87171', text: '#7F1D1D' },
+const POS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  POR: { bg: '#FCD34D', text: '#78350F', label: 'POR' },
+  DEF: { bg: '#60A5FA', text: '#1E3A5F', label: 'DEF' },
+  MED: { bg: '#34D399', text: '#064E3B', label: 'MED' },
+  DEL: { bg: '#F87171', text: '#7F1D1D', label: 'DEL' },
 };
 
 function strengthColor(v: number) {
@@ -39,32 +52,340 @@ function strengthColor(v: number) {
   return '#EF4444';
 }
 
-function ratingColor(v: number) {
-  if (v >= 70) return '#10B981';
-  if (v >= 50) return '#F59E0B';
-  return '#EF4444';
+function strengthBg(v: number) {
+  if (v >= 70) return 'rgba(16,185,129,0.1)';
+  if (v >= 50) return 'rgba(245,158,11,0.1)';
+  return 'rgba(239,68,68,0.1)';
 }
 
-const ATTRS = [
-  { key: 'strength', label: 'Fuerza', icon: '⚡', color: '#10B981' },
-  { key: 'prestige', label: 'Prestigio', icon: '🏆', color: '#F59E0B' },
-  { key: 'arraigo', label: 'Arraigo', icon: '🏠', color: '#3B82F6' },
-  { key: 'presupuesto', label: 'Presupuesto', icon: '💰', color: '#059669' },
-  { key: 'aficion', label: 'Afición', icon: '👥', color: '#8B5CF6' },
-  { key: 'estadio', label: 'Estadio', icon: '🏟️', color: '#F97316' },
-] as const;
+/* ── Squad Table ──────────────────────────────────────────────────────── */
+
+function SquadTable({ squad }: { squad: any[] }) {
+  const grouped = ['POR', 'DEF', 'MED', 'DEL'].flatMap((pos) =>
+    (squad as any[]).filter((p: any) => p.posicion.slice(0, 3).toUpperCase() === pos)
+  );
+  const rest = (squad as any[]).filter(
+    (p: any) => !['POR', 'DEF', 'MED', 'DEL'].includes(p.posicion.slice(0, 3).toUpperCase())
+  );
+  const ordered = [...grouped, ...rest];
+
+  return (
+    <Table highlightOnHover verticalSpacing={6}>
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 52 }}>Pos</Table.Th>
+          <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Jugador</Table.Th>
+          <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 44 }} ta="center">Edad</Table.Th>
+          <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 90 }} ta="right">Calidad</Table.Th>
+          <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', width: 90 }} ta="center">Estado</Table.Th>
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {ordered.map((p: any, i: number) => {
+          const posKey = p.posicion.slice(0, 3).toUpperCase();
+          const posCol = POS_COLORS[posKey] ?? { bg: '#6B7280', text: '#F9FAFB', label: posKey };
+          const qColor = p.calidad >= 70 ? '#10B981' : p.calidad >= 50 ? '#F59E0B' : '#EF4444';
+          const age = (p as unknown as PlayerWithAge).age;
+          const ageColor = age == null ? undefined : age < 27 ? '#10B981' : age <= 31 ? '#F59E0B' : '#EF4444';
+
+          return (
+            <Table.Tr
+              key={p.id}
+              className="stagger-item"
+              style={{ animationDelay: `${i * 20}ms` }}
+            >
+              <Table.Td>
+                <Badge
+                  size="xs"
+                  variant="filled"
+                  style={{ backgroundColor: posCol.bg, color: posCol.text, fontWeight: 700, minWidth: 36, textAlign: 'center' }}
+                >
+                  {posKey}
+                </Badge>
+              </Table.Td>
+              <Table.Td>
+                <Group gap="xs" wrap="nowrap">
+                  <Text size="sm" fw={p.calidad >= 70 ? 600 : 400}>{p.name}</Text>
+                  {p.cantera && (
+                    <Box
+                      style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: '#8B5CF6', flexShrink: 0,
+                      }}
+                      title="Cantera"
+                    />
+                  )}
+                </Group>
+              </Table.Td>
+              <Table.Td ta="center">
+                {age != null ? (
+                  <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: ageColor }}>
+                    {age}
+                  </Text>
+                ) : (
+                  <Text c="dimmed" size="sm">—</Text>
+                )}
+              </Table.Td>
+              <Table.Td ta="right">
+                <Group gap={6} justify="flex-end" wrap="nowrap">
+                  <Text fw={700} size="sm" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: qColor, minWidth: 22 }}>
+                    {p.calidad}
+                  </Text>
+                  <Box style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', flexShrink: 0 }}>
+                    <Box style={{ width: `${p.calidad}%`, height: '100%', borderRadius: 2, backgroundColor: qColor }} />
+                  </Box>
+                </Group>
+              </Table.Td>
+              <Table.Td ta="center">
+                {p.injuredMatchesLeft > 0 ? (
+                  <Badge size="xs" color="red" variant="light">Lesión ×{p.injuredMatchesLeft}</Badge>
+                ) : p.matchesSuspendedLeft > 0 ? (
+                  <Badge size="xs" color="orange" variant="light">Sanción ×{p.matchesSuspendedLeft}</Badge>
+                ) : (p.yellowCardsThisSeason > 0 || p.redCardsThisSeason > 0) ? (
+                  <Group gap={4} justify="center" wrap="nowrap">
+                    {p.yellowCardsThisSeason > 0 && (
+                      <Group gap={2} wrap="nowrap">
+                        <Box style={{ width: 8, height: 10, background: '#FBBF24', borderRadius: 1 }} />
+                        <Text size="xs" c="dimmed">{p.yellowCardsThisSeason}</Text>
+                      </Group>
+                    )}
+                    {p.redCardsThisSeason > 0 && (
+                      <Group gap={2} wrap="nowrap">
+                        <Box style={{ width: 8, height: 10, background: '#EF4444', borderRadius: 1 }} />
+                        <Text size="xs" c="dimmed">{p.redCardsThisSeason}</Text>
+                      </Group>
+                    )}
+                  </Group>
+                ) : null}
+              </Table.Td>
+            </Table.Tr>
+          );
+        })}
+      </Table.Tbody>
+    </Table>
+  );
+}
+
+/* ── Position breakdown mini bar ─────────────────────────────────────── */
+
+function PositionBreakdown({ squad }: { squad: any[] }) {
+  const counts = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
+  for (const p of squad) {
+    const k = p.posicion.slice(0, 3).toUpperCase() as keyof typeof counts;
+    if (k in counts) counts[k]++;
+  }
+  const total = squad.length;
+  if (total === 0) return null;
+
+  return (
+    <Group gap="lg" mb="xs">
+      {(Object.entries(counts) as [keyof typeof counts, number][])
+        .filter(([, v]) => v > 0)
+        .map(([pos, count]) => {
+          const col = POS_COLORS[pos];
+          return (
+            <Group key={pos} gap={4}>
+              <Box style={{ width: 8, height: 8, borderRadius: 2, background: col.bg }} />
+              <Text size="xs" c="dimmed">{count} {pos}</Text>
+            </Group>
+          );
+        })}
+    </Group>
+  );
+}
+
+/* ── Trajectory section ───────────────────────────────────────────────── */
+
+function TrajectorySection({ trajectory }: { trajectory: any[] }) {
+  if (trajectory.length === 0) {
+    return <Text c="dimmed" size="sm">Sin temporadas cerradas todavía.</Text>;
+  }
+
+  const best = Math.min(...trajectory.map((r: any) => r.puestoFinal));
+
+  return (
+    <>
+      <Group gap="xl" mb="md">
+        <Box>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: '0.05em' }}>Temporadas</Text>
+          <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{trajectory.length}</Text>
+        </Box>
+        <Box>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: '0.05em' }}>Mejor puesto</Text>
+          <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>{best}º</Text>
+        </Box>
+      </Group>
+
+      <Table highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año</Table.Th>
+            <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>División</Table.Th>
+            <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Puesto</Table.Th>
+            <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Δ</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {trajectory.map((r: any, i: number) => {
+            const prev = i < trajectory.length - 1 ? trajectory[i + 1] : null;
+            let delta: number | null = null;
+            if (prev) delta = prev.puestoFinal - r.puestoFinal; // positive = improved
+            const isChamp = r.puestoFinal === 1;
+
+            return (
+              <Table.Tr
+                key={r.anio}
+                className="stagger-item"
+                style={{
+                  animationDelay: `${i * 50}ms`,
+                  background: isChamp ? 'rgba(245,158,11,0.04)' : undefined,
+                  borderLeft: isChamp ? '2px solid rgba(245,158,11,0.4)' : '2px solid transparent',
+                }}
+              >
+                <Table.Td fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.anio}</Table.Td>
+                <Table.Td c="dimmed">{r.divisionOrden != null ? `Div. ${r.divisionOrden}` : '—'}</Table.Td>
+                <Table.Td ta="right">
+                  <Group gap={4} justify="flex-end">
+                    {isChamp && <IconTrophy size={12} color="#F59E0B" />}
+                    <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: isChamp ? '#F59E0B' : undefined }}>
+                      {r.puestoFinal}º
+                    </Text>
+                  </Group>
+                </Table.Td>
+                <Table.Td ta="right">
+                  {delta != null && delta !== 0 ? (
+                    <Text fw={700} size="sm" style={{ color: delta > 0 ? '#10B981' : '#EF4444' }}>
+                      {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
+                    </Text>
+                  ) : (
+                    <Text size="xs" c="dimmed">—</Text>
+                  )}
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}
+
+/* ── Palmarés section ─────────────────────────────────────────────────── */
+
+function PalmaresSection({ palmares }: { palmares: any[] }) {
+  if (palmares.length === 0) {
+    return (
+      <Group gap="sm" mt="xs">
+        <IconTrophyOff size={16} color="rgba(255,255,255,0.2)" />
+        <Text c="dimmed" size="sm">Sin títulos aún.</Text>
+      </Group>
+    );
+  }
+
+  return (
+    <SimpleGrid cols={2} spacing="sm">
+      {palmares.map((p: any, i: number) => (
+        <Paper
+          key={`${p.competition}-${p.isYouth ? 'j' : 'a'}`}
+          p="sm"
+          radius="sm"
+          className="stagger-item"
+          style={{
+            background: p.isYouth ? 'rgba(139,92,246,0.06)' : 'rgba(245,158,11,0.06)',
+            border: `1px solid ${p.isYouth ? 'rgba(139,92,246,0.2)' : 'rgba(245,158,11,0.2)'}`,
+            animationDelay: `${i * 50}ms`,
+          }}
+        >
+          <Group gap="sm" wrap="nowrap">
+            <Box
+              style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: p.isYouth ? 'rgba(139,92,246,0.15)' : 'rgba(245,158,11,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              <IconTrophy size={14} color={p.isYouth ? '#8B5CF6' : '#F59E0B'} />
+            </Box>
+            <Box style={{ minWidth: 0, flex: 1 }}>
+              <Text
+                size="xs" fw={600}
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#F9FAFB' }}
+              >
+                {p.competition}
+              </Text>
+              <Group gap={4}>
+                <Text fw={800} size="sm" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: p.isYouth ? '#8B5CF6' : '#F59E0B' }}>
+                  {p.count}
+                </Text>
+                <Text size="xs" c="dimmed">{p.count === 1 ? 'título' : 'títulos'}</Text>
+              </Group>
+            </Box>
+          </Group>
+        </Paper>
+      ))}
+    </SimpleGrid>
+  );
+}
+
+/* ── Club Structure ───────────────────────────────────────────────────── */
+
+function ClubStructure({ t }: { t: any }) {
+  const ratings = [
+    { label: 'Cantera', value: t.academiaRating, icon: IconUsers, color: '#8B5CF6' },
+    { label: 'Cuerpo médico', value: t.medicoRating, icon: IconHeart, color: '#EF4444' },
+    { label: 'Ojeadores', value: t.ojeadoresRating, icon: IconStar, color: '#F59E0B' },
+    { label: 'Cuerpo técnico', value: t.cuerpoTecnicoRating, icon: IconChartBar, color: '#10B981' },
+  ];
+
+  return (
+    <SimpleGrid cols={2} spacing="sm">
+      {ratings.map((s, i) => {
+        const col = s.value >= 70 ? '#10B981' : s.value >= 50 ? '#F59E0B' : '#EF4444';
+        return (
+          <Paper
+            key={s.label}
+            p="sm"
+            className="stagger-item"
+            style={{
+              background: `${s.color}08`,
+              border: `1px solid ${s.color}22`,
+              borderRadius: 10,
+              animationDelay: `${i * 50}ms`,
+            }}
+          >
+            <Group gap="sm" mb="xs">
+              <Box
+                style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: `${s.color}20`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}
+              >
+                <s.icon size={14} color={s.color} />
+              </Box>
+              <Text size="xs" fw={600} c="dimmed">{s.label}</Text>
+            </Group>
+            <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: col, lineHeight: 1 }}>
+              {s.value}
+            </Text>
+            <Box mt={6} style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+              <Box style={{ width: `${s.value}%`, height: '100%', borderRadius: 2, backgroundColor: col, transition: 'width 0.4s ease' }} />
+            </Box>
+          </Paper>
+        );
+      })}
+    </SimpleGrid>
+  );
+}
+
+/* ── Main page ────────────────────────────────────────────────────────── */
 
 export function TeamDetailPage() {
-  const { gameId, teamId } = useParams({ strict: false }) as {
-    gameId: string;
-    teamId: string;
-  };
+  const { gameId, teamId } = useParams({ strict: false }) as { gameId: string; teamId: string };
   const id = Number(gameId);
   const tid = Number(teamId);
-  const team = useQuery({
-    queryKey: QK.team(id, tid),
-    queryFn: () => api.team(id, tid),
-  });
+
+  const team = useQuery({ queryKey: QK.team(id, tid), queryFn: () => api.team(id, tid) });
   const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
 
   const cultivate = useMutationWithFeedback({
@@ -76,189 +397,120 @@ export function TeamDetailPage() {
   if (team.isLoading || !team.data) {
     return (
       <Grid>
-        <Grid.Col span={{ base: 12, md: 5 }}>
-          <Skeleton height={300} radius="md" />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 7 }}>
-          <Skeleton height={250} radius="md" mb="md" />
-          <Skeleton height={150} radius="md" />
-        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 4 }}><Skeleton height={400} radius="md" /></Grid.Col>
+        <Grid.Col span={{ base: 12, md: 8 }}><Skeleton height={400} radius="md" /></Grid.Col>
       </Grid>
     );
   }
 
   const t = team.data;
 
-  const attrValues: Record<string, string | number> = {
-    strength: t.strength,
-    prestige: t.prestige,
-    arraigo: t.arraigo,
-    presupuesto: fmtMoney(t.presupuesto),
-    aficion: num(t.aficion),
-    estadio: `${t.estadioNombre ?? '—'} (${num(t.estadioAforo ?? 0)})`,
-  };
-
   return (
-    <Grid className="page-enter">
-      <Grid.Col span={{ base: 12, md: 5 }}>
-        {/* Hero Card */}
+    <Grid className="page-enter" gutter="md">
+      {/* ── Left: Hero card ── */}
+      <Grid.Col span={{ base: 12, md: 4 }}>
         <Card
-          p="xl"
+          p="lg"
           radius="lg"
           style={{
-            background: 'linear-gradient(135deg, #111820 0%, #1A2332 100%)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            background: 'linear-gradient(160deg, #111820 0%, #1A2332 100%)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            position: 'sticky',
+            top: 16,
           }}
         >
-          <Group gap="sm" mb="xs">
-            <IconTrophy size={22} color="#10B981" />
+          {/* Name + federation badges */}
+          <Group gap="xs" mb={4}>
+            <IconTrophy size={18} color="#F59E0B" style={{ flexShrink: 0 }} />
             <Text
-              style={{
-                fontFamily: '"Plus Jakarta Sans", sans-serif',
-                fontWeight: 800,
-                fontSize: '28px',
-                color: '#F9FAFB',
-              }}
+              style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 800, fontSize: '22px', color: '#F9FAFB', lineHeight: 1.2 }}
             >
               {t.name}
             </Text>
           </Group>
-
-          <Group gap="xs" mb="lg">
-            <Badge size="sm" variant="light" color="blue">
-              {t.federationName ?? 'Sin federación'}
-            </Badge>
-            <Badge size="sm" variant="light" color="gray">
-              {t.divisionName ?? 'Sin división'}
-            </Badge>
+          <Group gap="xs" mb="xl">
+            <Badge size="xs" variant="light" color="blue">{t.federationName ?? 'Sin federación'}</Badge>
+            <Badge size="xs" variant="light" color="gray">{t.divisionName ?? 'Sin división'}</Badge>
           </Group>
 
-          {/* Strength indicator */}
-          <Group align="center" gap="md" mb="lg">
-            <Box
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                background: `conic-gradient(${strengthColor(t.strength)} ${t.strength * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
+          {/* Strength ring */}
+          <Group align="center" gap="md" mb="xl">
+            <RingProgress
+              size={80}
+              thickness={7}
+              roundCaps
+              sections={[{ value: t.strength, color: strengthColor(t.strength) }]}
+              label={
+                <Text fw={800} ta="center" style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '18px', color: strengthColor(t.strength) }}>
+                  {t.strength}
+                </Text>
+              }
+            />
+            <Box>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: '0.05em' }}>Fuerza</Text>
+              <Text size="sm" c="dimmed">Rating general</Text>
               <Box
+                mt={4}
                 style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: '50%',
-                  background: '#1A2332',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexDirection: 'column',
+                  display: 'inline-block',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  background: strengthBg(t.strength),
+                  border: `1px solid ${strengthColor(t.strength)}33`,
                 }}
               >
-                <Text
-                  fw={800}
-                  size="xl"
-                  c={strengthColor(t.strength)}
-                  style={{ fontFamily: 'var(--mantine-font-family-monospace)', lineHeight: 1 }}
-                >
-                  {t.strength}
+                <Text size="xs" fw={700} style={{ color: strengthColor(t.strength) }}>
+                  {t.strength >= 70 ? 'Alto' : t.strength >= 50 ? 'Medio' : 'Bajo'}
                 </Text>
               </Box>
             </Box>
-            <Box>
-              <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-                Fuerza
-              </Text>
-              <Text size="sm" c="dimmed">
-                Rating general del equipo
-              </Text>
-            </Box>
           </Group>
 
-          {/* Attribute Grid */}
-          <SimpleGrid cols={2} spacing="sm">
-            {ATTRS.map((a, i) => (
-              <Paper
-                key={a.key}
-                withBorder
-                p="sm"
-                radius="sm"
-                className="stagger-item"
-                style={{ background: 'rgba(255,255,255,0.03)', animationDelay: `${i * 50}ms` }}
+          {/* Stat rows */}
+          <Stack gap={6}>
+            {[
+              { icon: IconBolt, label: 'Fuerza', value: String(t.strength), color: '#10B981', bar: t.strength },
+              { icon: IconTrophy, label: 'Prestigio', value: String(t.prestige), color: '#F59E0B', bar: Math.min(t.prestige * 5, 100) },
+              { icon: IconShieldHalf, label: 'Arraigo', value: String(t.arraigo), color: '#3B82F6', bar: t.arraigo },
+              { icon: IconCoin, label: 'Presupuesto', value: fmtMoney(t.presupuesto), color: '#059669', bar: null },
+              { icon: IconUsers, label: 'Afición', value: num(t.aficion), color: '#8B5CF6', bar: null },
+              { icon: IconBuildingStadium, label: 'Estadio', value: `${t.estadioNombre ?? '—'} (${num(t.estadioAforo ?? 0)})`, color: '#F97316', bar: null },
+            ].map((s) => (
+              <Box
+                key={s.label}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  background: `${s.color}08`,
+                  border: `1px solid ${s.color}18`,
+                }}
               >
-                <Group gap="sm" wrap="nowrap">
-                  <Box
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: `${a.color}26`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px',
-                      flexShrink: 0,
-                    }}
+                <Group justify="space-between" wrap="nowrap">
+                  <Group gap="xs" wrap="nowrap">
+                    <s.icon size={13} color={s.color} style={{ flexShrink: 0 }} />
+                    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>{s.label}</Text>
+                  </Group>
+                  <Text
+                    fw={700}
+                    size="sm"
+                    style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F9FAFB', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}
                   >
-                    {a.icon}
-                  </Box>
-                  <Box style={{ minWidth: 0 }}>
-                    <Text
-                      size="xs"
-                      c="dimmed"
-                      tt="uppercase"
-                      fw={500}
-                      style={{ fontSize: '10px', lineHeight: 1.2 }}
-                    >
-                      {a.label}
-                    </Text>
-                    <Text
-                      fw={700}
-                      size="sm"
-                      style={{
-                        fontFamily: 'var(--mantine-font-family-monospace)',
-                        color: '#F9FAFB',
-                      }}
-                    >
-                      {attrValues[a.key]}
-                    </Text>
-                  </Box>
+                    {s.value}
+                  </Text>
                 </Group>
-                {a.key === 'strength' && (
-                  <Box
-                    mt="xs"
-                    style={{
-                      height: 4,
-                      borderRadius: 2,
-                      background: 'rgba(255,255,255,0.08)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Box
-                      style={{
-                        width: `${t.strength}%`,
-                        height: '100%',
-                        borderRadius: 2,
-                        background:
-                          t.strength >= 70
-                            ? 'linear-gradient(90deg, #059669, #10B981)'
-                            : t.strength >= 50
-                              ? 'linear-gradient(90deg, #D97706, #F59E0B)'
-                              : 'linear-gradient(90deg, #DC2626, #EF4444)',
-                      }}
-                    />
+                {s.bar != null && (
+                  <Box mt={5} style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                    <Box style={{ width: `${s.bar}%`, height: '100%', borderRadius: 2, backgroundColor: s.color, transition: 'width 0.4s ease' }} />
                   </Box>
                 )}
-              </Paper>
+              </Box>
             ))}
-          </SimpleGrid>
+          </Stack>
+
           {summary.data?.phase === 'pretemporada' && (
             <Button
               mt="md"
+              fullWidth
               size="compact-sm"
               variant="light"
               color="blue"
@@ -266,394 +518,146 @@ export function TeamDetailPage() {
               loading={cultivate.isPending}
               onClick={() => cultivate.mutate(undefined as void)}
             >
-              Cultivar arraigo (2M€, +5-10)
+              Cultivar arraigo (2M€, +5–10)
             </Button>
+          )}
+
+          {/* Rivalries inline */}
+          {t.rivalries && t.rivalries.length > 0 && (
+            <Box mt="lg">
+              <Group gap="xs" mb="xs">
+                <IconHeart size={13} color="#EF4444" />
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.05em' }}>Rivalidades</Text>
+              </Group>
+              <Stack gap={4}>
+                {t.rivalries.map((r: any) => {
+                  const rival = r.teamBName;
+                  const { wins, draws, losses } = r.headToHead;
+                  return (
+                    <Box
+                      key={`${r.teamAId}-${r.teamBId}`}
+                      style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.12)' }}
+                    >
+                      <Group justify="space-between" wrap="nowrap">
+                        <div>
+                          <Text size="xs" fw={600}>{rival}</Text>
+                          <Text size="xs" c="dimmed">{r.seasons} {r.seasons === 1 ? 'temporada' : 'temporadas'}</Text>
+                        </div>
+                        <Group gap={3} wrap="nowrap">
+                          <Badge size="xs" color="green" variant="filled" style={{ minWidth: 26 }}>{wins}V</Badge>
+                          <Badge size="xs" color="gray" variant="filled" style={{ minWidth: 26 }}>{draws}E</Badge>
+                          <Badge size="xs" color="red" variant="filled" style={{ minWidth: 26 }}>{losses}D</Badge>
+                        </Group>
+                      </Group>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
           )}
         </Card>
       </Grid.Col>
 
-      <Grid.Col span={{ base: 12, md: 7 }}>
-        {/* Squad Table */}
-        <Paper withBorder p="md" mb="md">
-          <Group justify="space-between" mb="sm">
-            <Text fw={700}>Plantilla</Text>
-            <Text size="sm" c="dimmed">
-              {t.squad.length} jugadores
-            </Text>
-          </Group>
-          <Table striped>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Pos</Table.Th>
-                <Table.Th>Jugador</Table.Th>
-                <Table.Th ta="right">Edad</Table.Th>
-                <Table.Th ta="right">Calidad</Table.Th>
-                <Table.Th ta="right">TA</Table.Th>
-                <Table.Th ta="right">TR</Table.Th>
-                <Table.Th ta="right">Estado</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {t.squad.map((p, i) => {
-                const unavailable =
-                  p.matchesSuspendedLeft > 0 || p.injuredMatchesLeft > 0;
-                const posKey = p.posicion.slice(0, 3).toUpperCase();
-                const posCol = POS_COLORS[posKey] ?? { bg: '#6B7280', text: '#F9FAFB' };
-                const qColor =
-                  p.calidad >= 70 ? '#10B981' : p.calidad >= 50 ? '#F59E0B' : '#EF4444';
-                return (
-                  <Table.Tr
-                    key={p.id}
-                    className="stagger-item"
-                    style={
-                      unavailable
-                        ? {
-                            borderLeft: `3px solid ${
-                              p.injuredMatchesLeft > 0 ? '#EF4444' : '#F97316'
-                            }`,
-                            animationDelay: `${i * 50}ms`,
-                          }
-                        : { borderLeft: `3px solid ${posCol.bg}`, animationDelay: `${i * 50}ms` }
-                    }
-                  >
-                    <Table.Td>
-                      <Badge
-                        size="xs"
-                        variant="filled"
-                        style={{ backgroundColor: posCol.bg, color: posCol.text, fontWeight: 600 }}
-                      >
-                        {posKey}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>{p.name}</Table.Td>
-                    <Table.Td ta="right">
-                      {(() => {
-                        const age = (p as unknown as PlayerWithAge).age;
-                        if (age == null) return <Text c="dimmed">—</Text>;
-                        const color = age < 27 ? '#10B981' : age <= 31 ? '#F59E0B' : '#EF4444';
-                        return (
-                          <Text fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color }}>
-                            {age}
-                          </Text>
-                        );
-                      })()}
-                    </Table.Td>
-                    <Table.Td ta="right">
-                      <Group gap={6} justify="flex-end" wrap="nowrap">
-                        <Text
-                          fw={700}
-                          style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: qColor }}
-                        >
-                          {p.calidad}
-                        </Text>
-                        <Box
-                          style={{
-                            width: 32,
-                            height: 4,
-                            borderRadius: 2,
-                            background: 'rgba(255,255,255,0.08)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <Box
-                            style={{
-                              width: `${p.calidad}%`,
-                              height: '100%',
-                              borderRadius: 2,
-                              backgroundColor: qColor,
-                            }}
-                          />
-                        </Box>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td ta="right">{p.yellowCardsThisSeason || ''}</Table.Td>
-                    <Table.Td ta="right">{p.redCardsThisSeason || ''}</Table.Td>
-                    <Table.Td ta="right">
-                      {p.injuredMatchesLeft > 0 ? (
-                        <Badge size="xs" color="red" variant="light">
-                          Lesionado ({p.injuredMatchesLeft})
-                        </Badge>
-                      ) : p.matchesSuspendedLeft > 0 ? (
-                        <Badge size="xs" color="orange" variant="light">
-                          Sancionado ({p.matchesSuspendedLeft})
-                        </Badge>
-                      ) : null}
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-        </Paper>
+      {/* ── Right: Tabbed content ── */}
+      <Grid.Col span={{ base: 12, md: 8 }}>
+        <Tabs defaultValue="plantilla" variant="pills" radius="md">
+          <Tabs.List
+            mb="md"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: 10,
+              padding: 4,
+            }}
+          >
+            <Tabs.Tab value="plantilla" leftSection={<IconUsers size={14} />} style={{ fontWeight: 600 }}>
+              Plantilla
+              <Badge size="xs" ml={6} color="gray" variant="light">{t.squad.length}</Badge>
+            </Tabs.Tab>
+            <Tabs.Tab value="historial" leftSection={<IconChartBar size={14} />} style={{ fontWeight: 600 }}>
+              Historial
+            </Tabs.Tab>
+            <Tabs.Tab value="club" leftSection={<IconBuildingStadium size={14} />} style={{ fontWeight: 600 }}>
+              Club
+            </Tabs.Tab>
+          </Tabs.List>
 
-        {/* Trajectory Table */}
-        <Paper withBorder p="md" mb="md">
-          <Text fw={700} mb="sm">
-            Trayectoria
-          </Text>
-          {t.trajectory.length === 0 ? (
-            <Text c="dimmed" size="sm">
-              Sin temporadas cerradas todavía.
-            </Text>
-          ) : (
-            <Table striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Año</Table.Th>
-                  <Table.Th>División</Table.Th>
-                  <Table.Th ta="right">Puesto</Table.Th>
-                  <Table.Th ta="right">Tendencia</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {t.trajectory.map((r, i) => {
-                  const prev = i < t.trajectory.length - 1 ? t.trajectory[i + 1] : null;
-                  let arrow: string | null = null;
-                  let arrowColor: string | undefined;
-                  if (prev) {
-                    if (r.puestoFinal < prev.puestoFinal) {
-                      arrow = '▲';
-                      arrowColor = '#10B981';
-                    } else if (r.puestoFinal > prev.puestoFinal) {
-                      arrow = '▼';
-                      arrowColor = '#EF4444';
-                    }
-                  }
-                  const showSparkline = t.trajectory.length >= 3;
-                  return (
-                    <Table.Tr key={r.anio} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                      <Table.Td fw={700}>{r.anio}</Table.Td>
-                      <Table.Td>{r.divisionOrden ?? '—'}</Table.Td>
-                      <Table.Td
-                        ta="right"
-                        fw={600}
-                        style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}
-                      >
-                        {r.puestoFinal}º
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        {arrow ? (
-                          <Text span fw={700} style={{ color: arrowColor }}>
-                            {arrow}
-                          </Text>
-                        ) : showSparkline && i > 0 ? (
-                          <Text span size="xs" c="dimmed">
-                            —
-                          </Text>
-                        ) : null}
-                      </Table.Td>
-                    </Table.Tr>
-                  );
-                })}
-              </Table.Tbody>
-            </Table>
-          )}
-        </Paper>
+          {/* ── Plantilla ── */}
+          <Tabs.Panel value="plantilla">
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Group justify="space-between" mb="xs">
+                <Text fw={700}>Plantilla</Text>
+                <Text size="xs" c="dimmed">{t.squad.length} jugadores</Text>
+              </Group>
+              <PositionBreakdown squad={t.squad} />
+              <SquadTable squad={t.squad} />
+            </Paper>
+          </Tabs.Panel>
 
-        {/* Palmarés */}
-        <Paper withBorder p="md" mb="md">
-          <Group gap="sm" mb="sm">
-            <IconTrophy size={16} color="#F59E0B" />
-            <Text fw={700}>Palmarés</Text>
-          </Group>
-          {t.palmares.length === 0 ? (
-            <Group gap="sm">
-              <IconTrophyOff size={14} color="rgba(255,255,255,0.3)" />
-              <Text c="dimmed" size="sm">
-                Sin títulos aún.
-              </Text>
-            </Group>
-          ) : (
-            <SimpleGrid cols={2} spacing="sm">
-              {t.palmares.map((p, i) => (
-                <Paper
-                  key={`${p.competition}-${p.isYouth ? 'j' : 'a'}`}
-                  p="sm"
-                  radius="sm"
-                  className="stagger-item"
-                  style={{
-                    background: p.isYouth
-                      ? 'rgba(139,92,246,0.06)'
-                      : 'rgba(245,158,11,0.06)',
-                    border: `1px solid ${p.isYouth ? 'rgba(139,92,246,0.2)' : 'rgba(245,158,11,0.2)'}`,
-                    animationDelay: `${i * 50}ms`,
-                  }}
-                >
-                  <Group gap="sm" wrap="nowrap">
-                    <Box
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: '50%',
-                        background: p.isYouth
-                          ? 'rgba(139,92,246,0.15)'
-                          : 'rgba(245,158,11,0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <IconTrophy
-                        size={16}
-                        color={p.isYouth ? '#8B5CF6' : '#F59E0B'}
-                      />
-                    </Box>
-                    <Box style={{ minWidth: 0, flex: 1 }}>
-                      <Text
-                        size="xs"
-                        fw={600}
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: '#F9FAFB',
-                        }}
-                      >
-                        {p.competition}
-                      </Text>
-                      <Group gap={4}>
-                        <Text
-                          fw={800}
-                          size="sm"
-                          style={{
-                            fontFamily: 'var(--mantine-font-family-monospace)',
-                            color: p.isYouth ? '#8B5CF6' : '#F59E0B',
-                          }}
-                        >
-                          {p.count}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {p.count === 1 ? 'título' : 'títulos'}
-                        </Text>
-                      </Group>
-                    </Box>
-                  </Group>
+          {/* ── Historial ── */}
+          <Tabs.Panel value="historial">
+            <Stack gap="md">
+              <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #10B981' }}>
+                <Text fw={700} mb="md">Trayectoria</Text>
+                <TrajectorySection trajectory={t.trajectory} />
+              </Paper>
+
+              <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+                <Group gap="sm" mb="md">
+                  <IconTrophy size={16} color="#F59E0B" />
+                  <Text fw={700}>Palmarés</Text>
+                  {t.palmares.length > 0 && (
+                    <Badge size="xs" color="yellow" variant="light">{t.palmares.reduce((acc: number, p: any) => acc + p.count, 0)} título{t.palmares.reduce((acc: number, p: any) => acc + p.count, 0) !== 1 ? 's' : ''}</Badge>
+                  )}
+                </Group>
+                <PalmaresSection palmares={t.palmares} />
+              </Paper>
+
+              {/* Requirements & Compliance */}
+              {(t.requirements.breaches.length > 0 || t.requirements.sanctions.length > 0) && (
+                <Paper p="md" style={{ border: '1px solid rgba(239,68,68,0.3)', borderLeft: '3px solid #EF4444', background: 'rgba(239,68,68,0.03)' }}>
+                  <Text fw={700} mb="sm">Requisitos y normas</Text>
+                  {t.requirements.breaches.length > 0 && (
+                    <Stack gap={4} mb="sm">
+                      <Text size="xs" fw={600} c="red" tt="uppercase" style={{ letterSpacing: '0.04em' }}>Incumplimientos activos</Text>
+                      {t.requirements.breaches.map((b: any) => (
+                        <Group key={b.normId} gap="xs">
+                          <Box style={{ width: 6, height: 6, borderRadius: '50%', background: b.sanctioned ? '#EF4444' : '#F59E0B', flexShrink: 0 }} />
+                          <Text size="xs">
+                            {b.tipo === 'tope_plantilla' && `Fuerza ${b.valorActual} supera tope de ${b.valor}`}
+                            {b.tipo === 'minimo_competitivo' && `Fuerza ${b.valorActual} por debajo del mínimo de ${b.valor}`}
+                            {b.tipo === 'tope_salarial' && `Masa salarial supera el tope`}
+                          </Text>
+                          {b.sanctioned && <Badge size="xs" color="red" variant="light">Sancionado</Badge>}
+                        </Group>
+                      ))}
+                    </Stack>
+                  )}
+                  {t.requirements.sanctions.length > 0 && (
+                    <Stack gap={4}>
+                      <Text size="xs" fw={600} c="red" tt="uppercase" style={{ letterSpacing: '0.04em' }}>Sanciones</Text>
+                      {t.requirements.sanctions.map((sa: any, i: number) => (
+                        <Group key={i} gap="xs">
+                          <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>Año {sa.year}</Text>
+                          <Text size="xs">{sa.motivo}</Text>
+                          <Badge size="xs" color="red" variant="light">{sa.castigo}</Badge>
+                        </Group>
+                      ))}
+                    </Stack>
+                  )}
                 </Paper>
-              ))}
-            </SimpleGrid>
-          )}
-        </Paper>
-
-        {/* Rivalidades */}
-        {t.rivalries && t.rivalries.length > 0 && (
-          <Paper withBorder p="md" mb="md">
-            <Group gap="sm" mb="sm">
-              <IconHeart size={16} color="#EF4444" />
-              <Text fw={700}>Rivalidades</Text>
-            </Group>
-            <Stack gap="xs">
-              {t.rivalries.map((r) => {
-                const isA = r.teamAId !== undefined;
-                const rival = isA ? r.teamBName : r.teamAName;
-                const { wins, draws, losses } = r.headToHead;
-                return (
-                  <Paper key={`${r.teamAId}-${r.teamBId}`} withBorder p="sm" radius="sm" style={{ background: 'rgba(239,68,68,0.04)', borderColor: 'rgba(239,68,68,0.15)' }}>
-                    <Group justify="space-between">
-                      <div>
-                        <Text size="sm" fw={600}>{rival}</Text>
-                        <Text size="xs" c="dimmed">{r.seasons} temporada{r.seasons !== 1 ? 's' : ''} en posiciones adyacentes</Text>
-                      </div>
-                      <Group gap={4}>
-                        <Badge size="xs" color="green" variant="light">{wins}V</Badge>
-                        <Badge size="xs" color="gray" variant="light">{draws}E</Badge>
-                        <Badge size="xs" color="red" variant="light">{losses}D</Badge>
-                      </Group>
-                    </Group>
-                  </Paper>
-                );
-              })}
+              )}
             </Stack>
-          </Paper>
-        )}
+          </Tabs.Panel>
 
-        {/* Club Structure */}
-        <Paper withBorder p="md">
-          <Text fw={700} mb="sm">
-            Estructura del club
-          </Text>
-          <Stack gap="sm">
-            {[
-              { label: 'Cantera', value: t.academiaRating },
-              { label: 'Cuerpo médico', value: t.medicoRating },
-              { label: 'Ojeadores', value: t.ojeadoresRating },
-              { label: 'Cuerpo técnico', value: t.cuerpoTecnicoRating },
-            ].map((s, i) => {
-              const col = ratingColor(s.value);
-              return (
-                <Box key={s.label} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
-                  <Group justify="space-between" mb={4}>
-                    <Text size="sm">{s.label}</Text>
-                    <Text
-                      size="sm"
-                      fw={700}
-                      style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: col }}
-                    >
-                      {s.value}
-                    </Text>
-                  </Group>
-                  <Box
-                    style={{
-                      height: 8,
-                      borderRadius: 4,
-                      background: 'rgba(255,255,255,0.08)',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Box
-                      style={{
-                        width: `${s.value}%`,
-                        height: '100%',
-                        borderRadius: 4,
-                        backgroundColor: col,
-                        transition: 'width 0.3s ease',
-                      }}
-                    />
-                  </Box>
-                </Box>
-              );
-            })}
-          </Stack>
-        </Paper>
-
-        {/* Requirements & Compliance */}
-        {(t.requirements.breaches.length > 0 || t.requirements.sanctions.length > 0) && (
-          <Paper withBorder p="md" mt="md" style={{ borderLeft: '3px solid #EF4444' }}>
-            <Text fw={700} mb="sm">
-              Requisitos y normas
-            </Text>
-            {t.requirements.breaches.length > 0 && (
-              <Stack gap={4} mb="sm">
-                <Text size="xs" fw={600} c="red">Incumplimientos activos</Text>
-                {t.requirements.breaches.map((b) => (
-                  <Group key={`${b.normId}`} gap="xs">
-                    <Box style={{ width: 6, height: 6, borderRadius: '50%', background: b.sanctioned ? '#EF4444' : '#F59E0B', flexShrink: 0 }} />
-                    <Text size="xs">
-                      {b.tipo === 'tope_plantilla' && `Fuerza ${b.valorActual} supera tope de ${b.valor}`}
-                      {b.tipo === 'minimo_competitivo' && `Fuerza ${b.valorActual} por debajo del mínimo de ${b.valor}`}
-                      {b.tipo === 'tope_salarial' && `Masa salarial supera el tope`}
-                    </Text>
-                    {b.sanctioned && (
-                      <Badge size="xs" color="red" variant="light">Sancionado</Badge>
-                    )}
-                  </Group>
-                ))}
-              </Stack>
-            )}
-            {t.requirements.sanctions.length > 0 && (
-              <Stack gap={4}>
-                <Text size="xs" fw={600} c="red">Sanciones</Text>
-                {t.requirements.sanctions.map((sa, i) => (
-                  <Group key={i} gap="xs">
-                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>Año {sa.year}</Text>
-                    <Text size="xs">{sa.motivo}</Text>
-                    <Badge size="xs" color="red" variant="light">{sa.castigo}</Badge>
-                  </Group>
-                ))}
-              </Stack>
-            )}
-          </Paper>
-        )}
+          {/* ── Club ── */}
+          <Tabs.Panel value="club">
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <Text fw={700} mb="md">Estructura del club</Text>
+              <ClubStructure t={t} />
+            </Paper>
+          </Tabs.Panel>
+        </Tabs>
       </Grid.Col>
     </Grid>
   );

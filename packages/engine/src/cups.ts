@@ -488,16 +488,26 @@ export function forceCompleteIncompleteCups(s: GameState): void {
 
 // Save templates from completed recurring cups and recreate them for next season.
 export function saveRecurringCupTemplates(s: GameState): void {
-  // Remove old templates and save new ones from this season's completed recurring cups.
-  s.cupTemplates = s.cups
+  // Deduplicate by name — keep only the most recent finalized instance of each
+  // recurring cup so we don't spawn N copies after N seasons.
+  const seen = new Set<string>();
+  const templates: typeof s.cupTemplates = [];
+  const byNewest = s.cups
     .filter((c) => c.recurring && c.status === 'finalizada')
-    .map((c) => ({
+    .sort((a, b) => b.id - a.id); // newest engine ID first
+  for (const c of byNewest) {
+    if (seen.has(c.name)) continue;
+    seen.add(c.name);
+    templates.push({
+      cupId: c.id,
       name: c.name,
       tipo: c.tipo,
       formato: c.formato,
       categoria: c.categoria,
       participantTeamIds: c.participantTeamIds,
-    }));
+    });
+  }
+  s.cupTemplates = templates;
 }
 
 // Recreate recurring cups from templates. Called at the start of each new pretemporada.
@@ -562,4 +572,54 @@ export function recreateRecurringCups(s: GameState): void {
       recurring: true,
     });
   }
+}
+
+// Edit a cup's participant list. Only allowed in pretemporada.
+// Clears the bracket so it is rebuilt at startSeason.
+export function editCupParticipants(
+  prev: GameState,
+  cupId: number,
+  newTeamIds: number[],
+): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+
+  const unique = [...new Set(newTeamIds)];
+  const validSet = new Set(prev.teams.map((t) => t.id));
+  const valid = unique.filter((id) => validSet.has(id));
+  if (valid.length < 2) return prev;
+
+  const s = structuredClone(prev);
+
+  // Update an en_curso cup (newly created this pretemporada, bracket not yet built)
+  const activeCup = s.cups.find((c) => c.id === cupId && c.status === 'en_curso');
+  if (activeCup) {
+    activeCup.participantTeamIds = valid;
+    activeCup.rounds = [];
+  }
+
+  // Update recurring template (cup from previous season, not yet recreated)
+  const tmpl = (s.cupTemplates ?? []).find((t) => t.cupId === cupId);
+  if (tmpl) {
+    tmpl.participantTeamIds = valid;
+    // Also update the finalizada cup so the UI reflects the change immediately
+    const finCup = s.cups.find((c) => c.id === cupId && c.status === 'finalizada');
+    if (finCup) finCup.participantTeamIds = valid;
+  }
+
+  return s;
+}
+
+// Remove a cup entirely. History (season_records in DB) is preserved.
+// Cannot delete a cup that is actively being played mid-season.
+export function deleteCup(prev: GameState, cupId: number): GameState {
+  const cup = prev.cups.find((c) => c.id === cupId);
+  if (!cup) return prev;
+  if (prev.phase === 'temporada' && cup.status === 'en_curso') return prev;
+
+  const s = structuredClone(prev);
+  s.cups = s.cups.filter((c) => c.id !== cupId);
+  s.cupTemplates = (s.cupTemplates ?? []).filter((t) => t.cupId !== cupId);
+  s.competitionPrizes = s.competitionPrizes.filter((cp) => cp.cupId !== cupId);
+  s.cupSchedule = (s.cupSchedule ?? []).filter((e) => e.cupId !== cupId);
+  return s;
 }

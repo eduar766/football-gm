@@ -1,8 +1,9 @@
-import { Badge, Box, Grid, Group, Paper, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
+import { useMemo } from 'react';
+import { Badge, Box, Grid, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconHistory, IconMedal, IconTrophy, IconWorld } from '@tabler/icons-react';
-import type { AwardType, RecordBookDto, TeamTrajectoryData } from '@football-gm/contracts';
+import { IconHistory, IconMedal, IconTable, IconTrophy, IconWorld } from '@tabler/icons-react';
+import type { AwardType, RecordBookDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
 import {
   CartesianGrid,
   Legend,
@@ -31,10 +32,101 @@ const AWARD_ICON: Record<AwardType, string> = {
 
 const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#D97706'];
 
+function CompetitionRecordsTable({
+  records,
+  isCup,
+  gameId,
+}: {
+  records: SeasonRecordDto[];
+  isCup: boolean;
+  gameId: string;
+}) {
+  const accentColor = isCup ? '#F59E0B' : '#10B981';
+  return (
+    <Table>
+      <Table.Thead>
+        <Table.Tr>
+          {(['Año', 'Campeón'] as const).map((h) => (
+            <Table.Th
+              key={h}
+              style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            >
+              {h}
+            </Table.Th>
+          ))}
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {records.map((r, i) => (
+          <Table.Tr
+            key={`${r.anio}-${r.championTeamId}`}
+            className="stagger-item"
+            style={{
+              borderLeft: i === 0 ? `3px solid ${accentColor}` : i < 3 ? `3px solid ${MEDAL_COLORS[i]}` : '3px solid transparent',
+              background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+              animationDelay: `${i * 40}ms`,
+            }}
+          >
+            <Table.Td>
+              <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: i === 0 ? accentColor : undefined }}>
+                {r.anio}
+              </Text>
+            </Table.Td>
+            <Table.Td>
+              <Link
+                to="/games/$gameId/teams/$teamId"
+                params={{ gameId, teamId: String(r.championTeamId) }}
+              >
+                <Group gap="xs">
+                  {i < 3 && (
+                    <Box
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: MEDAL_COLORS[i],
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Text style={{ fontSize: '10px', fontWeight: 800, color: '#000' }}>{i + 1}</Text>
+                    </Box>
+                  )}
+                  <Text fw={i < 3 ? 700 : 500}>{r.championName}</Text>
+                </Group>
+              </Link>
+            </Table.Td>
+          </Table.Tr>
+        ))}
+      </Table.Tbody>
+    </Table>
+  );
+}
+
 export function HistoryPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
   const hist = useQuery({ queryKey: ['history', id], queryFn: () => api.history(id) });
+
+  const records = hist.data?.records ?? [];
+
+  // All hooks before any early return.
+  const competitionGroups = useMemo(() => {
+    const map = new Map<string, { isCup: boolean; records: SeasonRecordDto[] }>();
+    for (const r of records) {
+      const label = r.cupName ?? r.divisionName ?? 'Liga';
+      const isCup = r.cupName != null;
+      if (!map.has(label)) map.set(label, { isCup, records: [] });
+      map.get(label)!.records.push(r);
+    }
+    return [...map.entries()].sort(([, aVal], [, bVal]) => {
+      if (!aVal.isCup && bVal.isCup) return -1;
+      if (aVal.isCup && !bVal.isCup) return 1;
+      return 0;
+    });
+  }, [records]);
 
   if (hist.isLoading) {
     return (
@@ -51,13 +143,14 @@ export function HistoryPage() {
     );
   }
 
-  const records = hist.data?.records ?? [];
   const palmares = hist.data?.palmares ?? [];
   const awards = hist.data?.awards ?? [];
   const topScorers = hist.data?.topScorers ?? [];
   const rivalChampions = hist.data?.rivalChampions ?? [];
   const trajectoryData = hist.data?.trajectoryData ?? [];
   const recordBook = hist.data?.recordBook ?? null;
+
+  const firstCompLabel = competitionGroups[0]?.[0];
 
   return (
     <div className="page-enter">
@@ -101,74 +194,45 @@ export function HistoryPage() {
                 {records.length === 0 ? (
                   <Text c="dimmed" size="sm">Aún no se ha cerrado ninguna temporada.</Text>
                 ) : (
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Año</Table.Th>
-                        <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Campeón</Table.Th>
-                        <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Competición</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {records.map((r, i) => (
-                        <Table.Tr
-                          key={`${r.anio}-${r.championTeamId}`}
-                          className="stagger-item"
-                          style={{
-                            borderLeft: `3px solid ${i < 3 ? MEDAL_COLORS[i] : 'transparent'}`,
-                            background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                            animationDelay: `${i * 50}ms`,
-                          }}
-                        >
-                          <Table.Td>
-                            <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.anio}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Link
-                              to="/games/$gameId/teams/$teamId"
-                              params={{ gameId, teamId: String(r.championTeamId) }}
-                            >
-                              <Group gap="xs">
-                                {i < 3 && (
-                                  <Box
-                                    style={{
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: '50%',
-                                      background: MEDAL_COLORS[i],
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    <Text style={{ fontSize: '10px', fontWeight: 800, color: '#000' }}>
-                                      {i + 1}
-                                    </Text>
-                                  </Box>
-                                )}
-                                <Text fw={600}>{r.championName}</Text>
-                              </Group>
-                            </Link>
-                          </Table.Td>
-                          <Table.Td>
-                            {r.cupName ? (
-                              <Badge
-                                size="sm"
-                                variant="light"
-                                color="yellow"
-                                leftSection={<IconTrophy size={10} />}
-                                style={{ fontWeight: 600 }}
-                              >
-                                {r.cupName}
-                              </Badge>
-                            ) : (
-                              <Text size="sm" c="dimmed">{r.divisionName ?? '—'}</Text>
-                            )}
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                  <Tabs defaultValue={firstCompLabel} variant="pills" radius="sm">
+                    <ScrollArea>
+                      <Tabs.List
+                        mb="sm"
+                        style={{
+                          flexWrap: 'nowrap',
+                          gap: 4,
+                          background: 'rgba(255,255,255,0.02)',
+                          borderRadius: 8,
+                          padding: 3,
+                          minWidth: 'max-content',
+                        }}
+                      >
+                        {competitionGroups.map(([label, { isCup, records: compRecords }]) => (
+                          <Tabs.Tab
+                            key={label}
+                            value={label}
+                            leftSection={isCup ? <IconTrophy size={12} /> : <IconTable size={12} />}
+                            style={{ fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                          >
+                            {label}
+                            <Badge size="xs" ml={4} variant="light" color={isCup ? 'yellow' : 'green'}>
+                              {compRecords.length}
+                            </Badge>
+                          </Tabs.Tab>
+                        ))}
+                      </Tabs.List>
+                    </ScrollArea>
+
+                    {competitionGroups.map(([label, { isCup, records: compRecords }]) => (
+                      <Tabs.Panel key={label} value={label}>
+                        <CompetitionRecordsTable
+                          records={compRecords}
+                          isCup={isCup}
+                          gameId={gameId}
+                        />
+                      </Tabs.Panel>
+                    ))}
+                  </Tabs>
                 )}
               </Paper>
             </Grid.Col>

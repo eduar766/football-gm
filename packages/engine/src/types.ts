@@ -217,6 +217,7 @@ export interface Cup {
 
 // Template for a recurring cup — saved at season close and recreated each pretemporada.
 export interface CupTemplate {
+  cupId: number; // source cup ID, for matching when editing
   name: string;
   tipo: CupType;
   formato: CupFormat;

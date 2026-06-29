@@ -1003,8 +1003,14 @@ export const CupDto = z.object({
   championTeamName: z.string().nullable(),
   rounds: z.array(CupRoundDto),
   recurring: z.boolean(),
+  participantTeamIds: z.array(Id),
 });
 export type CupDto = z.infer<typeof CupDto>;
+
+export const EditCupParticipantsRequest = z.object({
+  participantTeamIds: z.array(Id).min(2).max(32),
+});
+export type EditCupParticipantsRequest = z.infer<typeof EditCupParticipantsRequest>;
 
 export const CupScheduleEntryDto = z.object({
   matchday: z.number().int(),
