@@ -7,7 +7,7 @@
 import { randInt } from './rng';
 import { generateFixtures } from './fixtures';
 import { simulateMatch } from './match';
-import type { GameState, RivalFixture, RivalMatchResult, RivalSeasonRecord, RivalStandingRow, SeasonRecord, Team } from './types';
+import type { GameState, Player, RivalFixture, RivalMatchResult, RivalSeasonRecord, RivalStandingRow, SeasonRecord, Team } from './types';
 
 // ── Name generation ──────────────────────────────────────────────────────────
 
@@ -117,6 +117,98 @@ export function generateRivalFixtures(s: GameState): void {
   s.rivalFixtures = fixtures;
   s.rivalCurrentMatchday = 0;
   s.rivalLastMatchdayResults = [];
+}
+
+// ── Fase 11.3: processInterLeagueTransfers ───────────────────────────────────
+
+// Called at startSeason (after generateRivalPlayers resets goals). Uses the
+// previous season's rivalSeasonRecords to identify star players from weaker
+// rival federations and probabilistically bring them to the player's league.
+// All randomness via rivalRng — never touches state.rng.
+export function processInterLeagueTransfers(s: GameState): void {
+  if (s.rivalSeasonRecords.length === 0) return;
+  const prevYear = s.year - 1;
+  const prevRecords = s.rivalSeasonRecords.filter(r => r.year === prevYear);
+  if (prevRecords.length === 0) return;
+
+  // Player league must have at least one team to receive a star.
+  const playerTeams = s.teams.filter(
+    t => t.federationId === s.playerFederationId && t.divisionOrden !== null,
+  );
+  if (playerTeams.length === 0) return;
+
+  const fedById = new Map(s.federations.map(f => [f.id, f]));
+  const playerById = new Map(s.rivalPlayers.map(p => [p.id, p]));
+
+  for (const record of prevRecords) {
+    if (!record.topScorer) continue;
+    const rivalFed = fedById.get(record.federationId);
+    if (!rivalFed || rivalFed.isPlayer) continue;
+
+    const prestigeDiff = s.prestige - rivalFed.prestige;
+    if (prestigeDiff < 20) continue; // player league must be meaningfully stronger
+
+    // Probability scales with prestige gap: 15% base + 1% per point over 20, capped 60%.
+    const prob = Math.min(0.60, 0.15 + (prestigeDiff - 20) * 0.01);
+    if (randInt(s.rivalRng, 0, 99) >= Math.round(prob * 100)) continue;
+
+    // Find the rival player entity (may have been removed in a previous iteration).
+    const rivalPlayer = playerById.get(record.topScorer.playerId);
+    if (!rivalPlayer) continue;
+
+    // Send them to the highest-strength team in the player's league.
+    const destination = playerTeams.reduce((best, t) => t.strength > best.strength ? t : best);
+
+    const calidad = Math.min(95, Math.max(45, record.topScorer.goals * 3));
+    const fee = Math.round(calidad * 50_000);
+
+    if (s.treasury < fee) continue; // federation can't afford the attraction bonus
+
+    // Create a full Player entity for the player's league.
+    const newPlayer: Player = {
+      id: s.nextPlayerId++,
+      teamId: destination.id,
+      name: record.topScorer.name,
+      posicion: 'DEL',
+      calidad,
+      season: { goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0 },
+      matchesSuspendedLeft: 0,
+      injuredMatchesLeft: 0,
+      age: 24 + randInt(s.rivalRng, 0, 6), // 24–30
+      nationality: 'extranjero',
+      cantera: false,
+    };
+    s.players.push(newPlayer);
+
+    // Deduct the attraction fee from the federation treasury.
+    s.treasury -= fee;
+
+    // Weaken the rival team by 1-2 points.
+    const rivalTeam = s.teams.find(t => t.id === rivalPlayer.teamId);
+    if (rivalTeam) {
+      rivalTeam.strength = Math.max(25, rivalTeam.strength - randInt(s.rivalRng, 1, 2));
+    }
+
+    // Remove the rival player so they don't appear twice.
+    const idx = s.rivalPlayers.indexOf(rivalPlayer);
+    if (idx !== -1) s.rivalPlayers.splice(idx, 1);
+    playerById.delete(rivalPlayer.id);
+
+    // Log to the transfer history with isInternational flag.
+    s.transfers.push({
+      year: s.year,
+      playerId: newPlayer.id,
+      playerName: newPlayer.name,
+      fromTeamId: rivalPlayer.teamId,
+      fromTeamName: record.topScorer.teamName,
+      toTeamId: destination.id,
+      toTeamName: destination.name,
+      calidad,
+      transferFee: fee,
+      isInternational: true,
+      fromFederationName: rivalFed.name,
+    });
+  }
 }
 
 // ── Fase 11.1: stepRivalMatchdays ────────────────────────────────────────────
@@ -344,6 +436,28 @@ export function runRivalNegotiations(s: GameState): void {
     target.arraigo = Math.max(10, target.arraigo - 15);
     pursuer.prestige = Math.min(100, pursuer.prestige + prestigeXfer);
     victim.prestige = Math.max(0, victim.prestige - prestigeXfer);
+
+    // 11.3 — Rival player poaching: move the victim's top scorer to the pursuer.
+    // Requires prestige gap > 25 and the player pool to be non-empty.
+    if (pursuer.prestige - victim.prestige > 25 && s.rivalPlayers.length > 0) {
+      const victimPlayerTeams = s.teams
+        .filter(t => t.federationId === victim.id && t.divisionOrden !== null)
+        .map(t => t.id);
+      const victimPlayers = s.rivalPlayers.filter(p => victimPlayerTeams.includes(p.teamId));
+      if (victimPlayers.length > 0) {
+        const topScorer = victimPlayers.reduce((a, b) => a.goals >= b.goals ? a : b);
+        // Only poach if this player scored at least once (has actual quality signal).
+        if (topScorer.goals > 0) {
+          const pursuerTeams = s.teams.filter(
+            t => t.federationId === pursuer.id && t.divisionOrden !== null,
+          );
+          if (pursuerTeams.length > 0) {
+            const destTeam = pursuerTeams.reduce((a, b) => a.strength > b.strength ? a : b);
+            topScorer.teamId = destTeam.id;
+          }
+        }
+      }
+    }
   }
 }
 

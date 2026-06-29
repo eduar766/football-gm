@@ -450,6 +450,9 @@ export interface TransferEntry {
   toTeamName: string;
   calidad: number;
   transferFee: number;
+  // Fase 11.3: set when the player arrives from a rival federation.
+  isInternational?: boolean;
+  fromFederationName?: string;
 }
 
 // Mid-season commissioner actions (Proposal 1: Mid-Season Agency).

@@ -1938,6 +1938,10 @@ export class GameService {
       toTeamId: map.get(t.toTeamId) ?? t.toTeamId,
       toTeamName: t.toTeamName,
       calidad: t.calidad,
+      ...(t.isInternational && {
+        isInternational: t.isInternational,
+        fromFederationName: t.fromFederationName,
+      }),
     }));
     // Latest year present in the log; 0 when there's no history yet.
     const latestYear = dto.reduce((acc, t) => Math.max(acc, t.year), 0);

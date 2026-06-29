@@ -33,6 +33,7 @@ import { runTransferWindow } from './transfers';
 import {
   generateRivalFixtures,
   generateRivalPlayers,
+  processInterLeagueTransfers,
   stepRivalMatchdays,
   finalizeRivalSeason,
 } from './rival-sim';
@@ -484,9 +485,11 @@ export function startSeason(prev: GameState): GameState {
   maybeChainEvents(s, s.year - 1);
 
   // 11.1/11.2 — Pre-generate rival fixtures and virtual players (uses rivalRng).
+  // 11.3 — After generating players, run inter-league transfers from last season's stars.
   if (s.confederations.length > 0) {
     generateRivalPlayers(s); // resets goals; generates players first season only
     generateRivalFixtures(s);
+    processInterLeagueTransfers(s); // stars from weaker rivals join player's league
   }
 
   return s;
