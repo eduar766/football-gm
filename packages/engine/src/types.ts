@@ -505,7 +505,7 @@ export interface RivalPlayer {
   goals: number; // current season; reset at generateRivalPlayers each startSeason
 }
 
-// Fase 11.2: season summary for one rival federation — champion, top scorer, relegated.
+// Fase 11.2/11.4: season summary for one rival federation — champion, cup, top scorer, relegated.
 export interface RivalSeasonRecord {
   year: number;
   federationId: number;
@@ -515,6 +515,8 @@ export interface RivalSeasonRecord {
   runnerUpName: string | null;
   topScorer: { playerId: number; name: string; teamName: string; goals: number } | null;
   relegated: string[];
+  // Fase 11.4: winner of the top-4 mini-cup simulated at closeSeason.
+  cupWinner?: { name: string; teamId: number };
 }
 
 // Fase 11: individual rival fixture (pre-generated at startSeason).

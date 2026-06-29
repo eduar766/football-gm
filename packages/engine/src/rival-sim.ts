@@ -4,7 +4,7 @@
 // stepRivalMatchdays (advanceMatchday), finalizeRivalSeason (closeSeason).
 // All functions use rivalRng exclusively; never touch state.rng.
 
-import { randInt } from './rng';
+import { randInt, type RngState } from './rng';
 import { generateFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import type { GameState, Player, RivalFixture, RivalMatchResult, RivalSeasonRecord, RivalStandingRow, SeasonRecord, Team } from './types';
@@ -59,6 +59,13 @@ function applyResult(
 
 function sortRows(rows: RivalStandingRow[]): void {
   rows.sort((a, b) => b.points - a.points || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor);
+}
+
+// Fase 11.4: single-leg cup match; ties resolved by penalty shootout (50/50).
+function playCupMatch(home: Team, away: Team, rng: RngState): Team {
+  const { homeGoals, awayGoals } = simulateMatch(home, away, rng);
+  if (homeGoals !== awayGoals) return homeGoals > awayGoals ? home : away;
+  return randInt(rng, 0, 1) === 0 ? home : away;
 }
 
 // ── Fase 11.2: generateRivalPlayers ──────────────────────────────────────────
@@ -335,6 +342,21 @@ export function finalizeRivalSeason(s: GameState): void {
     const relegationCount = rows.length > 6 ? 2 : 1;
     const relegated = rows.slice(-relegationCount).map(r => r.name);
 
+    // 11.4 — Mini-cup: top 4 of the top division (orden 1) per federation.
+    let cupWinner: { name: string; teamId: number } | undefined;
+    if (div.orden === 1 && rows.length >= 4) {
+      const t1 = teamById.get(rows[0].teamId);
+      const t2 = teamById.get(rows[1].teamId);
+      const t3 = teamById.get(rows[2].teamId);
+      const t4 = teamById.get(rows[3].teamId);
+      if (t1 && t2 && t3 && t4) {
+        const sf1Winner = playCupMatch(t1, t4, s.rivalRng);
+        const sf2Winner = playCupMatch(t2, t3, s.rivalRng);
+        const finalWinner = playCupMatch(sf1Winner, sf2Winner, s.rivalRng);
+        cupWinner = { name: finalWinner.name, teamId: finalWinner.id };
+      }
+    }
+
     s.rivalSeasonRecords.push({
       year: s.year,
       federationId: div.federationId,
@@ -344,6 +366,7 @@ export function finalizeRivalSeason(s: GameState): void {
       runnerUpName,
       topScorer,
       relegated,
+      cupWinner,
     });
   }
 

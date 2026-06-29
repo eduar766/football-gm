@@ -241,7 +241,7 @@ export function FederationPage() {
           <Table>
             <Table.Thead>
               <Table.Tr>
-                {['Año', 'Campeón', 'Subcampeón', 'Pichichi', 'Descensos'].map(h => (
+                {['Año', 'Campeón', 'Copa', 'Subcampeón', 'Pichichi', 'Descensos'].map(h => (
                   <Table.Th key={h} style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {h}
                   </Table.Th>
@@ -268,6 +268,16 @@ export function FederationPage() {
                       <Box style={{ width: 6, height: 6, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
                       <Text fw={600} size="sm">{r.championName}</Text>
                     </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    {r.cupWinner ? (
+                      <Group gap={6}>
+                        <IconTrophy size={12} color="#8B5CF6" />
+                        <Text size="sm" fw={500} style={{ color: '#C4B5FD' }}>{r.cupWinner.name}</Text>
+                      </Group>
+                    ) : (
+                      <Text size="sm" c="dimmed">—</Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">{r.runnerUpName ?? '—'}</Text>

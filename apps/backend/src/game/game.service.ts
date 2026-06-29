@@ -1429,6 +1429,7 @@ export class GameService {
             runnerUpName: r.runnerUpName ?? null,
             topScorer: r.topScorer ?? null,
             relegated: r.relegated,
+            cupWinner: r.cupWinner,
           }))
       : undefined;
 

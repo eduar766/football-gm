@@ -304,7 +304,7 @@ export const FederationTeamItem = z.object({
 });
 export type FederationTeamItem = z.infer<typeof FederationTeamItem>;
 
-// Fase 11.2: rich per-season record for a rival federation (defined before FederationOverview).
+// Fase 11.2/11.4: rich per-season record for a rival federation (defined before FederationOverview).
 export const RivalSeasonRecordDto = z.object({
   year: z.number().int(),
   federationId: z.number().int(),
@@ -317,6 +317,8 @@ export const RivalSeasonRecordDto = z.object({
     goals: z.number().int(),
   }).nullable(),
   relegated: z.array(z.string()),
+  // Fase 11.4: winner of the top-4 mini-cup.
+  cupWinner: z.object({ name: z.string(), teamId: z.number().int() }).optional(),
 });
 export type RivalSeasonRecordDto = z.infer<typeof RivalSeasonRecordDto>;
 
