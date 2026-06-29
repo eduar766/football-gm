@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -57,6 +58,29 @@ export const awardType = pgEnum('award_type', [
   'max_goleador',
   'max_asistente',
   'mejor_portero',
+]);
+
+export const normType = pgEnum('norm_type', [
+  'tope_plantilla',
+  'minimo_competitivo',
+  'tope_salarial',
+  'tope_extrangeros',
+  'minimo_cantera',
+  'tope_edad_media',
+]);
+
+export const negotiationRequirementType = pgEnum('negotiation_requirement_type', [
+  'prestigio',
+  'estadio',
+  'reparto',
+]);
+
+export const leagueFormat = pgEnum('league_format', ['ida', 'ida_vuelta']);
+
+export const cupFormat = pgEnum('cup_format', [
+  'eliminatoria',
+  'eliminatoria_ida_vuelta',
+  'liga',
 ]);
 
 /* ------------------------------------------------------------------ users */
@@ -137,7 +161,7 @@ export const federations = pgTable(
   },
   (t) => [
     index('federations_game_idx').on(t.gameId),
-    index('federations_engine_idx').on(t.gameId, t.engineFederationId),
+    uniqueIndex('federations_engine_uq').on(t.gameId, t.engineFederationId),
   ],
 );
 
@@ -152,7 +176,7 @@ export const leagues = pgTable(
       .notNull()
       .references(() => federations.id),
     name: text('name').notNull(),
-    format: text('format'),
+    format: leagueFormat('format'),
   },
   (t) => [index('leagues_game_idx').on(t.gameId)],
 );
@@ -207,7 +231,7 @@ export const teams = pgTable(
     index('teams_game_idx').on(t.gameId),
     index('teams_federation_idx').on(t.federationId),
     index('teams_division_idx').on(t.divisionId),
-    index('teams_engine_idx').on(t.gameId, t.engineTeamId),
+    uniqueIndex('teams_engine_uq').on(t.gameId, t.engineTeamId),
   ],
 );
 
@@ -230,7 +254,7 @@ export const players = pgTable(
   },
   (t) => [
     index('players_team_idx').on(t.teamId),
-    index('players_engine_idx').on(t.gameId, t.enginePlayerId),
+    uniqueIndex('players_engine_uq').on(t.gameId, t.enginePlayerId),
   ],
 );
 
@@ -248,11 +272,11 @@ export const cups = pgTable(
       .references(() => federations.id),
     name: text('name').notNull(),
     tipo: competitionType('tipo').notNull(),
-    formato: text('formato'),
+    formato: cupFormat('formato'),
   },
   (t) => [
     index('cups_game_idx').on(t.gameId),
-    index('cups_engine_idx').on(t.gameId, t.engineCupId),
+    uniqueIndex('cups_engine_uq').on(t.gameId, t.engineCupId),
   ],
 );
 
@@ -287,7 +311,11 @@ export const matchdays = pgTable(
     divisionId: integer('division_id').references(() => divisions.id),
     cupId: integer('cup_id').references(() => cups.id),
   },
-  (t) => [index('matchdays_season_idx').on(t.seasonId)],
+  (t) => [
+    index('matchdays_season_idx').on(t.seasonId),
+    index('matchdays_game_id_idx').on(t.gameId),
+    check('matchdays_one_container', sql`(${t.divisionId} IS NULL) <> (${t.cupId} IS NULL)`),
+  ],
 );
 
 export const matches = pgTable(
@@ -319,6 +347,8 @@ export const matches = pgTable(
   (t) => [
     index('matches_season_idx').on(t.seasonId),
     index('matches_matchday_idx').on(t.matchdayId),
+    index('matches_game_id_idx').on(t.gameId),
+    check('matches_one_container', sql`(${t.divisionId} IS NULL) <> (${t.cupId} IS NULL)`),
   ],
 );
 
@@ -345,59 +375,75 @@ export const negotiations = pgTable(
   (t) => [index('negotiations_game_idx').on(t.gameId)],
 );
 
-export const negotiationRequirements = pgTable('negotiation_requirements', {
-  id: serial('id').primaryKey(),
-  negotiationId: integer('negotiation_id')
-    .notNull()
-    .references(() => negotiations.id),
-  tipo: text('tipo').notNull(),
-  valor: text('valor').notNull(),
-  cumplido: boolean('cumplido').notNull().default(false),
-});
+export const negotiationRequirements = pgTable(
+  'negotiation_requirements',
+  {
+    id: serial('id').primaryKey(),
+    negotiationId: integer('negotiation_id')
+      .notNull()
+      .references(() => negotiations.id),
+    tipo: negotiationRequirementType('tipo').notNull(),
+    valor: text('valor').notNull(),
+    cumplido: boolean('cumplido').notNull().default(false),
+  },
+  (t) => [index('neg_req_negotiation_idx').on(t.negotiationId)],
+);
 
-export const norms = pgTable('norms', {
-  id: serial('id').primaryKey(),
-  gameId: integer('game_id')
-    .notNull()
-    .references(() => games.id),
-  federationId: integer('federation_id')
-    .notNull()
-    .references(() => federations.id),
-  tipo: text('tipo').notNull(),
-  valor: text('valor').notNull(),
-});
+export const norms = pgTable(
+  'norms',
+  {
+    id: serial('id').primaryKey(),
+    gameId: integer('game_id')
+      .notNull()
+      .references(() => games.id),
+    federationId: integer('federation_id')
+      .notNull()
+      .references(() => federations.id),
+    tipo: normType('tipo').notNull(),
+    valor: text('valor').notNull(),
+  },
+  (t) => [index('norms_game_id_idx').on(t.gameId)],
+);
 
-export const sanctions = pgTable('sanctions', {
-  id: serial('id').primaryKey(),
-  gameId: integer('game_id')
-    .notNull()
-    .references(() => games.id),
-  teamId: integer('team_id')
-    .notNull()
-    .references(() => teams.id),
-  normId: integer('norm_id').references(() => norms.id),
-  seasonId: integer('season_id').references(() => seasons.id),
-  motivo: text('motivo').notNull(),
-  castigo: text('castigo').notNull(),
-});
+export const sanctions = pgTable(
+  'sanctions',
+  {
+    id: serial('id').primaryKey(),
+    gameId: integer('game_id')
+      .notNull()
+      .references(() => games.id),
+    teamId: integer('team_id')
+      .notNull()
+      .references(() => teams.id),
+    normId: integer('norm_id').references(() => norms.id),
+    seasonId: integer('season_id').references(() => seasons.id),
+    motivo: text('motivo').notNull(),
+    castigo: text('castigo').notNull(),
+  },
+  (t) => [index('sanctions_game_id_idx').on(t.gameId)],
+);
 
 // Impulse hangs off Season (annual counter) and points to a concrete match (§4.6).
-export const impulses = pgTable('impulses', {
-  id: serial('id').primaryKey(),
-  gameId: integer('game_id')
-    .notNull()
-    .references(() => games.id),
-  seasonId: integer('season_id')
-    .notNull()
-    .references(() => seasons.id),
-  matchId: integer('match_id')
-    .notNull()
-    .references(() => matches.id),
-  beneficiaryTeamId: integer('beneficiary_team_id')
-    .notNull()
-    .references(() => teams.id),
-  efecto: text('efecto').notNull(),
-});
+export const impulses = pgTable(
+  'impulses',
+  {
+    id: serial('id').primaryKey(),
+    gameId: integer('game_id')
+      .notNull()
+      .references(() => games.id),
+    seasonId: integer('season_id')
+      .notNull()
+      .references(() => seasons.id),
+    matchId: integer('match_id')
+      .notNull()
+      .references(() => matches.id),
+    beneficiaryTeamId: integer('beneficiary_team_id')
+      .notNull()
+      .references(() => teams.id),
+    efecto: text('efecto').notNull(),
+  },
+  (t) => [index('impulses_game_id_idx').on(t.gameId)],
+);
 
 export const commercialContracts = pgTable(
   'commercial_contracts',

@@ -245,21 +245,20 @@ export class GameService {
         .values({ name: input.name, seed, currentYear: state.year, userId: user.id })
         .returning({ id: s.games.id });
 
-      // Federations (player + rivals), keyed back to their engine ids.
-      const fedByEngine = new Map<number, number>();
-      for (const f of state.federations) {
-        const [row] = await tx
-          .insert(s.federations)
-          .values({
+      // Batch insert all federations (player + rivals) in one query.
+      const fedRows = await tx
+        .insert(s.federations)
+        .values(
+          state.federations.map((f) => ({
             gameId: game.id,
             engineFederationId: f.id,
             name: f.name,
             prestige: f.prestige,
             isPlayer: f.isPlayer,
-          })
-          .returning({ id: s.federations.id });
-        fedByEngine.set(f.id, row.id);
-      }
+          })),
+        )
+        .returning({ id: s.federations.id, engineFederationId: s.federations.engineFederationId });
+      const fedByEngine = new Map(fedRows.map((r) => [r.engineFederationId!, r.id]));
       const playerFedDbId = fedByEngine.get(state.playerFederationId)!;
 
       // Player league + division
@@ -279,52 +278,62 @@ export class GameService {
         })
         .returning({ id: s.divisions.id });
 
-      // Fase 9: create leagues + divisions for rival federations
-      const rivalLeagueByFed = new Map<number, number>(); // engineFedId -> dbLeagueId
+      // Batch insert rival leagues, then batch insert their divisions.
+      const rivalFeds = world.rivals
+        .map((rival) => {
+          const engFed = state.federations.find((f) => f.name === rival.name);
+          const fedDbId = engFed ? fedByEngine.get(engFed.id) : undefined;
+          return { rival, engFedId: engFed?.id ?? 0, fedDbId };
+        })
+        .filter((r) => r.fedDbId !== undefined);
+
       const rivalDivByOrden = new Map<string, number>(); // "engineFedId:orden" -> dbDivId
-      for (const rival of world.rivals) {
-        const fedDbId = fedByEngine.get(state.federations.find(f => f.name === rival.name)?.id ?? 0);
-        if (!fedDbId) continue;
-        const [rLeague] = await tx
+      if (rivalFeds.length > 0) {
+        const rivalLeagueRows = await tx
           .insert(s.leagues)
-          .values({ gameId: game.id, federationId: fedDbId, name: rival.name })
+          .values(rivalFeds.map((r) => ({ gameId: game.id, federationId: r.fedDbId!, name: r.rival.name })))
           .returning({ id: s.leagues.id });
-        rivalLeagueByFed.set(state.federations.find(f => f.name === rival.name)?.id ?? 0, rLeague.id);
-        // Create one division per league (orden 1)
-        const [rDiv] = await tx
+
+        const rivalDivRows = await tx
           .insert(s.divisions)
-          .values({
-            gameId: game.id,
-            leagueId: rLeague.id,
-            name: rival.name,
-            orden: 1,
-            plazas: rival.teams.length,
-          })
+          .values(
+            rivalFeds.map((r, i) => ({
+              gameId: game.id,
+              leagueId: rivalLeagueRows[i].id,
+              name: r.rival.name,
+              orden: 1,
+              plazas: r.rival.teams.length,
+            })),
+          )
           .returning({ id: s.divisions.id });
-        rivalDivByOrden.set(`${state.federations.find(f => f.name === rival.name)?.id ?? 0}:1`, rDiv.id);
+
+        rivalFeds.forEach((r, i) => rivalDivByOrden.set(`${r.engFedId}:1`, rivalDivRows[i].id));
       }
 
-      // Teams: league teams get the rich domain attributes + squad; rival teams
-      // are negotiation targets (lighter projection).
+      // Compute all team insert values (preserves leagueIdx order).
       let leagueIdx = 0;
-      for (const t of state.teams) {
+      const teamMeta = state.teams.map((t) => {
         const isPlayerTeam = t.federationId === state.playerFederationId;
         const rich = isPlayerTeam && t.divisionOrden !== null ? world.teams[leagueIdx++] : undefined;
-        // For rival teams, find their division from the engine state
         let teamDivisionId: number | null = null;
         if (t.divisionOrden !== null) {
           if (isPlayerTeam) {
             teamDivisionId = division.id;
           } else {
-            const engDiv = state.divisions.find(d => d.orden === t.divisionOrden && d.federationId === t.federationId);
-            if (engDiv) {
-              teamDivisionId = rivalDivByOrden.get(`${t.federationId}:${engDiv.orden}`) ?? null;
-            }
+            const engDiv = state.divisions.find(
+              (d) => d.orden === t.divisionOrden && d.federationId === t.federationId,
+            );
+            if (engDiv) teamDivisionId = rivalDivByOrden.get(`${t.federationId}:${engDiv.orden}`) ?? null;
           }
         }
-        const [row] = await tx
-          .insert(s.teams)
-          .values({
+        return { t, rich, teamDivisionId };
+      });
+
+      // Batch insert all teams in one query.
+      const teamRows = await tx
+        .insert(s.teams)
+        .values(
+          teamMeta.map(({ t, rich, teamDivisionId }) => ({
             gameId: game.id,
             engineTeamId: t.id,
             name: t.name,
@@ -341,27 +350,30 @@ export class GameService {
             cuerpoTecnicoRating: rich?.cuerpoTecnicoRating ?? 50,
             federationId: fedByEngine.get(t.federationId) ?? playerFedDbId,
             divisionId: teamDivisionId,
-          })
-          .returning({ id: s.teams.id });
-        if (rich) {
-          // Persist players using the engine state as source of truth so
-          // engine_player_id is preserved for awards/rankings (§6).
-          const enginePlayers = state.players.filter((p) => p.teamId === t.id);
-          if (enginePlayers.length > 0) {
-            await tx.insert(s.players).values(
-              enginePlayers.map((p) => ({
-                gameId: game.id,
-                teamId: row.id,
-                enginePlayerId: p.id,
-                name: p.name,
-                posicion: p.posicion,
-                calidad: p.calidad,
-                nationality: p.nationality,
-                cantera: p.cantera,
-              })),
-            );
-          }
-        }
+          })),
+        )
+        .returning({ id: s.teams.id, engineTeamId: s.teams.engineTeamId });
+      const teamByEngine = new Map(teamRows.map((r) => [r.engineTeamId!, r.id]));
+
+      // Batch insert all players (only for player-federation teams with rich data).
+      const allPlayerValues = teamMeta.flatMap(({ t, rich }) => {
+        if (!rich) return [];
+        const dbTeamId = teamByEngine.get(t.id)!;
+        return state.players
+          .filter((p) => p.teamId === t.id)
+          .map((p) => ({
+            gameId: game.id,
+            teamId: dbTeamId,
+            enginePlayerId: p.id,
+            name: p.name,
+            posicion: p.posicion,
+            calidad: p.calidad,
+            nationality: p.nationality,
+            cantera: p.cantera,
+          }));
+      });
+      if (allPlayerValues.length > 0) {
+        await tx.insert(s.players).values(allPlayerValues);
       }
 
       await tx.insert(s.seasons).values({
@@ -740,33 +752,45 @@ export class GameService {
         );
       }
 
-      // Sync read-model projections from the engine's evolved state: team
-      // strength, ownership (adhesions), division placement, federation prestige.
-      for (const t of next.teams) {
-        const dbId = map.get(t.id);
-        if (dbId) {
-          await tx
-            .update(s.teams)
-            .set({
-              strength: t.strength,
-              arraigo: t.arraigo,
-              federationId: fedMap.get(t.federationId) ?? undefined,
-              divisionId:
-                t.divisionOrden !== null
-                  ? (divMap.get(t.divisionOrden) ?? null)
-                  : null,
-            })
-            .where(eq(s.teams.id, dbId));
-        }
+      // Batch-update read-model projections: team strength/arraigo/placement and
+      // federation prestige. One UPDATE per entity type instead of N round-trips.
+      const teamUpdates = next.teams
+        .map((t) => ({
+          dbId: map.get(t.id),
+          strength: t.strength,
+          arraigo: t.arraigo,
+          federationId: fedMap.get(t.federationId) ?? null,
+          divisionId: t.divisionOrden !== null ? (divMap.get(t.divisionOrden) ?? null) : null,
+        }))
+        .filter((u): u is typeof u & { dbId: number } => u.dbId !== undefined);
+
+      if (teamUpdates.length > 0) {
+        const rows = teamUpdates.map(
+          (u) => sql`(${u.dbId}, ${u.strength}, ${u.arraigo}, ${u.federationId}, ${u.divisionId})`,
+        );
+        await tx.execute(sql`
+          UPDATE teams AS t SET
+            strength     = v.strength::int,
+            arraigo      = v.arraigo::int,
+            federation_id = v.federation_id::int,
+            division_id  = v.division_id::int
+          FROM (VALUES ${sql.join(rows, sql`, `)})
+            AS v(id, strength, arraigo, federation_id, division_id)
+          WHERE t.id = v.id::int
+        `);
       }
-      for (const f of next.federations) {
-        const dbId = fedMap.get(f.id);
-        if (dbId) {
-          await tx
-            .update(s.federations)
-            .set({ prestige: f.prestige })
-            .where(eq(s.federations.id, dbId));
-        }
+
+      const fedUpdates = next.federations
+        .map((f) => ({ dbId: fedMap.get(f.id), prestige: f.prestige }))
+        .filter((u): u is typeof u & { dbId: number } => u.dbId !== undefined);
+
+      if (fedUpdates.length > 0) {
+        const rows = fedUpdates.map((u) => sql`(${u.dbId}, ${u.prestige})`);
+        await tx.execute(sql`
+          UPDATE federations AS f SET prestige = v.prestige::int
+          FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, prestige)
+          WHERE f.id = v.id::int
+        `);
       }
       await tx
         .update(s.games)
