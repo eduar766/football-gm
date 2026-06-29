@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+.turbo
+coverage
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+apps/prototype
+.git
+.github
+*.md
+docker-compose.yml

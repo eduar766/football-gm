@@ -1,0 +1,13 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Placeholder — configure after choosing a hosting provider.
+# Examples:
+#   - Docker → push images to GHCR/ECR, deploy to Fly.io / Render / ECS
+#   - Vercel → frontend on Vercel, backend on Railway/Fly
+#
+# Required secrets:
+#   JWT_SECRET, DATABASE_URL, RESEND_API_KEY, FRONTEND_ORIGIN, ADMIN_EMAIL, ADMIN_PASSWORD
