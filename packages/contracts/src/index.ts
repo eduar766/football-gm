@@ -1000,7 +1000,7 @@ export type AuthUserDto = z.infer<typeof AuthUserDto>;
 
 export const LoginRequest = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(72), // bcrypt silently truncates above 72 bytes
 });
 export type LoginRequest = z.infer<typeof LoginRequest>;
 
@@ -1011,14 +1011,19 @@ export const LoginResponse = z.object({
 export type LoginResponse = z.infer<typeof LoginResponse>;
 
 export const ChangePasswordRequest = z.object({
-  currentPassword: z.string(),
-  newPassword: z.string().min(8),
+  currentPassword: z.string().min(1).max(72),
+  newPassword: z.string().min(8).max(72),
 });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequest>;
 
+export const RequestResetBody = z.object({
+  email: z.string().email(),
+});
+export type RequestResetBody = z.infer<typeof RequestResetBody>;
+
 export const ResetPasswordRequest = z.object({
-  token: z.string(),
-  newPassword: z.string().min(8),
+  token: z.string().min(1),
+  newPassword: z.string().min(8).max(72),
 });
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequest>;
 
@@ -1061,3 +1066,21 @@ export const RejectRequestBody = z.object({
   reason: z.string().optional(),
 });
 export type RejectRequestBody = z.infer<typeof RejectRequestBody>;
+
+// Shallow validation of an imported GameState — prevents crashes from malformed or
+// hostile uploads. Validates the presence and types of critical root fields only;
+// uses .passthrough() so forward-compat fields survive.
+export const GameStateImportSchema = z
+  .object({
+    year: z.number().int().min(1),
+    seed: z.number(),
+    phase: z.enum(['pretemporada', 'temporada']),
+    playerFederationId: z.number().int().positive(),
+    rng: z.object({ s: z.number() }).passthrough(),
+    federations: z.array(z.unknown()).min(1),
+    teams: z.array(z.unknown()),
+    players: z.array(z.unknown()),
+    divisions: z.array(z.unknown()),
+    negotiations: z.array(z.unknown()).default([]),
+  })
+  .passthrough();

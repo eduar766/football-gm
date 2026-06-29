@@ -22,6 +22,15 @@ export class EmailService {
     }
   }
 
+  private esc(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
+
   private async send(opts: { to: string; subject: string; html: string }) {
     if (!this.resend) {
       this.logger.log(`[Email dry-run] To: ${opts.to} | Subject: ${opts.subject}`);
@@ -37,12 +46,12 @@ export class EmailService {
   async sendAccessRequestNotification(data: { name: string; email: string; reason: string }) {
     await this.send({
       to: this.ADMIN,
-      subject: `[Football GM] Nueva solicitud de acceso — ${data.name}`,
+      subject: `[Football GM] Nueva solicitud de acceso — ${this.esc(data.name)}`,
       html: `
         <h2>Nueva solicitud de acceso beta</h2>
-        <p><b>Nombre:</b> ${data.name}</p>
-        <p><b>Email:</b> ${data.email}</p>
-        <p><b>Motivo:</b> ${data.reason}</p>
+        <p><b>Nombre:</b> ${this.esc(data.name)}</p>
+        <p><b>Email:</b> ${this.esc(data.email)}</p>
+        <p><b>Motivo:</b> ${this.esc(data.reason)}</p>
         <hr>
         <p><a href="${this.APP_URL}/admin">→ Revisar en el panel de admin</a></p>
       `,
@@ -54,10 +63,10 @@ export class EmailService {
       to: data.email,
       subject: '¡Tu acceso a Football GM Beta ha sido aprobado!',
       html: `
-        <h2>Bienvenido a Football GM Beta, ${data.name}</h2>
+        <h2>Bienvenido a Football GM Beta, ${this.esc(data.name)}</h2>
         <p>Tu solicitud de acceso ha sido aprobada.</p>
-        <p><b>Email:</b> ${data.email}</p>
-        <p><b>Contraseña temporal:</b> <code>${data.temporaryPassword}</code></p>
+        <p><b>Email:</b> ${this.esc(data.email)}</p>
+        <p><b>Contraseña temporal:</b> <code>${this.esc(data.temporaryPassword)}</code></p>
         <p>Al entrar por primera vez se te pedirá que cambies esta contraseña.</p>
         <p><a href="${this.APP_URL}/login">→ Acceder al juego</a></p>
         <hr>
@@ -72,9 +81,9 @@ export class EmailService {
       to: data.email,
       subject: 'Actualización sobre tu solicitud a Football GM Beta',
       html: `
-        <h2>Hola ${data.name},</h2>
+        <h2>Hola ${this.esc(data.name)},</h2>
         <p>Gracias por tu interés en Football GM Beta.</p>
-        <p>Por el momento no podemos aprobar tu solicitud${data.reason ? `: ${data.reason}` : '.'}</p>
+        <p>Por el momento no podemos aprobar tu solicitud${data.reason ? `: ${this.esc(data.reason)}` : '.'}</p>
         <p>Seguiremos abriendo accesos progresivamente. Te avisaremos si cambia la situación.</p>
       `,
     });

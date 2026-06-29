@@ -2,10 +2,15 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Disable NestJS default body parser so we can set our own 5mb limit.
+  // Required to support game state imports (full saves can exceed the default 100kb).
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(express.json({ limit: '5mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
   // Fail fast on missing or weak JWT_SECRET — prevents silent prod misconfig.
   const config = app.get(ConfigService);

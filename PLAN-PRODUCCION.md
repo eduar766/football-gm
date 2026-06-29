@@ -12,11 +12,11 @@ El sistema tiene una base arquitectónica sólida (functional core / imperative 
 
 ---
 
-## Fase 1 — Seguridad urgente (ANTES de cualquier usuario)
+## Fase 1 — Seguridad urgente (ANTES de cualquier usuario) ✅ COMPLETA
 
 Estas tareas bloquean el lanzamiento. Ningún usuario beta puede entrar hasta resolverlas.
 
-### 1.1 IDOR en endpoints de juego [CRÍTICO] · Esfuerzo M
+### ~~1.1 IDOR en endpoints de juego [CRÍTICO] · Esfuerzo M~~ ✅
 
 **Problema:** `game.controller.ts` tiene ~50 endpoints que solo requieren login, no verifican que el juego pertenece al usuario. Cualquier beta autenticado puede leer y mutar la partida de otro incrementando el `id`.
 
@@ -27,7 +27,7 @@ Estas tareas bloquean el lanzamiento. Ningún usuario beta puede entrar hasta re
 
 **Archivo clave:** `apps/backend/src/game/game.service.ts:99` — extender `loadState` para aceptar `userId` y verificar ownership en la misma query.
 
-### 1.2 JWT secret fallback en código [CRÍTICO] · Esfuerzo S
+### ~~1.2 JWT secret fallback en código [CRÍTICO] · Esfuerzo S~~ ✅
 
 **Problema:** `auth.module.ts:16` y `jwt.strategy.ts:36` usan `?? 'dev-secret-change-in-production'`. Si `JWT_SECRET` no está seteado en prod, el app arranca con un secreto público y cualquiera puede forjar tokens de admin.
 
@@ -41,7 +41,7 @@ if (!secret || secret.length < 32) {
 ```
 Eliminar los `?? 'dev-secret...'` de ambos archivos. Agregar `JWT_SECRET` al `.env.example` como requerido.
 
-### 1.3 Rate limiting · Esfuerzo M
+### ~~1.3 Rate limiting · Esfuerzo M~~ ✅
 
 **Problema:** Sin `@nestjs/throttler`. `POST /auth/login` permite fuerza bruta ilimitada. `/auth/request-access` permite spam a Resend y la tabla `access_requests`.
 
@@ -54,7 +54,7 @@ Global: 100 req/min/IP. Sobreescribir en auth:
 - `POST /auth/request-reset`: 3/hora/IP
 - `POST /auth/request-access`: 3/día/IP
 
-### 1.4 CORS + Helmet · Esfuerzo S
+### ~~1.4 CORS + Helmet · Esfuerzo S~~ ✅
 
 **CORS:** `main.ts` — `app.enableCors()` abre todos los orígenes.
 ```ts
@@ -68,17 +68,17 @@ app.use(helmet());
 ```
 Agregar `FRONTEND_ORIGIN` al `.env.example`.
 
-### 1.5 Validación importGame · Esfuerzo M
+### ~~1.5 Validación importGame · Esfuerzo M~~ ✅
 
 **Problema:** `game.service.ts:1739-1763` hace `state as GameState` sin validar. Payload malformado se convierte en estado autoritativo.
 
 **Solución:** Crear un schema Zod superficial en `contracts` que valide los campos raíz de `GameState` (sin validar recursivamente los 300 campos internos — solo que `year`, `rng`, `federations`, `teams`, etc. existen y tienen tipos correctos). Validar antes del INSERT. Agregar límite de tamaño en `main.ts` (`app.use(express.json({ limit: '5mb' }))`).
 
-### 1.6 Zod en endpoints de auth · Esfuerzo S
+### ~~1.6 Zod en endpoints de auth · Esfuerzo S~~ ✅
 
 `auth.controller.ts:17-55` usa `@Body() body: {...}` sin `ZodValidationPipe`. Agregar schemas en `packages/contracts` para `LoginBody`, `RegisterBody`, `RequestResetBody`, `ResetPasswordBody`, `RequestAccessBody` y aplicar el pipe. Limitar longitud de contraseña a 72 chars (bcrypt trunca silenciosamente después).
 
-### 1.7 HTML escaping en emails · Esfuerzo S
+### ~~1.7 HTML escaping en emails · Esfuerzo S~~ ✅
 
 `email.service.ts:41-94` interpola `name`, `email`, `reason` directamente en HTML sin escapar. Un atacante inyecta HTML/links en el email del admin. Agregar función `esc(s: string)` que reemplace `<>&"'` con entidades HTML y aplicarla a todos los interpolados.
 
@@ -164,7 +164,7 @@ export const NormTypeSchema = z.enum(['tope_plantilla', ...] as const satisfies 
 
 ## Fase 3 — Base de datos: concurrencia y performance
 
-### 3.1 SELECT FOR UPDATE en loadState · Esfuerzo S
+### ~~3.1 SELECT FOR UPDATE en loadState · Esfuerzo S~~ ✅
 
 **Problema:** Lost-update bajo tabs múltiples o doble-click. Dos requests leen estado N y ambos escriben N+1 — uno se pierde silenciosamente.
 
@@ -179,7 +179,7 @@ const rows = await tx
 
 Drizzle soporta `.for('update')`. Es la solución más simple y directa.
 
-### 3.2 Pool config explícito · Esfuerzo S
+### ~~3.2 Pool config explícito · Esfuerzo S~~ ✅
 
 `drizzle.ts:11` es `new Pool({ connectionString })` — defaults a max=10, sin timeouts.
 
@@ -460,17 +460,17 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 
 ## Orden de ejecución sugerido
 
-| Sprint | Tareas | Duración estimada |
-|--------|--------|-------------------|
-| S1 | 1.1 IDOR, 1.2 JWT secret, 1.3 Rate limiting, 1.4 CORS+Helmet | 2-3 días |
-| S2 | 1.5 importGame validation, 1.6 Zod auth, 1.7 email escaping, 3.1 FOR UPDATE, 3.2 pool config | 2 días |
-| S3 | 2.1 GameStateRepository, 2.3 migraciones versionadas | 2-3 días |
-| S4 | 2.2 Split controllers, 2.4 engine barrel, 2.5 enum dedup | 1-2 días |
-| S5 | 3.3 Batch inserts, 3.4-3.7 indexes + constraints | 1-2 días |
-| S6 | 4.1 Lazy routes, 4.2 constants+ApiError, 4.3 useMutationWithFeedback | 1-2 días |
-| S7 | 5.1 Dockerfiles, 5.2 CI, 5.3 health, 5.4 .env.example | 2-3 días |
-| S8 | 4.4-4.6 Frontend quality (matchReports, route map, primitivas) | 2 días |
-| S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días |
-| S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días |
+| Sprint | Tareas | Duración estimada | Estado |
+|--------|--------|-------------------|--------|
+| S1 | 1.1 IDOR, 1.2 JWT secret, 1.3 Rate limiting, 1.4 CORS+Helmet | 2-3 días | ✅ HECHO |
+| S2 | 1.5 importGame validation, 1.6 Zod auth, 1.7 email escaping, 3.1 FOR UPDATE, 3.2 pool config | 2 días | ✅ HECHO |
+| S3 | 2.1 GameStateRepository, 2.3 migraciones versionadas | 2-3 días | — |
+| S4 | 2.2 Split controllers, 2.4 engine barrel, 2.5 enum dedup | 1-2 días | — |
+| S5 | 3.3 Batch inserts, 3.4-3.7 indexes + constraints | 1-2 días | — |
+| S6 | 4.1 Lazy routes, 4.2 constants+ApiError, 4.3 useMutationWithFeedback | 1-2 días | — |
+| S7 | 5.1 Dockerfiles, 5.2 CI, 5.3 health, 5.4 .env.example | 2-3 días | — |
+| S8 | 4.4-4.6 Frontend quality (matchReports, route map, primitivas) | 2 días | — |
+| S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | — |
+| S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | — |
 
-**Total estimado:** 4-5 semanas a ritmo sostenible. S1-S2 son innegociables antes de cualquier usuario real.
+**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S2 completados — el sistema ya puede recibir usuarios.**

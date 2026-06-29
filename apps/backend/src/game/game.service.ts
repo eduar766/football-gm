@@ -52,6 +52,7 @@ import {
   detectRivalries,
   type GameState,
 } from '@football-gm/engine';
+import { GameStateImportSchema } from '@football-gm/contracts';
 import type {
   CreateGameRequest,
   FederationListItem,
@@ -98,10 +99,13 @@ export class GameService {
 
   private async loadState(gameId: number, tx?: Tx): Promise<GameState> {
     const db = tx ?? this.db;
-    const [row] = await db
+    const selectQuery = db
       .select({ state: s.gameEngineStates.state })
       .from(s.gameEngineStates)
       .where(eq(s.gameEngineStates.gameId, gameId));
+    // Lock the row for the duration of the transaction to prevent lost updates
+    // (two concurrent tabs advancing the same matchday would otherwise overwrite each other).
+    const [row] = await (tx ? selectQuery.for('update') : selectQuery);
     if (!row) throw new NotFoundException(`Game ${gameId} not found`);
     const state = row.state as unknown as GameState;
     // Ensure fields added in later versions exist on old serialized states.
@@ -1737,6 +1741,12 @@ export class GameService {
   }
 
   async importGame(name: string, importedState: unknown, user: AuthUser): Promise<{ id: number }> {
+    const parsed = GameStateImportSchema.safeParse(importedState);
+    if (!parsed.success) {
+      throw new BadRequestException('Estado de partida inválido o corrupto');
+    }
+    const state = parsed.data as unknown as GameState;
+
     if (user.role !== 'admin') {
       const [{ c }] = await this.db
         .select({ c: count() })
@@ -1745,7 +1755,6 @@ export class GameService {
       if (c >= 3) throw new BadRequestException('GAME_LIMIT_REACHED');
     }
     return this.db.transaction(async (tx) => {
-      const state = importedState as GameState;
       const [newGame] = await tx
         .insert(s.games)
         .values({
@@ -1757,7 +1766,7 @@ export class GameService {
         .returning({ id: s.games.id });
       await tx.insert(s.gameEngineStates).values({
         gameId: newGame.id,
-        state: state as any,
+        state: state as unknown as Record<string, unknown>,
       });
       return { id: newGame.id };
     });

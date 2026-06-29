@@ -16,7 +16,14 @@ const DEFAULT_URL = 'postgresql://postgres:postgres@localhost:5544/football_gm';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const url = config.get<string>('DATABASE_URL') ?? DEFAULT_URL;
-        return createDatabase(url);
+        const isProd = config.get<string>('NODE_ENV') === 'production';
+        return createDatabase(url, {
+          max: Number(config.get<string>('DB_POOL_MAX') ?? 20),
+          idleTimeoutMillis: 30_000,
+          connectionTimeoutMillis: 5_000,
+          ssl: isProd ? { rejectUnauthorized: true } : false,
+          application_name: 'football-gm-backend',
+        });
       },
     },
     {
