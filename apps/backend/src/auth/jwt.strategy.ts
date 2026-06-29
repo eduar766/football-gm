@@ -27,9 +27,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     @Inject(DRIZZLE) private readonly db: Database,
   ) {
+    const secret = config.get<string>('JWT_SECRET');
+    if (!secret || secret.length < 32) {
+      throw new Error('JWT_SECRET must be set and at least 32 characters long');
+    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.get<string>('JWT_SECRET') ?? 'dev-secret-change-in-production',
+      secretOrKey: secret,
     });
   }
 

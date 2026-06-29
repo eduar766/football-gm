@@ -1,5 +1,7 @@
 import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { DrizzleModule } from './db/drizzle.module';
 import { GameModule } from './game/game.module';
@@ -10,12 +12,16 @@ import { AdminModule } from './admin/admin.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Global rate limit: 100 requests per minute per IP.
+    // Auth endpoints override with stricter limits via @Throttle().
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     DrizzleModule,
     AuthModule,
     AdminModule,
     GameModule,
   ],
   controllers: [AppController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule implements OnApplicationBootstrap {
   constructor(

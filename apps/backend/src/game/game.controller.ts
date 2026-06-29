@@ -30,11 +30,12 @@ import {
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { GameOwnerGuard } from './game-owner.guard';
 import type { AuthUser } from '../auth/jwt.strategy';
 import { GameService } from './game.service';
 
 @Controller('games')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, GameOwnerGuard)
 export class GameController {
   constructor(private readonly games: GameService) {}
 
