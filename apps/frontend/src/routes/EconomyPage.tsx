@@ -207,7 +207,7 @@ export function EconomyPage() {
               <span style={{ fontFamily: '"Geist Mono", monospace' }}>
                 {money(e.operatingCostNow)}
               </span>{' '}
-              / año (escala con equipos y divisiones — §5).
+              / año (escala con equipos y divisiones).
             </Text>
             {e.treasury < 0 && (
               <Alert color="red" mt="sm">
@@ -575,7 +575,7 @@ export function EconomyPage() {
         </Group>
         <Text size="xs" c="dimmed" mb="sm">
           Masa salarial anual por equipo (derivada de la calidad de la plantilla).
-          Crea o ajusta la norma <em>tope_salarial</em> en Normas para fijar el límite (§4.7).
+          Crea o ajusta la norma <em>tope_salarial</em> en Normas para fijar el límite.
         </Text>
         {!compliance.data || compliance.data.rows.length === 0 ? (
           <Text c="dimmed" size="sm">Sin equipos en competición.</Text>

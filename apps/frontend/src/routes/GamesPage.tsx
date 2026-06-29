@@ -30,6 +30,8 @@ import {
 } from '@tabler/icons-react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { ExportReminderBanner } from '../components/ExportReminderBanner';
+import { FirstLoginModal, useOnboardingModal } from '../components/FirstLoginModal';
 
 const ACCENT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316'];
 const GAME_LIMIT = 3;
@@ -44,6 +46,7 @@ export function GamesPage() {
 
   // Delete confirmation modal state
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
+  const onboarding = useOnboardingModal();
 
   const games = useQuery({ queryKey: ['games'], queryFn: api.listGames });
 
@@ -121,8 +124,11 @@ export function GamesPage() {
   };
 
   return (
+    <>
+    <FirstLoginModal opened={onboarding.opened} onClose={onboarding.close} />
     <Container size="md" py="xl" className="page-enter">
       <Stack gap="lg">
+        <ExportReminderBanner hasGames={(games.data?.length ?? 0) > 0} />
         {/* Header with user info */}
         <Group justify="space-between" align="center">
           <Box />
@@ -389,5 +395,6 @@ export function GamesPage() {
         )}
       </Modal>
     </Container>
+    </>
   );
 }

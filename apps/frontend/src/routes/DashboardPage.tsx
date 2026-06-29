@@ -218,7 +218,7 @@ export function DashboardPage() {
                   </Text>
                 </Group>
                 <Text size="sm" c="dimmed" ml={52}>
-                  Monta la nueva temporada antes de que ruede el balón (§4.8).
+                  Monta la nueva temporada antes de que ruede el balón.
                   Las copas, ligas juveniles y formato deben quedar decididos
                   aquí porque el calendario se construye al comenzar.
                 </Text>

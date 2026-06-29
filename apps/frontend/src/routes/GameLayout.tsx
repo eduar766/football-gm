@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Badge,
   Box,
@@ -36,6 +37,9 @@ import {
 } from '@tabler/icons-react';
 import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { BugReportBanner } from '../components/BugReportBanner';
+import { ChangelogModal } from '../components/ChangelogModal';
+import { CURRENT_VERSION } from '../changelog';
 
 const TAB_ICONS = {
   dashboard: IconHome,
@@ -103,6 +107,7 @@ export function GameLayout() {
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { logout } = useAuth();
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   const summary = useQuery({
     queryKey: ['summary', id],
@@ -346,6 +351,8 @@ export function GameLayout() {
             )}
           </Group>
         </Box>
+      <BugReportBanner />
+      <ChangelogModal opened={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </Box>
     );
   }
@@ -501,12 +508,28 @@ export function GameLayout() {
           >
             Cerrar sesión
           </Button>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="teal"
+            fullWidth
+            mt={4}
+            onClick={() => setChangelogOpen(true)}
+          >
+            <Group gap={6} justify="center">
+              <Text size="xs">Novedades</Text>
+              <Badge size="xs" color="teal" variant="outline">{CURRENT_VERSION}</Badge>
+            </Group>
+          </Button>
         </Box>
       </Paper>
 
       <Container size="xl" py="lg" style={{ flex: 1 }}>
         <Outlet />
       </Container>
+
+      <BugReportBanner />
+      <ChangelogModal opened={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </Group>
   );
 }

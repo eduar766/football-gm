@@ -383,7 +383,7 @@ export function CupsPage() {
       {!isPreseason && summary.data && (
         <Alert color="gray" mb="md" title="Pretemporada solo">
           Las copas y ligas juveniles deben crearse en pretemporada para que el
-          calendario las incluya desde la jornada 1 (§4.8). Cierra la temporada
+          calendario las incluya desde la jornada 1. Cierra la temporada
           para volver a esta ventana.
         </Alert>
       )}

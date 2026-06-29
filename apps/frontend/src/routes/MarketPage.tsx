@@ -68,7 +68,7 @@ export function MarketPage() {
               Mercado de adhesiones
             </Text>
             <Text size="sm" c="dimmed" mt="xs">
-              Solo puedes negociar equipos de tu tier o inferior (§4.1). Adherir un
+              Solo puedes negociar equipos de tu tier o inferior. Adherir un
               equipo tarda años y mueve prestigio entre federaciones.
             </Text>
           </div>

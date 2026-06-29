@@ -182,7 +182,7 @@ export function FederationsPage() {
           </Text>
         </Group>
         <Text size="sm" c="dimmed" mt="xs" ml={34}>
-          Tu federación y las rivales son el mismo modelo (§3). Robar un equipo
+          Tu federación y las rivales son el mismo modelo. Robar un equipo
           mueve prestigio de una a otra.
         </Text>
       </Paper>

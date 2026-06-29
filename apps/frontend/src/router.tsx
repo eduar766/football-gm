@@ -37,13 +37,6 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<Center h="100vh"><Loader /></Center>}>{children}</Suspense>;
 }
 
-// Guard wrapper used by protected routes
-function AuthGuard() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) throw redirect({ to: '/login' });
-  return <Outlet />;
-}
-
 const rootRoute = createRootRoute({ component: RootLayout });
 
 /* ---- public routes ---- */
@@ -72,7 +65,13 @@ const changePasswordRoute = createRoute({
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
-  component: AuthGuard,
+  // beforeLoad runs in the router lifecycle — not during React render —
+  // so throwing redirect here is safe and won't hit React error boundaries.
+  beforeLoad: () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) throw redirect({ to: '/login' });
+  },
+  component: Outlet,
 });
 
 const gamesRoute = createRoute({

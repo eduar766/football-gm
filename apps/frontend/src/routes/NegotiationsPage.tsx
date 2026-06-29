@@ -441,7 +441,7 @@ export function NegotiationsPage() {
         </Group>
         <Text size="sm" c="dimmed" mt="xs" ml={34}>
           Ciclo: requisitos (1–3 años) → oferta → aceptada → efectiva dos años
-          después de aceptar (§4.2).
+          después de aceptar.
         </Text>
       </Paper>
 

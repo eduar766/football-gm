@@ -134,7 +134,7 @@ export function NormsPage() {
         </Group>
         <Text size="sm" c="dimmed" mt="xs" ml={34}>
           Los equipos son autónomos: pueden incumplir. Tú decides si sancionas
-          (§4.7). Dejar incumplimientos sin sancionar resta prestigio.
+          Dejar incumplimientos sin sancionar resta prestigio.
         </Text>
       </Paper>
 

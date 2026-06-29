@@ -101,7 +101,7 @@ export function TransfersPage() {
               </Text>
             </Group>
             <Text size="sm" c="dimmed" mt="xs" ml={34}>
-              Movimientos reales entre clubes en la pretemporada (§4.8). Los
+              Movimientos reales entre clubes en la pretemporada. Los
               clubes son autónomos: el comisionado no firma fichajes, los observa.
             </Text>
           </div>

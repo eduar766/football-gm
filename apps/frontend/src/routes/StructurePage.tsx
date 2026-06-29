@@ -174,7 +174,7 @@ export function StructurePage() {
             </Text>
             <Text size="sm" c="dimmed" mt="xs">
               Antes de crecer o abrir una división nueva se celebra una liga de
-              nivelación que reparte los equipos por mérito (§4.4).
+              nivelación que reparte los equipos por mérito.
             </Text>
           </div>
           <Button
@@ -201,7 +201,7 @@ export function StructurePage() {
         {!isPreseason && summary.data && (
           <Alert color="gray" mt="md" title="Cambios estructurales bloqueados">
             La temporada está en curso. Los cambios de estructura, formato, copas
-            y equipos solo pueden hacerse en pretemporada (§4.8). Cierra la
+            y equipos solo pueden hacerse en pretemporada. Cierra la
             temporada para volver a esta ventana.
           </Alert>
         )}
@@ -243,7 +243,7 @@ export function StructurePage() {
         <Text size="xs" c="dimmed" mb="sm">
           Construye un club desde cero: entra débil en la división más baja y
           se incluye en el calendario de la próxima temporada. No depende de
-          tier ni negociación, pero cuesta 5 M€ (§4.3).
+          tier ni negociación, pero cuesta 5 M€.
         </Text>
         <Group align="end">
           <TextInput
