@@ -88,7 +88,7 @@ Agregar `FRONTEND_ORIGIN` al `.env.example`.
 
 Estas tareas habilitan que las fases 3 y 4 sean tractables. Sin esto, cada feature nueva aumenta la deuda exponencialmente.
 
-### 2.1 GameStateRepository · Esfuerzo M
+### ~~2.1 GameStateRepository · Esfuerzo M~~ ✅
 
 Extraer de `game.service.ts` en `apps/backend/src/game/game-state.repository.ts`:
 
@@ -131,7 +131,7 @@ game/
 
 El split de controllers es mecánico (mover métodos + rutas) y de bajo riesgo. No requiere cambiar la lógica.
 
-### 2.3 Versionar las migraciones de estado · Esfuerzo M
+### ~~2.3 Versionar las migraciones de estado · Esfuerzo M~~ ✅
 
 **Problema:** `game.service.ts:99-189` ejecuta ~50 líneas de defaults + reconstrucción de rival-divisions en CADA carga de estado, incluyendo reads puros. Crece con cada "Fase".
 
@@ -464,7 +464,7 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 |--------|--------|-------------------|--------|
 | S1 | 1.1 IDOR, 1.2 JWT secret, 1.3 Rate limiting, 1.4 CORS+Helmet | 2-3 días | ✅ HECHO |
 | S2 | 1.5 importGame validation, 1.6 Zod auth, 1.7 email escaping, 3.1 FOR UPDATE, 3.2 pool config | 2 días | ✅ HECHO |
-| S3 | 2.1 GameStateRepository, 2.3 migraciones versionadas | 2-3 días | — |
+| S3 | 2.1 GameStateRepository, 2.3 migraciones versionadas | 2-3 días | ✅ HECHO |
 | S4 | 2.2 Split controllers, 2.4 engine barrel, 2.5 enum dedup | 1-2 días | — |
 | S5 | 3.3 Batch inserts, 3.4-3.7 indexes + constraints | 1-2 días | — |
 | S6 | 4.1 Lazy routes, 4.2 constants+ApiError, 4.3 useMutationWithFeedback | 1-2 días | — |
@@ -473,4 +473,4 @@ Estas están en el diseño original pero no son urgentes para la producción ini
 | S9 | 4.7 Descomponer DashboardPage, 4.8 Testing setup | 2-3 días | — |
 | S10 | 5.5-5.7 Observabilidad, PII/GDPR | 1-2 días | — |
 
-**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S2 completados — el sistema ya puede recibir usuarios.**
+**Total estimado:** 4-5 semanas a ritmo sostenible. **S1-S3 completados — arquitectura lista para escalar.**

@@ -1,4 +1,5 @@
 export * from './rng';
+export * from './migrations';
 export * from './types';
 export * from './headlines';
 export * from './fixtures';

@@ -657,6 +657,7 @@ export interface GameState {
   // Batch 7: accumulated historical records and federation world ranking.
   recordBook: RecordBook | null;
   federationCoefficients: FederationCoefficient[];
+  schemaVersion: number;
 }
 
 export interface RecordBook {

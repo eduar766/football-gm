@@ -3,6 +3,7 @@
 // staying readable inside. The imperative shell (backend) owns persistence.
 
 import { makeRng, randInt, rngNext } from './rng';
+import { CURRENT_SCHEMA_VERSION } from './migrations';
 import { buildDivisionFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import { computeStandings, type StandingRow } from './standings';
@@ -315,6 +316,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     teamSeasonHistory: [],
     recordBook: null,
     federationCoefficients: [],
+    schemaVersion: CURRENT_SCHEMA_VERSION,
   };
 }
 

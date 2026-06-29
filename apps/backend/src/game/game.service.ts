@@ -8,7 +8,6 @@ import {
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { AuthUser } from '../auth/jwt.strategy';
 import type { NormType } from '@football-gm/engine';
-import { CONFEDERATIONS } from '@football-gm/engine';
 import {
   advanceMatchday as engineAdvanceMatchday,
   advanceSeason as engineAdvanceSeason,
@@ -83,177 +82,22 @@ import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
 import * as s from '../db/schema';
 import { buildWeakSquad, generateWorld } from './world-generator';
+import { GameStateRepository } from './game-state.repository';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 @Injectable()
 export class GameService {
-  constructor(@Inject(DRIZZLE) private readonly db: Database) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Database,
+    private readonly repo: GameStateRepository,
+  ) {}
 
   /* ----------------------------------------------------------- helpers */
 
   private assertOwner(game: { userId: number | null }, user: AuthUser) {
     if (user.role === 'admin') return;
     if (game.userId !== user.id) throw new ForbiddenException();
-  }
-
-  private async loadState(gameId: number, tx?: Tx): Promise<GameState> {
-    const db = tx ?? this.db;
-    const selectQuery = db
-      .select({ state: s.gameEngineStates.state })
-      .from(s.gameEngineStates)
-      .where(eq(s.gameEngineStates.gameId, gameId));
-    // Lock the row for the duration of the transaction to prevent lost updates
-    // (two concurrent tabs advancing the same matchday would otherwise overwrite each other).
-    const [row] = await (tx ? selectQuery.for('update') : selectQuery);
-    if (!row) throw new NotFoundException(`Game ${gameId} not found`);
-    const state = row.state as unknown as GameState;
-    // Ensure fields added in later versions exist on old serialized states.
-    if (!state.poachCooldowns) state.poachCooldowns = {};
-    // Batch 3: negotiation requirements (old saves have none).
-    for (const n of state.negotiations) {
-      if (!n.requirements) n.requirements = [];
-      if (n.offerValue === undefined) n.offerValue = 0;
-      if (n.revealedCount === undefined) n.revealedCount = n.requirements.length;
-    }
-    if (state.eventStrengthPenalty === undefined) state.eventStrengthPenalty = 0;
-    if (state.eventCapacityPenaltyPct === undefined) state.eventCapacityPenaltyPct = 0;
-    if (state.eventImpulseLoss === undefined) state.eventImpulseLoss = 0;
-    if (state.eventTreasuryInjection === undefined) state.eventTreasuryInjection = 0;
-    if (!state.confederations) state.confederations = [];
-    if (!state.rivalRng) state.rivalRng = { s: 0 };
-    if (!state.rivalStandings) state.rivalStandings = {};
-    if (!state.rivalChampions) state.rivalChampions = [];
-    if (!state.rivalFixtures) state.rivalFixtures = [];
-    if (state.rivalCurrentMatchday === undefined) state.rivalCurrentMatchday = 0;
-    if (!state.rivalLastMatchdayResults) state.rivalLastMatchdayResults = [];
-    if (!state.rivalPlayers) state.rivalPlayers = [];
-    if (state.nextRivalPlayerId === undefined) state.nextRivalPlayerId = 1;
-    if (!state.rivalSeasonRecords) state.rivalSeasonRecords = [];
-    if (!state.mandates) state.mandates = [];
-    if (state.nextMandateId === undefined) state.nextMandateId = 1;
-    if (state.consecutiveMandateFails === undefined) state.consecutiveMandateFails = 0;
-    if (!state.mandatesRng) state.mandatesRng = { s: state.seed ^ 0xb4a4d3c2 };
-    if (!state.seasonChronicles) state.seasonChronicles = [];
-    if (!state.teamSeasonHistory) state.teamSeasonHistory = [];
-    if (state.recordBook === undefined) state.recordBook = null;
-    if (!state.federationCoefficients) state.federationCoefficients = [];
-    // Ensure all divisions have federationId (migrate old saves)
-    for (const d of state.divisions) {
-      if ((d as any).federationId === undefined) {
-        (d as any).federationId = state.playerFederationId;
-      }
-    }
-    // Ensure all federations have confederationId (migrate old saves)
-    for (const f of state.federations) {
-      if ((f as any).confederationId === undefined) {
-        (f as any).confederationId = 0;
-      }
-    }
-    // Rebuild missing rival divisions from seed data (migrate saves before Fase 9 division fix)
-    const rivalFeds = state.federations.filter(f => !f.isPlayer);
-    for (const rf of rivalFeds) {
-      const hasDivisions = state.divisions.some(d => d.federationId === rf.id);
-      if (hasDivisions) continue;
-      // Find matching confederation league by federation name
-      for (const conf of CONFEDERATIONS) {
-        if (!conf.available) continue;
-        for (const league of conf.leagues) {
-          if (rf.name.includes(league.name) || rf.name.includes(league.country)) {
-            const orden = state.divisions.length + 1;
-            state.divisions.push({
-              orden,
-              name: league.name,
-              federationId: rf.id,
-            });
-            // Assign teams to this division
-            const teamsForFed = state.teams.filter(t => t.federationId === rf.id && t.divisionOrden === null);
-            for (const t of teamsForFed) {
-              t.divisionOrden = orden;
-            }
-            break;
-          }
-        }
-      }
-      // If no match found, create a generic single division
-      if (!state.divisions.some(d => d.federationId === rf.id)) {
-        const orden = state.divisions.length + 1;
-        state.divisions.push({
-          orden,
-          name: rf.name,
-          federationId: rf.id,
-        });
-        const teamsForFed = state.teams.filter(t => t.federationId === rf.id && t.divisionOrden === null);
-        for (const t of teamsForFed) {
-          t.divisionOrden = orden;
-        }
-      }
-    }
-    return state;
-  }
-
-  private async saveState(tx: Tx, gameId: number, state: GameState) {
-    await tx
-      .update(s.gameEngineStates)
-      .set({ state: state as unknown as Record<string, unknown>, updatedAt: new Date() })
-      .where(eq(s.gameEngineStates.gameId, gameId));
-  }
-
-  // engine team id (1..N) -> db team id
-  private async engineToDbTeam(gameId: number, tx?: Tx): Promise<Map<number, number>> {
-    const db = tx ?? this.db;
-    const rows = await db
-      .select({ id: s.teams.id, engineTeamId: s.teams.engineTeamId })
-      .from(s.teams)
-      .where(eq(s.teams.gameId, gameId));
-    const map = new Map<number, number>();
-    for (const r of rows) if (r.engineTeamId != null) map.set(r.engineTeamId, r.id);
-    return map;
-  }
-
-  // engine federation id -> db federation id
-  private async engineToDbFederation(
-    gameId: number,
-    tx?: Tx,
-  ): Promise<Map<number, number>> {
-    const db = tx ?? this.db;
-    const rows = await db
-      .select({ id: s.federations.id, eng: s.federations.engineFederationId })
-      .from(s.federations)
-      .where(eq(s.federations.gameId, gameId));
-    const map = new Map<number, number>();
-    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
-    return map;
-  }
-
-  // engine cup id -> db cup id
-  private async engineToDbCup(
-    gameId: number,
-    tx?: Tx,
-  ): Promise<Map<number, number>> {
-    const db = tx ?? this.db;
-    const rows = await db
-      .select({ id: s.cups.id, eng: s.cups.engineCupId })
-      .from(s.cups)
-      .where(eq(s.cups.gameId, gameId));
-    const map = new Map<number, number>();
-    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
-    return map;
-  }
-
-  // engine player id -> db player id
-  private async engineToDbPlayer(
-    gameId: number,
-    tx?: Tx,
-  ): Promise<Map<number, number>> {
-    const db = tx ?? this.db;
-    const rows = await db
-      .select({ id: s.players.id, eng: s.players.enginePlayerId })
-      .from(s.players)
-      .where(eq(s.players.gameId, gameId));
-    const map = new Map<number, number>();
-    for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
-    return map;
   }
 
   // Ensure a db divisions row exists for every engine division; returns
@@ -556,7 +400,7 @@ export class GameService {
       .where(eq(s.games.id, gameId));
     if (!game) throw new NotFoundException(`Game ${gameId} not found`);
     this.assertOwner(game, user);
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     return this.summaryFrom(gameId, state);
   }
 
@@ -613,10 +457,10 @@ export class GameService {
     format: 'ida' | 'ida_vuelta',
   ): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'cambiar el formato de la liga');
       const next = engineSetLeagueFormat(state, format);
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -652,21 +496,21 @@ export class GameService {
   // Build the season's calendar and start the playable phase (§4.8).
   async startSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'comenzar la temporada');
       const next = engineStartSeason(state);
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
 
   async advanceMatchday(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertTemporada(state, 'avanzar la jornada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceMatchday(state);
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -680,10 +524,10 @@ export class GameService {
     awayId: number,
   ): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertTemporada(state, 'llamar a revisión');
       // Convert DB team IDs → engine team IDs
-      const engToDb = await this.engineToDbTeam(gameId, tx);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       // Reverse: db id → engine id
       const dbToEng = new Map<number, number>();
       for (const [eng, db] of engToDb) dbToEng.set(db, eng);
@@ -698,7 +542,7 @@ export class GameService {
           'No se pudo convocar revisión: ya usada en esta jornada para este local, falta presupuesto, o no estás en temporada',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -708,9 +552,9 @@ export class GameService {
     teamId: number,
   ): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertTemporada(state, 'reunión de emergencia');
-      const engToDb = await this.engineToDbTeam(gameId, tx);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       const dbToEng = new Map<number, number>();
       for (const [eng, db] of engToDb) dbToEng.set(db, eng);
       const engTeam = dbToEng.get(teamId);
@@ -723,14 +567,14 @@ export class GameService {
           'No se pudo convocar reunión: ya usada para este equipo, falta presupuesto, o no estás en temporada',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
 
   async postponeMatchday(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertTemporada(state, 'posponer jornada');
       const next = enginePostponeMatchday(state);
       if (next === state) {
@@ -738,16 +582,16 @@ export class GameService {
           'No se pudo posponer: la temporada ya terminó o no estás en temporada',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
 
   async cultivateArraigo(gameId: number, teamId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'cultivar arraigo');
-      const engToDb = await this.engineToDbTeam(gameId, tx);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       const dbToEng = new Map<number, number>();
       for (const [eng, db] of engToDb) dbToEng.set(db, eng);
       const engTeam = dbToEng.get(teamId);
@@ -760,7 +604,7 @@ export class GameService {
           'No se pudo cultivar arraigo: límite de 2 equipos/temporada alcanzado, falta presupuesto, o no estás en pretemporada',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -770,11 +614,11 @@ export class GameService {
   // (this is the validated prototype loop: advance -> see table -> close).
   async advanceSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertTemporada(state, 'avanzar la temporada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceSeason(state);
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -783,15 +627,15 @@ export class GameService {
   // pretemporada of the next year. Requires the season to be over.
   async closeSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
-      const finished = await this.loadState(gameId, tx);
+      const finished = await this.repo.loadState(gameId, tx);
       if (finished.phase !== 'temporada' || !finished.seasonOver) {
         throw new BadRequestException('Season is not finished yet');
       }
       const closedYear = finished.year;
       const next = engineCloseSeason(finished);
 
-      const map = await this.engineToDbTeam(gameId, tx);
-      const fedMap = await this.engineToDbFederation(gameId, tx);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
+      const fedMap = await this.repo.engineToDbFederation(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       // Cover both the finished structure (for history) and the next one
       // (for reprojection after promotion/relegation). Only player-federation
@@ -863,7 +707,7 @@ export class GameService {
       // Cup actas (§4.4): a season_records row per cup finalised this year.
       // No positions table (single-elimination bracket has only one champion);
       // palmarés counts the title automatically via vw_palmares.
-      const cupMap = await this.engineToDbCup(gameId, tx);
+      const cupMap = await this.repo.engineToDbCup(gameId, tx);
       const cupsThisYear = next.cups.filter(
         (c) => c.year === closedYear && c.status === 'finalizada' && c.championTeamId !== null,
       );
@@ -883,7 +727,7 @@ export class GameService {
       // append-only history; the historical scorer ranking is a SQL view.
       const yearAwards = next.awards.filter((a) => a.year === closedYear);
       if (yearAwards.length > 0) {
-        const playerMap = await this.engineToDbPlayer(gameId, tx);
+        const playerMap = await this.repo.engineToDbPlayer(gameId, tx);
         await tx.insert(s.awards).values(
           yearAwards.map((a) => ({
             gameId,
@@ -934,7 +778,7 @@ export class GameService {
         impulsosRestantes: next.impulsesRemaining,
       });
 
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
     });
   }
@@ -945,8 +789,8 @@ export class GameService {
     gameId: number,
     divisionOrden = 1,
   ): Promise<StandingsResponse> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const div =
       state.divisions.find((d) => d.orden === divisionOrden) ??
       state.divisions[0];
@@ -983,8 +827,8 @@ export class GameService {
   }
 
   async getStructure(gameId: number): Promise<StructureResponse> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const toDto = (t: GameState['teams'][number]) => ({
       teamId: map.get(t.id) ?? t.id,
       name: t.name,
@@ -1008,7 +852,7 @@ export class GameService {
 
   async runLevelingLeague(gameId: number): Promise<StructureResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'celebrar la liga de nivelación');
       if (state.treasury < 0) {
         throw new BadRequestException(
@@ -1016,7 +860,7 @@ export class GameService {
         );
       }
       const next = engineRunLevelingLeague(state);
-      const map = await this.engineToDbTeam(gameId, tx);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       const playerDivisionsNext = next.divisions.filter(
         (d) => d.federationId === next.playerFederationId,
@@ -1043,7 +887,7 @@ export class GameService {
             .where(eq(s.teams.id, dbId));
         }
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       const toDto = (t: GameState['teams'][number]) => ({
         teamId: map.get(t.id) ?? t.id,
         name: t.name,
@@ -1068,7 +912,7 @@ export class GameService {
     name: string,
   ): Promise<StructureResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'crear un equipo propio');
       // The engine assigns the new team id as max(team.id) + 1; compute it
       // here so we can pre-build a matching squad and feed it to the engine.
@@ -1084,7 +928,7 @@ export class GameService {
       const existing = new Set(state.teams.map((t) => t.id));
       const created = next.teams.find((t) => !existing.has(t.id))!;
 
-      const fedMap = await this.engineToDbFederation(gameId, tx);
+      const fedMap = await this.repo.engineToDbFederation(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       const playerDivisionsNext = next.divisions.filter(
         (d) => d.federationId === next.playerFederationId,
@@ -1136,9 +980,9 @@ export class GameService {
         })),
       );
 
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
 
-      const map = await this.engineToDbTeam(gameId, tx);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
       const toDto = (t: GameState['teams'][number]) => ({
         teamId: map.get(t.id) ?? t.id,
         name: t.name,
@@ -1225,7 +1069,7 @@ export class GameService {
       .orderBy(desc(s.players.calidad));
 
     // Enrich with engine stats (cards / availability) when present.
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     const enginePlayers = new Map(state.players.map((p) => [p.id, p]));
     const squad = dbSquad.map((p) => {
       const eng = p.enginePlayerId !== null ? enginePlayers.get(p.enginePlayerId) : undefined;
@@ -1255,7 +1099,7 @@ export class GameService {
 
     // Compute norm breaches specific to this team
     const allBreaches = normBreaches(state);
-    const teamDbToEng = await this.engineToDbTeam(gameId);
+    const teamDbToEng = await this.repo.engineToDbTeam(gameId);
     const engTeamId = [...teamDbToEng.entries()].find(([, db]) => db === teamId)?.[0];
     const teamBreaches = engTeamId != null
       ? allBreaches.filter((b) => b.teamId === engTeamId)
@@ -1296,7 +1140,7 @@ export class GameService {
 
     // 5.3 — Rivalries: detect from engine state and filter to this team.
     const allRivalries = detectRivalries(state);
-    const engTeamIdForRiv = [...(await this.engineToDbTeam(gameId)).entries()].find(
+    const engTeamIdForRiv = [...(await this.repo.engineToDbTeam(gameId)).entries()].find(
       ([, db]) => db === teamId,
     )?.[0];
     const rivalries = engTeamIdForRiv != null
@@ -1378,7 +1222,7 @@ export class GameService {
   }
 
   async getFederationById(gameId: number, federationId: number): Promise<FederationOverview> {
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     const engFed = state.federations.find(f => f.id === federationId);
     if (!engFed) throw new NotFoundException(`Federation ${federationId} not found`);
     const confNames = new Map(state.confederations.map((c) => [c.id, c.name]));
@@ -1579,7 +1423,7 @@ export class GameService {
 
     // Rival champions from engine state — use rivalSeasonRecords (Fase 11.2+) which
     // store federationName directly, avoiding the broken divisionOrden→federationId lookup.
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     const rivalChampions = (state.rivalSeasonRecords ?? []).map(r => ({
       year: r.year,
       federationName: r.federationName,
@@ -1661,7 +1505,7 @@ export class GameService {
   /* ----------------------------- Batch 7: world ranking & export/import */
 
   async getWorldRanking(gameId: number): Promise<WorldRankingResponse> {
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     const isPlayer = new Map(state.federations.map(f => [f.id, f.isPlayer]));
     const rows = state.federationCoefficients.map(c => ({
       federationId: c.federationId,
@@ -1676,7 +1520,7 @@ export class GameService {
   }
 
   async getWorldStandings(gameId: number): Promise<WorldStandingsResponse> {
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
 
     const fedById = new Map(state.federations.map((f) => [f.id, f]));
     const confById = new Map(state.confederations.map((c) => [c.id, c]));
@@ -1736,7 +1580,7 @@ export class GameService {
       .from(s.games)
       .where(eq(s.games.id, gameId));
     if (!game) throw new NotFoundException(`Game ${gameId} not found`);
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     return { name: game.name, state };
   }
 
@@ -1775,7 +1619,7 @@ export class GameService {
   /* ------------------------------- commissioner: federations & market */
 
   async getFederations(gameId: number): Promise<FederationListItem[]> {
-    const state = await this.loadState(gameId);
+    const state = await this.repo.loadState(gameId);
     const confNames = new Map(state.confederations.map((c) => [c.id, c.name]));
     return state.federations
       .map((f) => ({
@@ -1792,8 +1636,8 @@ export class GameService {
   }
 
   async getMarket(gameId: number): Promise<MarketResponse> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const fedName = new Map(state.federations.map((f) => [f.id, f]));
     const teams = negotiableTeams(state).map((t) => {
       const owner = fedName.get(t.federationId);
@@ -1811,8 +1655,8 @@ export class GameService {
   }
 
   async getNegotiations(gameId: number): Promise<NegotiationDto[]> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
     const fedName = new Map(state.federations.map((f) => [f.id, f.name]));
     return state.negotiations.map((n) => ({
@@ -1844,16 +1688,16 @@ export class GameService {
       if (!team || team.eng == null) {
         throw new NotFoundException(`Team ${dbTeamId} not found`);
       }
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineStartNegotiation(state, team.eng);
       if (next === state) {
         throw new BadRequestException(
           'No puedes negociar por este equipo (tier, ya en curso o propio)',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       // Inline projection of the just-created negotiations list.
-      const map = await this.engineToDbTeam(gameId, tx);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
       const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
       const fedName = new Map(next.federations.map((f) => [f.id, f.name]));
       return next.negotiations.map((n) => ({
@@ -1876,11 +1720,11 @@ export class GameService {
 
   async setOfferValue(gameId: number, negId: number, offerValue: number): Promise<NegotiationDto[]> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineSetNegotiationOfferValue(state, negId, offerValue);
       if (next === state) throw new BadRequestException('Negociación no encontrada o no modificable');
-      await this.saveState(tx, gameId, next);
-      const map = await this.engineToDbTeam(gameId, tx);
+      await this.repo.saveState(tx, gameId, next);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
       const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
       const fedName = new Map(next.federations.map((f) => [f.id, f.name]));
       return next.negotiations.map((n) => ({
@@ -1933,7 +1777,7 @@ export class GameService {
   }
 
   async getEconomy(gameId: number): Promise<EconomyResponse> {
-    return this.economyResponse(await this.loadState(gameId));
+    return this.economyResponse(await this.repo.loadState(gameId));
   }
 
   async setEconomyPolicy(
@@ -1941,8 +1785,8 @@ export class GameService {
     policy: { talentInvestment: number },
   ): Promise<EconomyResponse> {
     return this.db.transaction(async (tx) => {
-      const next = engineSetEconomyPolicy(await this.loadState(gameId, tx), policy);
-      await this.saveState(tx, gameId, next);
+      const next = engineSetEconomyPolicy(await this.repo.loadState(gameId, tx), policy);
+      await this.repo.saveState(tx, gameId, next);
       return this.economyResponse(next);
     });
   }
@@ -1952,12 +1796,12 @@ export class GameService {
     offerId: number,
   ): Promise<EconomyResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineSignContract(state, offerId);
       if (next === state) {
         throw new BadRequestException('Oferta no disponible');
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.economyResponse(next);
     });
   }
@@ -1967,12 +1811,12 @@ export class GameService {
     contractId: number,
   ): Promise<EconomyResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineCancelContract(state, contractId);
       if (next === state) {
         throw new BadRequestException('Contrato no encontrado');
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.economyResponse(next);
     });
   }
@@ -2010,8 +1854,8 @@ export class GameService {
   }
 
   async getPrizes(gameId: number): Promise<PrizesResponse> {
-    const state = await this.loadState(gameId);
-    return this.prizesResponse(state, await this.engineToDbTeam(gameId));
+    const state = await this.repo.loadState(gameId);
+    return this.prizesResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
   async setLeaguePrize(
@@ -2020,15 +1864,15 @@ export class GameService {
     shares: number[],
   ): Promise<PrizesResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineSetLeaguePrize(state, pool, shares);
       if (next === state) {
         throw new BadRequestException(
           'No se pueden definir premios fuera de pretemporada',
         );
       }
-      await this.saveState(tx, gameId, next);
-      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
@@ -2039,29 +1883,29 @@ export class GameService {
     shares: number[],
   ): Promise<PrizesResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineSetCupPrize(state, cupId, pool, shares);
       if (next === state) {
         throw new BadRequestException(
           'No se pudo asignar el premio: copa no existe o no estás en pretemporada',
         );
       }
-      await this.saveState(tx, gameId, next);
-      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
   async removePrize(gameId: number, prizeId: number): Promise<PrizesResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineRemovePrize(state, prizeId);
       if (next === state) {
         throw new BadRequestException(
           'No se pudo eliminar el premio (no existe o no estás en pretemporada)',
         );
       }
-      await this.saveState(tx, gameId, next);
-      return this.prizesResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.prizesResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
@@ -2069,8 +1913,8 @@ export class GameService {
   // to (the pretemporada of the year stamped on each entry); `entries` is the
   // latest window, `history` is every move ever recorded.
   async getTransfers(gameId: number): Promise<TransfersResponse> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const dto = state.transfers.map((t) => ({
       year: t.year,
       playerId: t.playerId,
@@ -2099,8 +1943,8 @@ export class GameService {
   // tope_salarial cap (null cap => everybody trivially complies, just shows
   // the bills).
   async getCompliance(gameId: number): Promise<ComplianceResponse> {
-    const state = await this.loadState(gameId);
-    const map = await this.engineToDbTeam(gameId);
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
     const cap =
       state.norms.find((n) => n.tipo === 'tope_salarial')?.valor ?? null;
     const divName = new Map(state.divisions.map((d) => [d.orden, d.name]));
@@ -2161,8 +2005,8 @@ export class GameService {
   }
 
   async getNorms(gameId: number): Promise<NormsResponse> {
-    const state = await this.loadState(gameId);
-    return this.normsResponse(state, await this.engineToDbTeam(gameId));
+    const state = await this.repo.loadState(gameId);
+    return this.normsResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
   async addNorm(
@@ -2171,17 +2015,17 @@ export class GameService {
     valor: number,
   ): Promise<NormsResponse> {
     return this.db.transaction(async (tx) => {
-      const next = engineAddNorm(await this.loadState(gameId, tx), tipo, valor);
-      await this.saveState(tx, gameId, next);
-      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+      const next = engineAddNorm(await this.repo.loadState(gameId, tx), tipo, valor);
+      await this.repo.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
   async removeNorm(gameId: number, normId: number): Promise<NormsResponse> {
     return this.db.transaction(async (tx) => {
-      const next = engineRemoveNorm(await this.loadState(gameId, tx), normId);
-      await this.saveState(tx, gameId, next);
-      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+      const next = engineRemoveNorm(await this.repo.loadState(gameId, tx), normId);
+      await this.repo.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
@@ -2198,15 +2042,15 @@ export class GameService {
       if (!team || team.eng == null) {
         throw new NotFoundException(`Team ${dbTeamId} not found`);
       }
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineSanctionTeam(state, team.eng, normId);
       if (next === state) {
         throw new BadRequestException(
           'No se puede sancionar: el equipo no incumple esa norma o ya está sancionado',
         );
       }
-      await this.saveState(tx, gameId, next);
-      return this.normsResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.normsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
@@ -2276,8 +2120,8 @@ export class GameService {
   }
 
   async getNextFixtures(gameId: number): Promise<NextFixturesResponse> {
-    const state = await this.loadState(gameId);
-    return this.nextFixturesResponse(state, await this.engineToDbTeam(gameId));
+    const state = await this.repo.loadState(gameId);
+    return this.nextFixturesResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
   async applyImpulse(
@@ -2306,7 +2150,7 @@ export class GameService {
         );
       }
 
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const fixture = state.fixtures.find(
         (f) =>
           f.matchday === state.currentMatchday &&
@@ -2324,10 +2168,10 @@ export class GameService {
           'Sin impulsos disponibles o ya aplicado a ese partido',
         );
       }
-      await this.saveState(tx, gameId, next);
+      await this.repo.saveState(tx, gameId, next);
       return this.nextFixturesResponse(
         next,
-        await this.engineToDbTeam(gameId, tx),
+        await this.repo.engineToDbTeam(gameId, tx),
       );
     });
   }
@@ -2376,8 +2220,8 @@ export class GameService {
   }
 
   async getEvents(gameId: number): Promise<EventsResponse> {
-    const state = await this.loadState(gameId);
-    return this.eventsResponse(state, await this.engineToDbTeam(gameId));
+    const state = await this.repo.loadState(gameId);
+    return this.eventsResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
   async resolveEvent(
@@ -2386,15 +2230,15 @@ export class GameService {
     action: 'actuar' | 'ignorar',
   ): Promise<EventsResponse> {
     return this.db.transaction(async (tx) => {
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       const next = engineResolveEvent(state, eventId, action);
       if (next === state) {
         throw new BadRequestException(
           'No se puede resolver: evento no encontrado o ya resuelto',
         );
       }
-      await this.saveState(tx, gameId, next);
-      return this.eventsResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.eventsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 
@@ -2442,8 +2286,8 @@ export class GameService {
   }
 
   async getCups(gameId: number): Promise<CupsResponse> {
-    const state = await this.loadState(gameId);
-    return this.cupsResponse(state, await this.engineToDbTeam(gameId));
+    const state = await this.repo.loadState(gameId);
+    return this.cupsResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
   async createCup(
@@ -2467,7 +2311,7 @@ export class GameService {
         engineIds.push(eng);
       }
 
-      const state = await this.loadState(gameId, tx);
+      const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'crear una copa');
       const next = engineCreateCup(
         state,
@@ -2486,7 +2330,7 @@ export class GameService {
 
       const existing = new Set(state.cups.map((c) => c.id));
       const created = next.cups.find((c) => !existing.has(c.id))!;
-      const fedMap = await this.engineToDbFederation(gameId, tx);
+      const fedMap = await this.repo.engineToDbFederation(gameId, tx);
 
       await tx.insert(s.cups).values({
         gameId,
@@ -2497,8 +2341,8 @@ export class GameService {
         formato: input.formato,
       });
 
-      await this.saveState(tx, gameId, next);
-      return this.cupsResponse(next, await this.engineToDbTeam(gameId, tx));
+      await this.repo.saveState(tx, gameId, next);
+      return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
   }
 }
