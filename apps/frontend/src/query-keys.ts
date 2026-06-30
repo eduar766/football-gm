@@ -19,6 +19,7 @@ export const QK = {
   compliance: (id: number) => ['compliance', id],
   worldRanking: (id: number) => ['worldRanking', id],
   worldStandings: (id: number) => ['worldStandings', id],
+  commissionerReports: (id: number) => ['commissionerReports', id],
   nextFixtures: (id: number) => ['nextFixtures', id],
   games: () => ['games'],
 } as const;

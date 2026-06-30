@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   CreateCupRequest,
+  CreateInterLeagueCupRequest,
   CreateOwnTeamRequest,
   EditCupParticipantsRequest,
   SetLeagueFormatRequest,
@@ -93,6 +94,14 @@ export class CompetitionController {
     @Body(new ZodValidationPipe(CreateCupRequest)) body: CreateCupRequest,
   ) {
     return this.games.createCup(id, body);
+  }
+
+  @Post(':id/cups/inter-league')
+  createInterLeagueCup(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(CreateInterLeagueCupRequest)) body: CreateInterLeagueCupRequest,
+  ) {
+    return this.games.createInterLeagueCup(id, body);
   }
 
   @Patch(':id/cups/:cupId')

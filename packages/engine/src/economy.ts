@@ -332,6 +332,15 @@ export function processTeamEconomies(s: GameState): void {
               - wageExpenses - transferExpenses - infrastructureExpenses;
     team.treasury += net;
 
+    // Financial distress erodes squad quality: losing players and coaches is
+    // harder to avoid when a club can't pay wages on time.
+    if (team.treasury < 0) {
+      const degradation =
+        team.treasury < -wageExpenses * 2 ? 3 :
+        team.treasury < -wageExpenses ? 2 : 1;
+      team.strength = Math.max(20, team.strength - degradation);
+    }
+
     team.lastTeamEconomy = {
       year: s.year,
       gateReceipts,

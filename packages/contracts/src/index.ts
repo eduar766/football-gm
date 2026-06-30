@@ -286,6 +286,40 @@ export const PalmaresEntry = z.object({
 });
 export type PalmaresEntry = z.infer<typeof PalmaresEntry>;
 
+/* ----------------------------------- financial health (used in TeamDetail & EconomyResponse) */
+
+export const FinancialHealth = z.enum([
+  'saneada',
+  'ajustada',
+  'en_riesgo',
+  'quiebra',
+]);
+export type FinancialHealth = z.infer<typeof FinancialHealth>;
+
+/* ----------------------------------- team economy DTOs (used in TeamDetail) */
+
+export const TeamSponsorDto = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  valorAnual: z.number().int(),
+  yearsLeft: z.number().int(),
+});
+export type TeamSponsorDto = z.infer<typeof TeamSponsorDto>;
+
+export const TeamSeasonEconomyDto = z.object({
+  year: z.number().int(),
+  gateReceipts: z.number().int(),
+  sponsorIncome: z.number().int(),
+  prizeIncome: z.number().int(),
+  transferIncome: z.number().int(),
+  wageExpenses: z.number().int(),
+  transferExpenses: z.number().int(),
+  infrastructureExpenses: z.number().int(),
+  net: z.number().int(),
+  treasuryAfter: z.number().int(),
+});
+export type TeamSeasonEconomyDto = z.infer<typeof TeamSeasonEconomyDto>;
+
 /* ----------------------------------- commissioner: norms & sanctions (§4.7) */
 
 const _normTypeValues = [
@@ -331,6 +365,13 @@ export const TeamDetail = z.object({
       castigo: z.string(),
     })),
   }),
+  finance: z.object({
+    treasury: z.number().int(),
+    financialHealth: FinancialHealth,
+    sponsors: z.array(TeamSponsorDto),
+    lastEconomy: TeamSeasonEconomyDto.nullable(),
+    prizesWithheld: z.boolean(),
+  }).nullable(),
 });
 export type TeamDetail = z.infer<typeof TeamDetail>;
 
@@ -501,6 +542,33 @@ export const WorldStandingsResponse = z.object({
 });
 export type WorldStandingsResponse = z.infer<typeof WorldStandingsResponse>;
 
+/* ----------------------------------------- Batch 12.3: commissioner reports */
+
+export const CommissionerFederationReport = z.object({
+  federationId: z.number().int(),
+  federationName: z.string(),
+  prestige: z.number().int(),
+  isPlayer: z.boolean(),
+  lastChampion: z.object({
+    id: z.number().int(),
+    name: z.string(),
+    year: z.number().int(),
+  }).nullable(),
+  topScorer: z.object({
+    name: z.string(),
+    teamName: z.string(),
+    goals: z.number().int(),
+    year: z.number().int(),
+  }).nullable(),
+  powerScore: z.number(),
+});
+export type CommissionerFederationReport = z.infer<typeof CommissionerFederationReport>;
+
+export const CommissionerReportsResponse = z.object({
+  federations: z.array(CommissionerFederationReport),
+});
+export type CommissionerReportsResponse = z.infer<typeof CommissionerReportsResponse>;
+
 export const ImportGameRequest = z.object({
   name: z.string().min(1).max(80),
   state: z.any(),
@@ -623,14 +691,6 @@ export type StructureResponse = z.infer<typeof StructureResponse>;
 
 /* ----------------------------------------- commissioner: economy (§4.5) */
 
-export const FinancialHealth = z.enum([
-  'saneada',
-  'ajustada',
-  'en_riesgo',
-  'quiebra',
-]);
-export type FinancialHealth = z.infer<typeof FinancialHealth>;
-
 export const CommercialContractDto = z.object({
   id: Id,
   tipo: CommercialContractType,
@@ -690,28 +750,6 @@ export const SetEconomyPolicyRequest = EconomyPolicyDto;
 export type SetEconomyPolicyRequest = z.infer<typeof SetEconomyPolicyRequest>;
 
 /* ----------------------------------- team economy (Fase economy) */
-
-export const TeamSponsorDto = z.object({
-  id: z.number().int(),
-  name: z.string(),
-  valorAnual: z.number().int(),
-  yearsLeft: z.number().int(),
-});
-export type TeamSponsorDto = z.infer<typeof TeamSponsorDto>;
-
-export const TeamSeasonEconomyDto = z.object({
-  year: z.number().int(),
-  gateReceipts: z.number().int(),
-  sponsorIncome: z.number().int(),
-  prizeIncome: z.number().int(),
-  transferIncome: z.number().int(),
-  wageExpenses: z.number().int(),
-  transferExpenses: z.number().int(),
-  infrastructureExpenses: z.number().int(),
-  net: z.number().int(),
-  treasuryAfter: z.number().int(),
-});
-export type TeamSeasonEconomyDto = z.infer<typeof TeamSeasonEconomyDto>;
 
 export const RescueEntryDto = z.object({
   year: z.number().int(),
@@ -1019,7 +1057,7 @@ export type ResolveEventRequest = z.infer<typeof ResolveEventRequest>;
 
 /* -------------------------------------- cups / tournaments (§4.4) */
 
-export const CupType = z.enum(['copa', 'liga_juvenil', 'torneo_verano']);
+export const CupType = z.enum(['copa', 'liga_juvenil', 'torneo_verano', 'inter_ligas']);
 export type CupType = z.infer<typeof CupType>;
 
 export const CupStatus = z.enum(['en_curso', 'finalizada']);
@@ -1081,11 +1119,19 @@ export const CupScheduleEntryDto = z.object({
 });
 export type CupScheduleEntryDto = z.infer<typeof CupScheduleEntryDto>;
 
+export const RivalFederationForCup = z.object({
+  federationId: z.number().int(),
+  name: z.string(),
+  lastChampionName: z.string().nullable(),
+});
+export type RivalFederationForCup = z.infer<typeof RivalFederationForCup>;
+
 export const CupsResponse = z.object({
   cups: z.array(CupDto),
   schedule: z.array(CupScheduleEntryDto),
   currentMatchday: z.number().int(),
   totalMatchdays: z.number().int(),
+  rivalFederations: z.array(RivalFederationForCup).default([]),
 });
 export type CupsResponse = z.infer<typeof CupsResponse>;
 
@@ -1098,6 +1144,14 @@ export const CreateCupRequest = z.object({
   recurring: z.boolean().optional().default(false),
 });
 export type CreateCupRequest = z.infer<typeof CreateCupRequest>;
+
+export const CreateInterLeagueCupRequest = z.object({
+  name: z.string().min(1).max(80),
+  formato: CupFormat,
+  playerTeamIds: z.array(Id).min(1).max(8),
+  rivalFederationIds: z.array(z.number().int()).min(1).max(7),
+});
+export type CreateInterLeagueCupRequest = z.infer<typeof CreateInterLeagueCupRequest>;
 
 /* ----------------------------------------- league format (§4.4) */
 

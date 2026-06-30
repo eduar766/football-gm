@@ -22,4 +22,9 @@ export class HistoryController {
   worldStandings(@Param('id', ParseIntPipe) id: number) {
     return this.games.getWorldStandings(id);
   }
+
+  @Get(':id/commissioner-reports')
+  commissionerReports(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getCommissionerReports(id);
+  }
 }

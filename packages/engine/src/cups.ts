@@ -609,6 +609,89 @@ export function editCupParticipants(
   return s;
 }
 
+// Inter-league cup: championship between the player's federation champion and
+// the most recent champion of each selected rival federation.
+// Requires prestige >= 50 and pretemporada phase.
+export function createInterLeagueCup(
+  prev: GameState,
+  name: string,
+  formato: CupFormat,
+  playerTeamIds: number[],
+  rivalFederationIds: number[],
+): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  if (prev.prestige < 50) return prev;
+  if (prev.treasury < CUP_CREATION_COST) return prev;
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return prev;
+
+  const uniquePlayerIds = [...new Set(playerTeamIds)];
+  for (const id of uniquePlayerIds) {
+    if (!isCompetingPlayerTeam(prev, id)) return prev;
+  }
+
+  const rivalChampionIds: number[] = [];
+  for (const fedId of rivalFederationIds) {
+    const record = [...(prev.rivalSeasonRecords ?? [])]
+      .filter((r) => r.federationId === fedId)
+      .sort((a, b) => b.year - a.year)[0];
+    if (!record) return prev;
+    const championTeam = prev.teams.find((t) => t.id === record.championId);
+    if (!championTeam) return prev;
+    rivalChampionIds.push(record.championId);
+  }
+
+  const allParticipants = [...new Set([...uniquePlayerIds, ...rivalChampionIds])];
+  if (allParticipants.length < 2 || allParticipants.length > MAX_PARTICIPANTS) return prev;
+
+  const s = structuredClone(prev);
+  s.treasury -= CUP_CREATION_COST;
+
+  let firstRound: CupMatch[];
+  let secondRound: CupMatch[] | null = null;
+
+  const shuffled = shuffle([...allParticipants], s.cupsRng);
+  const byes = nextPowerOf2(shuffled.length) - shuffled.length;
+  const isIV = formato === 'eliminatoria_ida_vuelta';
+  firstRound = [];
+  for (let i = 0; i < byes; i++) {
+    firstRound.push(buildMatch(shuffled[i], BYE, isIV ? 'ida' : undefined));
+  }
+  for (let i = byes; i < shuffled.length; i += 2) {
+    firstRound.push(buildMatch(shuffled[i], shuffled[i + 1], isIV ? 'ida' : undefined));
+  }
+  if (isIV) {
+    secondRound = [];
+    for (let i = 0; i < byes; i++) {
+      secondRound.push(buildMatch(BYE, shuffled[i], 'vuelta'));
+    }
+    for (let i = byes; i < shuffled.length; i += 2) {
+      secondRound.push(buildMatch(shuffled[i + 1], shuffled[i], 'vuelta'));
+    }
+  }
+
+  const rounds: CupRound[] = [
+    { numero: 1, matches: firstRound, ...(isIV ? { leg: 'ida' as const } : {}) },
+  ];
+  if (secondRound) rounds.push({ numero: 2, matches: secondRound, leg: 'vuelta' as const });
+
+  s.cups.push({
+    id: s.nextCupId++,
+    name: trimmed,
+    tipo: 'inter_ligas',
+    formato,
+    categoria: 'primer_equipo',
+    year: s.year,
+    status: 'en_curso',
+    participantTeamIds: allParticipants,
+    rounds,
+    championTeamId: null,
+    recurring: false,
+  });
+
+  return s;
+}
+
 // Remove a cup entirely. History (season_records in DB) is preserved.
 // Cannot delete a cup that is actively being played mid-season.
 export function deleteCup(prev: GameState, cupId: number): GameState {

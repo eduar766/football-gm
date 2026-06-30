@@ -52,6 +52,7 @@ const TIPO_LABEL: Record<CupType, string> = {
   copa: 'Copa',
   liga_juvenil: 'Liga juvenil',
   torneo_verano: 'Torneo de verano',
+  inter_ligas: 'Copa Inter-Ligas',
 };
 
 const STATUS_CONFIG: Record<CupStatus, { label: string; color: string; gradient: string }> = {
@@ -665,6 +666,145 @@ function CreateCupForm({
   );
 }
 
+/* ── Inter-League Cup form ────────────────────────────────────────────── */
+
+function CreateInterLeagueCupForm({
+  isPreseason,
+  prestige,
+  playerTeamOptions,
+  rivalFederationOptions,
+}: {
+  isPreseason: boolean;
+  prestige: number;
+  playerTeamOptions: { value: string; label: string }[];
+  rivalFederationOptions: { value: string; label: string }[];
+}) {
+  const { gameId } = useParams({ strict: false }) as { gameId: string };
+  const id = Number(gameId);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('Copa Inter-Ligas');
+  const [formato, setFormato] = useState<CupFormat>('eliminatoria');
+  const [playerTeams, setPlayerTeams] = useState<string[]>([]);
+  const [rivalFeds, setRivalFeds] = useState<string[]>([]);
+
+  const unlocked = prestige >= 50;
+
+  const create = useMutationWithFeedback({
+    mutationFn: () =>
+      api.createInterLeagueCup(
+        id,
+        name,
+        formato,
+        playerTeams.map(Number),
+        rivalFeds.map(Number),
+      ),
+    queryKeyToInvalidate: ['cups', 'summary'],
+    successMessage: 'Copa Inter-Ligas creada correctamente',
+    onSuccess: () => { setPlayerTeams([]); setRivalFeds([]); },
+  });
+
+  const available = isPreseason && unlocked;
+
+  return (
+    <Card
+      mb="md"
+      style={{
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderLeft: `3px solid ${available ? '#3B82F6' : 'rgba(255,255,255,0.1)'}`,
+      }}
+      p={0}
+    >
+      <Group
+        justify="space-between"
+        px="md"
+        py="sm"
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+        onClick={() => setOpen(!open)}
+      >
+        <Group gap="sm">
+          <IconUsers size={16} color={available ? '#3B82F6' : 'rgba(255,255,255,0.3)'} />
+          <Text fw={700} size="sm" c={available ? undefined : 'dimmed'}>
+            Copa Inter-Ligas
+          </Text>
+          {!unlocked && (
+            <Badge size="xs" color="gray" variant="light">Requiere 50 prestigio</Badge>
+          )}
+          {unlocked && !isPreseason && (
+            <Badge size="xs" color="gray" variant="light">Solo en pretemporada</Badge>
+          )}
+          {unlocked && isPreseason && (
+            <Badge size="xs" color="blue" variant="light">Champions internacionales</Badge>
+          )}
+        </Group>
+        <Box style={{ color: 'rgba(255,255,255,0.4)' }}>
+          {open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+        </Box>
+      </Group>
+
+      <Collapse in={open}>
+        <Box px="md" pb="md">
+          <Text size="xs" c="dimmed" mb="sm">
+            Enfrenta al campeón de la liga rival con equipos de tu federación. Disponible cuando el prestigio ≥ 50.
+          </Text>
+          <Stack>
+            <Group grow>
+              <TextInput
+                label="Nombre"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                disabled={!available}
+              />
+              <Select
+                label="Formato"
+                value={formato}
+                onChange={(v) => setFormato((v ?? 'eliminatoria') as CupFormat)}
+                data={[
+                  { value: 'eliminatoria', label: 'Eliminatoria' },
+                  { value: 'eliminatoria_ida_vuelta', label: 'Eliminatoria I/V' },
+                ]}
+                disabled={!available}
+              />
+            </Group>
+            <MultiSelect
+              label="Tus equipos representantes"
+              placeholder="Elige al menos 1 equipo de tu liga"
+              data={playerTeamOptions}
+              value={playerTeams}
+              onChange={setPlayerTeams}
+              searchable
+              clearable
+              disabled={!available}
+            />
+            <MultiSelect
+              label="Federaciones rivales invitadas"
+              placeholder="Elige las federaciones cuyos campeones participan"
+              data={rivalFederationOptions}
+              value={rivalFeds}
+              onChange={setRivalFeds}
+              searchable
+              clearable
+              maxValues={7}
+              disabled={!available}
+            />
+            <Group justify="flex-end">
+              <Button
+                variant="gradient"
+                gradient={{ from: '#3B82F6', to: '#2563EB' }}
+                leftSection={<IconPlus size={14} />}
+                loading={create.isPending}
+                disabled={!available || playerTeams.length < 1 || rivalFeds.length < 1 || !name.trim()}
+                onClick={() => create.mutate(undefined as void)}
+              >
+                Crear Copa Inter-Ligas
+              </Button>
+            </Group>
+          </Stack>
+        </Box>
+      </Collapse>
+    </Card>
+  );
+}
+
 /* ── Edit Cup Modal ───────────────────────────────────────────────────── */
 
 function EditCupModal({
@@ -773,6 +913,7 @@ export function CupsPage() {
   const structure = useQuery({ queryKey: QK.structure(id), queryFn: () => api.structure(id) });
   const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
   const isPreseason = summary.data?.phase === 'pretemporada';
+  const prestige = summary.data?.federation.prestige ?? 0;
 
   const [editingCup, setEditingCup] = useState<CupDto | null>(null);
 
@@ -783,6 +924,13 @@ export function CupsPage() {
       .filter((t) => { if (seen.has(t.teamId)) return false; seen.add(t.teamId); return true; })
       .map((t) => ({ value: String(t.teamId), label: t.name }));
   }, [structure.data]);
+
+  const rivalFedOptions = useMemo(() => {
+    return (cups.data?.rivalFederations ?? []).map((f) => ({
+      value: String(f.federationId),
+      label: f.lastChampionName ? `${f.name} (campeón: ${f.lastChampionName})` : f.name,
+    }));
+  }, [cups.data]);
 
   const editMutation = useMutationWithFeedback({
     mutationFn: ({ cupId, teamIds }: { cupId: number; teamIds: number[] }) =>
@@ -857,6 +1005,12 @@ export function CupsPage() {
       />
 
       <CreateCupForm isPreseason={isPreseason} teamOptions={teamOptions} />
+      <CreateInterLeagueCupForm
+        isPreseason={isPreseason}
+        prestige={prestige}
+        playerTeamOptions={teamOptions}
+        rivalFederationOptions={rivalFedOptions}
+      />
 
       <Tabs defaultValue="copas" keepMounted={false}>
         <Tabs.List

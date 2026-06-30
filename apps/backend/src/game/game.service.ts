@@ -19,6 +19,7 @@ import {
   applyPointPenalties,
   cancelContract as engineCancelContract,
   createCup as engineCreateCup,
+  createInterLeagueCup as engineCreateInterLeagueCup,
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
   cultivateArraigo as engineCultivateArraigo,
@@ -82,6 +83,8 @@ import type {
   WorldRankingResponse,
   WorldStandingsResponse,
   TeamEconomiesResponse,
+  CommissionerReportsResponse,
+  CreateInterLeagueCupRequest,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -757,7 +760,7 @@ export class GameService {
               engineCupId: c.id,
               federationId: playerFedDbId,
               name: c.name,
-              tipo: c.tipo as 'liga' | 'copa',
+              tipo: (c.tipo === 'liga_juvenil' || c.tipo === 'torneo_verano' ? c.tipo : 'copa') as 'copa' | 'liga_juvenil' | 'torneo_verano',
               formato: c.formato,
             })),
           )
@@ -768,8 +771,14 @@ export class GameService {
       }
 
       const cupMap = await this.repo.engineToDbCup(gameId, tx);
+      // Only record cups where the champion is a player-federation team
+      // (inter-league cups may have a rival champion that has no DB row).
       const cupsThisYear = next.cups.filter(
-        (c) => c.year === closedYear && c.status === 'finalizada' && c.championTeamId !== null,
+        (c) =>
+          c.year === closedYear &&
+          c.status === 'finalizada' &&
+          c.championTeamId !== null &&
+          map.get(c.championTeamId!) != null,
       );
       if (cupsThisYear.length > 0) {
         await tx.insert(s.seasonRecords).values(
@@ -1225,6 +1234,23 @@ export class GameService {
         )
       : [];
 
+    // Financial data from engine state (only for teams in the player's federation).
+    const engTeam = engTeamId != null ? state.teams.find((t) => t.id === engTeamId) : undefined;
+    const finance = engTeam && engTeam.federationId === state.playerFederationId
+      ? {
+          treasury: engTeam.treasury,
+          financialHealth: teamFinancialHealth(engTeam.treasury, wageBill(engTeamId!, state.players)),
+          sponsors: engTeam.sponsors.map((sp) => ({
+            id: sp.id,
+            name: sp.name,
+            valorAnual: sp.valorAnual,
+            yearsLeft: sp.yearsLeft,
+          })),
+          lastEconomy: engTeam.lastTeamEconomy,
+          prizesWithheld: engTeam.prizesWithheld,
+        }
+      : null;
+
     return {
       ...team,
       divisionName: team.divisionName ?? null,
@@ -1245,6 +1271,7 @@ export class GameService {
         })),
         sanctions: teamSanctions,
       },
+      finance,
     };
   }
 
@@ -2451,6 +2478,18 @@ export class GameService {
       }),
       currentMatchday: state.currentMatchday,
       totalMatchdays: state.totalMatchdays,
+      rivalFederations: state.federations
+        .filter((f) => !f.isPlayer)
+        .map((f) => {
+          const latestRecord = (state.rivalSeasonRecords ?? [])
+            .filter((r) => r.federationId === f.id)
+            .sort((a, b) => b.year - a.year)[0];
+          return {
+            federationId: f.id,
+            name: f.name,
+            lastChampionName: latestRecord?.championName ?? null,
+          };
+        }),
     };
   }
 
@@ -2506,13 +2545,110 @@ export class GameService {
         engineCupId: created.id,
         federationId: fedMap.get(next.playerFederationId)!,
         name: created.name,
-        tipo: created.tipo,
+        tipo: (created.tipo === 'liga_juvenil' || created.tipo === 'torneo_verano' ? created.tipo : 'copa') as 'copa' | 'liga_juvenil' | 'torneo_verano',
         formato: input.formato,
       });
 
       await this.repo.saveState(tx, gameId, next);
       return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
+  }
+
+  async createInterLeagueCup(
+    gameId: number,
+    input: CreateInterLeagueCupRequest,
+  ): Promise<CupsResponse> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: s.teams.id, eng: s.teams.engineTeamId })
+        .from(s.teams)
+        .where(eq(s.teams.gameId, gameId));
+      const dbToEng = new Map<number, number>();
+      for (const r of rows) if (r.eng != null) dbToEng.set(r.id, r.eng);
+
+      const playerEngineIds: number[] = [];
+      for (const dbId of input.playerTeamIds) {
+        const eng = dbToEng.get(dbId);
+        if (eng == null) throw new BadRequestException(`Equipo ${dbId} no encontrado`);
+        playerEngineIds.push(eng);
+      }
+
+      const state = await this.repo.loadState(gameId, tx);
+      this.assertPretemporada(state, 'crear copa inter-ligas');
+
+      const next = engineCreateInterLeagueCup(
+        state,
+        input.name,
+        input.formato,
+        playerEngineIds,
+        input.rivalFederationIds,
+      );
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo crear la copa inter-ligas: prestige insuficiente, fondos insuficientes, o selección de federaciones inválida',
+        );
+      }
+
+      const existing = new Set(state.cups.map((c) => c.id));
+      const created = next.cups.find((c) => !existing.has(c.id))!;
+      const fedMap = await this.repo.engineToDbFederation(gameId, tx);
+
+      await tx.insert(s.cups).values({
+        gameId,
+        engineCupId: created.id,
+        federationId: fedMap.get(next.playerFederationId)!,
+        name: created.name,
+        tipo: 'copa',
+        formato: input.formato,
+      });
+
+      await this.repo.saveState(tx, gameId, next);
+      return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  async getCommissionerReports(gameId: number): Promise<CommissionerReportsResponse> {
+    const state = await this.repo.loadState(gameId);
+    const coeff = new Map(
+      (state.federationCoefficients ?? []).map((c) => [c.federationId, c.cumulativeScore]),
+    );
+
+    // Most recent season record per federation (top scorer + champion)
+    const latestRecord = new Map<number, typeof state.rivalSeasonRecords[number]>();
+    for (const r of state.rivalSeasonRecords ?? []) {
+      const existing = latestRecord.get(r.federationId);
+      if (!existing || r.year > existing.year) latestRecord.set(r.federationId, r);
+    }
+
+    const federations: CommissionerReportsResponse['federations'] = [];
+
+    for (const fed of state.federations) {
+      const record = latestRecord.get(fed.id);
+      const topScorer = record?.topScorer
+        ? { name: record.topScorer.name, teamName: record.topScorer.teamName, goals: record.topScorer.goals, year: record.year }
+        : null;
+      const lastChampion = record
+        ? { id: record.championId, name: record.championName, year: record.year }
+        : null;
+
+      federations.push({
+        federationId: fed.id,
+        federationName: fed.name,
+        prestige: fed.prestige,
+        isPlayer: fed.isPlayer,
+        lastChampion,
+        topScorer,
+        powerScore: coeff.get(fed.id) ?? 0,
+      });
+    }
+
+    // Sort: player federation first, then by power score
+    federations.sort((a, b) => {
+      if (a.isPlayer !== b.isPlayer) return a.isPlayer ? -1 : 1;
+      return b.powerScore - a.powerScore;
+    });
+
+    return { federations };
   }
 
   async editCupParticipants(gameId: number, cupId: number, teamIds: number[]): Promise<CupsResponse> {

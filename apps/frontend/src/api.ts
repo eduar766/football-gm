@@ -1,6 +1,7 @@
 import type {
   AccessRequestDto,
   AdminUserDto,
+  CommissionerReportsResponse,
   ComplianceResponse,
   CreateCupRequest,
   CreateGameRequest,
@@ -195,8 +196,20 @@ export const api = {
     req<CupsResponse>(`/games/${id}/cups/${cupId}`, { method: 'PATCH', body: JSON.stringify({ participantTeamIds }) }),
   deleteCup: (id: number, cupId: number) =>
     req<CupsResponse>(`/games/${id}/cups/${cupId}`, { method: 'DELETE' }),
+  createInterLeagueCup: (
+    id: number,
+    name: string,
+    formato: string,
+    playerTeamIds: number[],
+    rivalFederationIds: number[],
+  ) =>
+    req<CupsResponse>(`/games/${id}/cups/inter-league`, {
+      method: 'POST',
+      body: JSON.stringify({ name, formato, playerTeamIds, rivalFederationIds }),
+    }),
   worldRanking: (id: number) => req<WorldRankingResponse>(`/games/${id}/world-ranking`),
   worldStandings: (id: number) => req<WorldStandingsResponse>(`/games/${id}/world-standings`),
+  commissionerReports: (id: number) => req<CommissionerReportsResponse>(`/games/${id}/commissioner-reports`),
   exportGame: (id: number) => req<{ name: string; state: unknown }>(`/games/${id}/export`),
   importGame: (name: string, state: unknown) =>
     req<{ id: number }>('/games/import', { method: 'POST', body: JSON.stringify({ name, state }) }),

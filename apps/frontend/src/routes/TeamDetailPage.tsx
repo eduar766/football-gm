@@ -27,6 +27,8 @@ import {
   IconTrophyOff,
   IconUsers,
   IconBolt,
+  IconReportMoney,
+  IconAlertTriangle,
 } from '@tabler/icons-react';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -378,6 +380,106 @@ function ClubStructure({ t }: { t: any }) {
   );
 }
 
+/* ── Finanzas Tab ────────────────────────────────────────────────────── */
+
+const HEALTH_COLOR: Record<string, string> = {
+  saneada: '#10B981',
+  ajustada: '#F59E0B',
+  en_riesgo: '#F97316',
+  quiebra: '#EF4444',
+};
+const HEALTH_LABEL: Record<string, string> = {
+  saneada: 'Saneada',
+  ajustada: 'Ajustada',
+  en_riesgo: 'En riesgo',
+  quiebra: 'Quiebra',
+};
+
+function FinanzasTab({ finance }: { finance: NonNullable<any> }) {
+  const hc = HEALTH_COLOR[finance.financialHealth] ?? '#6B7280';
+  const eco = finance.lastEconomy;
+
+  return (
+    <Stack gap="md">
+      {/* Header: treasury + health */}
+      <Paper p="md" style={{ border: `1px solid ${hc}33`, background: `${hc}08`, borderLeft: `3px solid ${hc}` }}>
+        <Group justify="space-between" wrap="nowrap">
+          <Box>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} style={{ letterSpacing: '0.05em' }}>Tesorería</Text>
+            <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: hc }}>
+              {fmtMoney(finance.treasury)}
+            </Text>
+          </Box>
+          <Box ta="right">
+            <Badge color={finance.financialHealth === 'quiebra' ? 'red' : finance.financialHealth === 'en_riesgo' ? 'orange' : finance.financialHealth === 'ajustada' ? 'yellow' : 'teal'} variant="light" size="lg">
+              {HEALTH_LABEL[finance.financialHealth]}
+            </Badge>
+            {finance.prizesWithheld && (
+              <Group gap={4} mt={4} justify="flex-end">
+                <IconAlertTriangle size={12} color="#F59E0B" />
+                <Text size="xs" c="yellow">Premios retenidos</Text>
+              </Group>
+            )}
+          </Box>
+        </Group>
+      </Paper>
+
+      {/* Last season P&L */}
+      {eco && (
+        <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+          <Text fw={700} mb="md">P&L — Temporada {eco.year}</Text>
+          <Stack gap={4}>
+            {[
+              { label: 'Taquilla', value: eco.gateReceipts, positive: true },
+              { label: 'Patrocinadores', value: eco.sponsorIncome, positive: true },
+              { label: 'Premios', value: eco.prizeIncome, positive: true },
+              { label: 'Fichajes (ventas)', value: eco.transferIncome, positive: true },
+              { label: 'Salarios', value: -eco.wageExpenses, positive: false },
+              { label: 'Fichajes (compras)', value: -eco.transferExpenses, positive: false },
+              { label: 'Infraestructura', value: -eco.infrastructureExpenses, positive: false },
+            ].map(({ label, value }) => (
+              <Group key={label} justify="space-between" py={4} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <Text size="sm" c="dimmed">{label}</Text>
+                <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: value > 0 ? '#10B981' : value < 0 ? '#EF4444' : 'rgba(255,255,255,0.5)' }}>
+                  {value >= 0 ? '+' : ''}{fmtMoney(value)}
+                </Text>
+              </Group>
+            ))}
+            <Group justify="space-between" pt={6}>
+              <Text size="sm" fw={700}>Resultado neto</Text>
+              <Text size="sm" fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: eco.net >= 0 ? '#10B981' : '#EF4444' }}>
+                {eco.net >= 0 ? '+' : ''}{fmtMoney(eco.net)}
+              </Text>
+            </Group>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Sponsors */}
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+        <Text fw={700} mb="sm">Patrocinadores activos</Text>
+        {finance.sponsors.length === 0 ? (
+          <Text c="dimmed" size="sm">Sin patrocinadores.</Text>
+        ) : (
+          <Stack gap={4}>
+            {finance.sponsors.map((sp: any) => (
+              <Group key={sp.id} justify="space-between" py={4} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <Box>
+                  <Text size="sm" fw={600}>{sp.name}</Text>
+                  <Text size="xs" c="dimmed">{sp.yearsLeft} {sp.yearsLeft === 1 ? 'año' : 'años'} restantes</Text>
+                </Box>
+                <Text size="sm" fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>
+                  +{fmtMoney(sp.valorAnual)}/año
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+        )}
+      </Paper>
+    </Stack>
+  );
+}
+
 /* ── Main page ────────────────────────────────────────────────────────── */
 
 export function TeamDetailPage() {
@@ -580,6 +682,14 @@ export function TeamDetailPage() {
             <Tabs.Tab value="club" leftSection={<IconBuildingStadium size={14} />} style={{ fontWeight: 600 }}>
               Club
             </Tabs.Tab>
+            {t.finance && (
+              <Tabs.Tab value="finanzas" leftSection={<IconReportMoney size={14} />} style={{ fontWeight: 600 }}>
+                Finanzas
+                {t.finance.financialHealth === 'quiebra' && (
+                  <Box component="span" ml={4} style={{ color: '#EF4444', fontSize: 10 }}>●</Box>
+                )}
+              </Tabs.Tab>
+            )}
           </Tabs.List>
 
           {/* ── Plantilla ── */}
@@ -657,6 +767,13 @@ export function TeamDetailPage() {
               <ClubStructure t={t} />
             </Paper>
           </Tabs.Panel>
+
+          {/* ── Finanzas ── */}
+          {t.finance && (
+            <Tabs.Panel value="finanzas">
+              <FinanzasTab finance={t.finance} />
+            </Tabs.Panel>
+          )}
         </Tabs>
       </Grid.Col>
     </Grid>

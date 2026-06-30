@@ -637,7 +637,7 @@ export function advanceMatchday(prev: GameState): GameState {
     const imp = s.pendingImpulses.find(
       (p) => p.matchday === md && p.homeId === fx.homeId && p.awayId === fx.awayId,
     );
-    const { homeGoals, awayGoals, goalscorers } = simulateMatch(home, away, s.rng, imp?.favoredTeamId);
+    const { homeGoals, awayGoals, goalscorers } = simulateMatch(home, away, s.rng, imp?.favoredTeamId, s.players);
     const goalMinutes = goalscorers.map((g) => g.minute);
     const attribution = attributeMatchGoals(s, fx.homeId, fx.awayId, homeGoals, awayGoals, goalMinutes);
     s.results.push({ ...fx, homeGoals, awayGoals });
@@ -1180,6 +1180,8 @@ export function callReview(
           home,
           away,
           s.rng,
+          undefined,
+          s.players,
         );
         const goalMinutes = newGoalscorers.map((g) => g.minute);
         const attribution = attributeMatchGoals(

@@ -216,7 +216,7 @@ export interface Player {
 // Cups / tournaments (§4.4): elimination brackets that run alongside the
 // league and are concluded at season close. Independent rng (cupsRng) so they
 // don't perturb the match engine — golden-safe when no cups exist.
-export type CupType = 'copa' | 'liga_juvenil' | 'torneo_verano';
+export type CupType = 'copa' | 'liga_juvenil' | 'torneo_verano' | 'inter_ligas';
 
 export type CupStatus = 'en_curso' | 'finalizada';
 
