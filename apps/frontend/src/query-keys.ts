@@ -9,6 +9,7 @@ export const QK = {
   negotiations: (id: number) => ['negotiations', id],
   structure: (id: number) => ['structure', id],
   economy: (id: number) => ['economy', id],
+  teamEconomies: (id: number) => ['teamEconomies', id],
   norms: (id: number) => ['norms', id],
   events: (id: number) => ['events', id],
   cups: (id: number) => ['cups', id],

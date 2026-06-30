@@ -104,6 +104,12 @@ export function runTransferWindow(s: GameState): void {
     const fromTeamId = target.teamId;
     target.teamId = buyer.id;
     transferredPlayerIds.add(target.id);
+
+    // Update club treasuries immediately (team-level economy).
+    buyer.treasury -= fee;
+    const sellerTeam = s.teams.find((t) => t.id === fromTeamId);
+    if (sellerTeam) sellerTeam.treasury += fee;
+
     s.transfers.push({
       year: s.year,
       playerId: target.id,

@@ -25,6 +25,7 @@ import type {
   TransfersResponse,
   TeamDetail,
   TeamListItem,
+  TeamEconomiesResponse,
   WorldRankingResponse,
   WorldStandingsResponse,
 } from '@football-gm/contracts';
@@ -154,6 +155,12 @@ export const api = {
     }),
   cancelContract: (id: number, contractId: number) =>
     req<EconomyResponse>(`/games/${id}/economy/contracts/${contractId}/cancel`, { method: 'POST' }),
+  teamEconomies: (id: number) => req<TeamEconomiesResponse>(`/games/${id}/economy/teams`),
+  rescueTeam: (id: number, teamId: number, amount: number, withholdPrizes: boolean) =>
+    req<TeamEconomiesResponse>(`/games/${id}/economy/rescue`, {
+      method: 'POST',
+      body: JSON.stringify({ teamId, amount, withholdPrizes }),
+    }),
   compliance: (id: number) => req<ComplianceResponse>(`/games/${id}/economy/compliance`),
   transfers: (id: number) => req<TransfersResponse>(`/games/${id}/transfers`),
   norms: (id: number) => req<NormsResponse>(`/games/${id}/norms`),

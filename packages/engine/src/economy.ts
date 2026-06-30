@@ -4,13 +4,19 @@
 // determinism of the match engine stay intact.
 
 import { makeRng, randInt } from './rng';
+import { wageBill } from './salaries';
 import type {
   CommercialContractType,
   ContractOffer,
   GameState,
+  Team,
+  TeamSeasonEconomy,
+  TeamSponsor,
 } from './types';
 
 export const STARTING_TREASURY = 80_000_000;
+export const TEAM_STARTING_TREASURY_BASE = 5_000_000;
+export const TEAM_STARTING_TREASURY_PER_STRENGTH = 200_000;
 const OP_BASE = 1_000_000;
 const OP_PER_TEAM = 400_000;
 const OP_PER_DIVISION = 800_000;
@@ -199,4 +205,165 @@ export function processEconomy(s: GameState): {
     competing, // player teams only — rivals excluded
   );
   return { econDelta, talentBump };
+}
+
+// ── Team-level economy ────────────────────────────────────────────────────────
+
+export type TeamFinancialHealth = 'saneada' | 'ajustada' | 'en_riesgo' | 'quiebra';
+
+export function teamFinancialHealth(treasury: number, annualWages: number): TeamFinancialHealth {
+  const buffer = Math.max(annualWages, 1_000_000);
+  if (treasury < 0) return 'quiebra';
+  if (treasury < buffer) return 'en_riesgo';
+  if (treasury < buffer * 2) return 'ajustada';
+  return 'saneada';
+}
+
+const TEAM_SPONSOR_NAMES = [
+  'Banca Regional', 'Seguros del Norte', 'Cerveza Dorada', 'AutoCenter',
+  'TechSport', 'Energía Plus', 'Café Montaña', 'Telecomunicaciones Sur',
+  'Constructora Álvarez', 'Supermercados Frescos', 'Farmacia Vida', 'Hotel Plaza',
+  'Transportes Rápidos', 'Clínica Salud', 'Editorial Deportes', 'Radio Estadio',
+  'Bodega Rioja', 'Óptica Central', 'Concesionario Premier', 'Medios Digitales',
+];
+
+function teamSponsorValue(team: Team, federationPrestige: number): number {
+  // Base value scales with team strength + stadium size + federation prestige halo.
+  return Math.round(
+    (team.strength * 12_000 + team.stadiumCapacity * 6 + 150_000) *
+    (0.8 + (federationPrestige / 100) * 0.4),
+  );
+}
+
+// Called at startSeason for player-federation teams: auto-renew or sign new sponsors.
+export function autoNegotiateTeamSponsors(s: GameState): void {
+  const rng = makeRng((s.seed ^ (s.year * 0x45d9f3b) ^ 0x2c4a1d7e) >>> 0);
+  const playerTeams = s.teams.filter(
+    (t) => t.divisionOrden !== null && t.federationId === s.playerFederationId,
+  );
+
+  for (const team of playerTeams) {
+    // Decrement existing sponsor years and remove expired ones.
+    for (const sp of team.sponsors) sp.yearsLeft -= 1;
+    team.sponsors = team.sponsors.filter((sp) => sp.yearsLeft > 0);
+
+    // Teams aim to maintain 1-2 active sponsors.
+    const target = 1 + (randInt(rng, 0, 1));
+    const needed = Math.max(0, target - team.sponsors.length);
+    for (let i = 0; i < needed; i++) {
+      const name = TEAM_SPONSOR_NAMES[randInt(rng, 0, TEAM_SPONSOR_NAMES.length - 1)];
+      const valor = Math.round(teamSponsorValue(team, s.prestige) * (0.8 + randInt(rng, 0, 4) * 0.1));
+      const sponsor: TeamSponsor = {
+        id: s.nextTeamSponsorId++,
+        name,
+        valorAnual: valor,
+        yearsLeft: 1 + randInt(rng, 0, 2), // 1-3 years
+      };
+      team.sponsors.push(sponsor);
+    }
+  }
+}
+
+// Computes team P&L for the just-closed season and updates team treasuries.
+// Called in closeSeason AFTER payLeaguePrize and processEconomy (federation),
+// but BEFORE runTransferWindow (so transfer fees from this window don't overlap).
+export function processTeamEconomies(s: GameState): void {
+  const capacityMultiplier = 1 - s.eventCapacityPenaltyPct;
+  const playerTeamIds = new Set(
+    s.teams
+      .filter((t) => t.divisionOrden !== null && t.federationId === s.playerFederationId)
+      .map((t) => t.id),
+  );
+
+  // Transfer fees from the CURRENT year's window (ran at end of last closeSeason).
+  // transfers are recorded with year === s.year because the window ran after s.year++ last season.
+  const transfersByBuyer = new Map<number, number>();
+  const transfersBySeller = new Map<number, number>();
+  for (const tr of s.transfers.filter((t) => t.year === s.year)) {
+    if (playerTeamIds.has(tr.toTeamId)) {
+      transfersByBuyer.set(tr.toTeamId, (transfersByBuyer.get(tr.toTeamId) ?? 0) + tr.transferFee);
+    }
+    if (playerTeamIds.has(tr.fromTeamId)) {
+      transfersBySeller.set(tr.fromTeamId, (transfersBySeller.get(tr.fromTeamId) ?? 0) + tr.transferFee);
+    }
+  }
+
+  for (const team of s.teams) {
+    if (!playerTeamIds.has(team.id)) continue;
+
+    // Gate receipts: team keeps 90% (federation keeps 10% — already in processEconomy).
+    let gateReceipts = 0;
+    if (team.stadiumCapacity > 0) {
+      const homeMatches = s.results.filter((r) => r.homeId === team.id).length;
+      gateReceipts = Math.round(homeMatches * team.stadiumCapacity * 15 * 0.9 * capacityMultiplier);
+    }
+
+    // Sponsor income.
+    const sponsorIncome = team.sponsors.reduce((a, sp) => a + sp.valorAnual, 0);
+
+    // Prize income: from prizePayments for this season (prizesWithheld check done in payLeaguePrize/payCupPrize).
+    const prizeIncome = s.prizePayments
+      .filter((p) => p.year === s.year && p.teamId === team.id)
+      .reduce((a, p) => a + p.amount, 0);
+
+    // Transfer fees (from last window, recorded with this year number).
+    const transferIncome = transfersBySeller.get(team.id) ?? 0;
+    const transferExpenses = transfersByBuyer.get(team.id) ?? 0;
+
+    // Wages.
+    const wageExpenses = wageBill(team.id, s.players);
+
+    // Autonomous infrastructure investment: teams with surplus spend on improvement.
+    const reserve = Math.max(wageExpenses * 2, 2_000_000);
+    const surplus = team.treasury - reserve;
+    let infrastructureExpenses = 0;
+    if (surplus > 2_000_000) {
+      // Invest up to 35% of surplus, max 8M per season.
+      infrastructureExpenses = Math.min(Math.round(surplus * 0.35), 8_000_000);
+      // Stadium expansion: every 3M invested adds 1000 seats (max +5000/season).
+      const seatBonus = Math.min(5_000, Math.floor(infrastructureExpenses / 3_000_000) * 1_000);
+      team.stadiumCapacity += seatBonus;
+      // Academy improvement: every 2M adds 1 rating point (max +3/season).
+      const academiaBonus = Math.min(3, Math.floor(infrastructureExpenses / 2_000_000));
+      team.academia = Math.min(100, team.academia + academiaBonus);
+    }
+
+    const net = gateReceipts + sponsorIncome + prizeIncome + transferIncome
+              - wageExpenses - transferExpenses - infrastructureExpenses;
+    team.treasury += net;
+
+    team.lastTeamEconomy = {
+      year: s.year,
+      gateReceipts,
+      sponsorIncome,
+      prizeIncome,
+      transferIncome,
+      wageExpenses,
+      transferExpenses,
+      infrastructureExpenses,
+      net,
+      treasuryAfter: team.treasury,
+    } satisfies TeamSeasonEconomy;
+  }
+}
+
+// Rescue: commissioner injects capital from federation treasury into a struggling club.
+export function rescueTeam(
+  prev: GameState,
+  teamId: number,
+  amount: number,
+  withholdPrizes: boolean,
+): GameState {
+  const team = prev.teams.find((t) => t.id === teamId);
+  if (!team || team.federationId !== prev.playerFederationId) return prev;
+  const safeAmount = Math.max(0, Math.round(amount));
+  if (safeAmount === 0 || prev.treasury < safeAmount) return prev;
+
+  const s = structuredClone(prev);
+  const t = s.teams.find((t) => t.id === teamId)!;
+  s.treasury -= safeAmount;
+  t.treasury += safeAmount;
+  if (withholdPrizes) t.prizesWithheld = true;
+  s.rescueLog.push({ year: s.year, teamId, teamName: t.name, amount: safeAmount });
+  return s;
 }

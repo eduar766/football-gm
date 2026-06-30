@@ -289,7 +289,7 @@ export type PalmaresEntry = z.infer<typeof PalmaresEntry>;
 /* ----------------------------------- commissioner: norms & sanctions (§4.7) */
 
 const _normTypeValues = [
-  'tope_plantilla', 'minimo_competitivo', 'tope_salarial', 'tope_extrangeros', 'minimo_cantera', 'tope_edad_media',
+  'tope_plantilla', 'minimo_competitivo', 'tope_salarial', 'tope_extrangeros', 'minimo_cantera', 'tope_edad_media', 'tope_deficit',
 ] as const satisfies [EngineNormType, ...EngineNormType[]];
 
 export const NormType = z.enum(_normTypeValues);
@@ -689,6 +689,65 @@ export type SignContractRequest = z.infer<typeof SignContractRequest>;
 export const SetEconomyPolicyRequest = EconomyPolicyDto;
 export type SetEconomyPolicyRequest = z.infer<typeof SetEconomyPolicyRequest>;
 
+/* ----------------------------------- team economy (Fase economy) */
+
+export const TeamSponsorDto = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  valorAnual: z.number().int(),
+  yearsLeft: z.number().int(),
+});
+export type TeamSponsorDto = z.infer<typeof TeamSponsorDto>;
+
+export const TeamSeasonEconomyDto = z.object({
+  year: z.number().int(),
+  gateReceipts: z.number().int(),
+  sponsorIncome: z.number().int(),
+  prizeIncome: z.number().int(),
+  transferIncome: z.number().int(),
+  wageExpenses: z.number().int(),
+  transferExpenses: z.number().int(),
+  infrastructureExpenses: z.number().int(),
+  net: z.number().int(),
+  treasuryAfter: z.number().int(),
+});
+export type TeamSeasonEconomyDto = z.infer<typeof TeamSeasonEconomyDto>;
+
+export const RescueEntryDto = z.object({
+  year: z.number().int(),
+  teamId: z.number().int(),
+  teamName: z.string(),
+  amount: z.number().int(),
+});
+export type RescueEntryDto = z.infer<typeof RescueEntryDto>;
+
+export const TeamFinancialSummary = z.object({
+  teamId: z.number().int(),
+  teamName: z.string(),
+  divisionName: z.string().nullable(),
+  treasury: z.number().int(),
+  financialHealth: FinancialHealth,
+  sponsors: z.array(TeamSponsorDto),
+  lastEconomy: TeamSeasonEconomyDto.nullable(),
+  prizesWithheld: z.boolean(),
+  recentForm: z.array(z.enum(['W', 'D', 'L'])),
+});
+export type TeamFinancialSummary = z.infer<typeof TeamFinancialSummary>;
+
+export const TeamEconomiesResponse = z.object({
+  federationTreasury: z.number().int(),
+  teams: z.array(TeamFinancialSummary),
+  rescueLog: z.array(RescueEntryDto),
+});
+export type TeamEconomiesResponse = z.infer<typeof TeamEconomiesResponse>;
+
+export const RescueTeamRequest = z.object({
+  teamId: z.number().int().positive(),
+  amount: z.number().int().positive(),
+  withholdPrizes: z.boolean().default(false),
+});
+export type RescueTeamRequest = z.infer<typeof RescueTeamRequest>;
+
 /* ----------------------------------- commissioner: prizes (Fase 6.5) */
 
 export const PrizeKind = z.enum(['liga', 'copa']);
@@ -830,6 +889,7 @@ export const AddNormRequest = z
   .refine(
     (v) => {
       if (v.tipo === 'tope_salarial') return v.valor >= 0 && v.valor <= 200_000_000;
+      if (v.tipo === 'tope_deficit') return v.valor >= 0 && v.valor <= 500_000_000;
       if (v.tipo === 'tope_edad_media') return v.valor >= 16 && v.valor <= 40;
       // strength-based (1-100) and count-based (1-25) norms
       return v.valor >= 1 && v.valor <= 100;

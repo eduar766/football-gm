@@ -51,6 +51,8 @@ import {
   detectRivalries,
   deleteCup as engineDeleteCup,
   editCupParticipants as engineEditCupParticipants,
+  teamFinancialHealth,
+  rescueTeam as engineRescueTeam,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -79,6 +81,7 @@ import type {
   TeamListItem,
   WorldRankingResponse,
   WorldStandingsResponse,
+  TeamEconomiesResponse,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -2043,6 +2046,81 @@ export class GameService {
       })
       .sort((a, b) => b.wageBill - a.wageBill);
     return { cap, rows };
+  }
+
+  /* ------------------------------ team economy (Fase economy) */
+
+  async getTeamEconomies(gameId: number): Promise<TeamEconomiesResponse> {
+    const state = await this.repo.loadState(gameId);
+    const map = await this.repo.engineToDbTeam(gameId);
+    const divName = new Map(state.divisions.map((d) => [d.orden, d.name]));
+    const playerTeams = state.teams.filter(
+      (t) => t.divisionOrden !== null && t.federationId === state.playerFederationId,
+    );
+    return {
+      federationTreasury: state.treasury,
+      teams: playerTeams.map((t) => ({
+        teamId: map.get(t.id) ?? t.id,
+        teamName: t.name,
+        divisionName: divName.get(t.divisionOrden!) ?? null,
+        treasury: t.treasury,
+        financialHealth: teamFinancialHealth(t.treasury, wageBill(t.id, state.players)),
+        sponsors: t.sponsors,
+        lastEconomy: t.lastTeamEconomy,
+        prizesWithheld: t.prizesWithheld,
+        recentForm: t.recentForm,
+      })),
+      rescueLog: state.rescueLog.map((r) => ({
+        year: r.year,
+        teamId: map.get(r.teamId) ?? r.teamId,
+        teamName: r.teamName,
+        amount: r.amount,
+      })),
+    };
+  }
+
+  async rescueTeam(
+    gameId: number,
+    teamId: number,
+    amount: number,
+    withholdPrizes: boolean,
+  ): Promise<TeamEconomiesResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      // teamId from client is DB id; invert the engine→DB map to get engine id.
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
+      const dbToEng = new Map([...engToDb.entries()].map(([eng, db]) => [db, eng]));
+      const engineTeamId = dbToEng.get(teamId) ?? teamId;
+      const next = engineRescueTeam(state, engineTeamId, amount, withholdPrizes);
+      if (next === state) throw new BadRequestException('No se puede rescatar el equipo (fondos insuficientes o equipo no válido)');
+      await this.repo.saveState(tx, gameId, next);
+      // Re-load team map for response.
+      const map = await this.repo.engineToDbTeam(gameId, tx);
+      const divName = new Map(next.divisions.map((d) => [d.orden, d.name]));
+      const playerTeams = next.teams.filter(
+        (t) => t.divisionOrden !== null && t.federationId === next.playerFederationId,
+      );
+      return {
+        federationTreasury: next.treasury,
+        teams: playerTeams.map((t) => ({
+          teamId: map.get(t.id) ?? t.id,
+          teamName: t.name,
+          divisionName: divName.get(t.divisionOrden!) ?? null,
+          treasury: t.treasury,
+          financialHealth: teamFinancialHealth(t.treasury, wageBill(t.id, next.players)),
+          sponsors: t.sponsors,
+          lastEconomy: t.lastTeamEconomy,
+          prizesWithheld: t.prizesWithheld,
+          recentForm: t.recentForm,
+        })),
+        rescueLog: next.rescueLog.map((r) => ({
+          year: r.year,
+          teamId: map.get(r.teamId) ?? r.teamId,
+          teamName: r.teamName,
+          amount: r.amount,
+        })),
+      };
+    });
   }
 
   /* ------------------------------ commissioner: norms & sanctions (§4.7) */

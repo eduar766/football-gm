@@ -31,6 +31,7 @@ const TIPO_LABEL: Record<NormType, string> = {
   tope_extrangeros: 'Tope de extranjeros',
   minimo_cantera: 'Mínimo cantera',
   tope_edad_media: 'Tope de edad media',
+  tope_deficit: 'Tope de déficit (FFP)',
 };
 
 const DEFAULT_VALOR: Record<NormType, number> = {
@@ -40,10 +41,11 @@ const DEFAULT_VALOR: Record<NormType, number> = {
   tope_extrangeros: 5,
   minimo_cantera: 5,
   tope_edad_media: 28,
+  tope_deficit: 5_000_000,
 };
 
 const formatValor = (tipo: NormType, valor: number) =>
-  tipo === 'tope_salarial' ? money(valor) : String(valor);
+  tipo === 'tope_salarial' || tipo === 'tope_deficit' ? money(valor) : String(valor);
 
 export function NormsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };

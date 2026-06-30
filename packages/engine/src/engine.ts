@@ -10,9 +10,13 @@ import { computeStandings, type StandingRow } from './standings';
 import { progressNegotiations, rivalPoachAttempt } from './negotiation';
 import { divisionName, PROMOTION_RELEGATION } from './structure';
 import {
+  autoNegotiateTeamSponsors,
   generateContractOffers,
   processEconomy,
+  processTeamEconomies,
   STARTING_TREASURY,
+  TEAM_STARTING_TREASURY_BASE,
+  TEAM_STARTING_TREASURY_PER_STRENGTH,
 } from './economy';
 import {
   applyPointPenalties,
@@ -122,6 +126,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         wageCap: 0,
         stadiumCapacity: t.stadiumCapacity ?? DEFAULT_STADIUM_CAPACITY,
         academia: t.academia ?? DEFAULT_ACADEMIA,
+        treasury: TEAM_STARTING_TREASURY_BASE + t.strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
+        sponsors: [],
+        lastTeamEconomy: null,
+        prizesWithheld: false,
+        recentForm: [],
+        matchesPlayedThisSeason: 0,
       });
       if (t.squad) {
         for (const p of t.squad) {
@@ -162,6 +172,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         wageCap: 0,
         stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
         academia: DEFAULT_ACADEMIA,
+        treasury: TEAM_STARTING_TREASURY_BASE + strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
+        sponsors: [],
+        lastTeamEconomy: null,
+        prizesWithheld: false,
+        recentForm: [],
+        matchesPlayedThisSeason: 0,
       });
     }
   }
@@ -192,6 +208,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         wageCap: 0,
         stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
         academia: DEFAULT_ACADEMIA,
+        treasury: 0, // rival teams don't participate in player-fed economy
+        sponsors: [],
+        lastTeamEconomy: null,
+        prizesWithheld: false,
+        recentForm: [],
+        matchesPlayedThisSeason: 0,
       });
     }
   }
@@ -317,6 +339,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     recordBook: null,
     federationCoefficients: [],
     schemaVersion: CURRENT_SCHEMA_VERSION,
+    rescueLog: [],
+    nextTeamSponsorId: 1,
   };
 }
 
@@ -494,6 +518,9 @@ export function startSeason(prev: GameState): GameState {
     processInterLeagueTransfers(s); // stars from weaker rivals join player's league
   }
 
+  // Team sponsors: auto-negotiate at the start of each season (uses independent rng).
+  autoNegotiateTeamSponsors(s);
+
   return s;
 }
 
@@ -551,6 +578,12 @@ export function createOwnTeam(
     wageCap: 0,
     stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
     academia: DEFAULT_ACADEMIA,
+    treasury: TEAM_STARTING_TREASURY_BASE + CREATED_TEAM_STRENGTH * TEAM_STARTING_TREASURY_PER_STRENGTH,
+    sponsors: [],
+    lastTeamEconomy: null,
+    prizesWithheld: false,
+    recentForm: [],
+    matchesPlayedThisSeason: 0,
   });
   if (squad) {
     for (const p of squad) {
@@ -621,6 +654,14 @@ export function advanceMatchday(prev: GameState): GameState {
       homeRedCards: attribution.homeRedCards,
       awayRedCards: attribution.awayRedCards,
     });
+
+    // Track team form (last 5 results) and matches played.
+    const homeResult: 'W' | 'D' | 'L' = homeGoals > awayGoals ? 'W' : homeGoals === awayGoals ? 'D' : 'L';
+    const awayResult: 'W' | 'D' | 'L' = awayGoals > homeGoals ? 'W' : awayGoals === homeGoals ? 'D' : 'L';
+    home.recentForm = [homeResult, ...home.recentForm].slice(0, 5) as ('W' | 'D' | 'L')[];
+    away.recentForm = [awayResult, ...away.recentForm].slice(0, 5) as ('W' | 'D' | 'L')[];
+    home.matchesPlayedThisSeason += 1;
+    away.matchesPlayedThisSeason += 1;
   }
 
   s.pendingImpulses = s.pendingImpulses.filter((p) => p.matchday !== md);
@@ -820,6 +861,10 @@ export function closeSeason(prev: GameState): GameState {
   // processEconomy so it sees the payment in s.prizePayments.
   payLeaguePrize(s);
 
+  // Team-level economy: gate receipts, sponsors, prizes, wages → team.treasury.
+  // Must run AFTER payLeaguePrize (prizePayments are ready) and BEFORE year increment.
+  processTeamEconomies(s);
+
   // Federation finances for the just-closed season (§4.5 + §5 tension). Pure,
   // no state.rng — keeps the match engine deterministic and golden-stable.
   const { econDelta, talentBump } = processEconomy(s);
@@ -1012,6 +1057,12 @@ export function closeSeason(prev: GameState): GameState {
   s.eventCapacityPenaltyPct = 0;
   s.eventImpulseLoss = 0;
   s.eventTreasuryInjection = 0;
+  // Reset per-season team flags.
+  for (const t of s.teams) {
+    t.prizesWithheld = false;
+    t.matchesPlayedThisSeason = 0;
+  }
+
   // Force-complete any cups that were not finished during the season
   // (e.g. scheduling edge cases). Must run BEFORE saving templates so
   // recurring cups are always captured regardless of scheduling issues.

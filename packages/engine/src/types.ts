@@ -39,6 +39,36 @@ export interface Division {
   federationId: number; // which federation owns this division (player or rival)
 }
 
+// Club sponsorship contract (autonomous — signed by the club, not the commissioner).
+export interface TeamSponsor {
+  id: number;
+  name: string;
+  valorAnual: number;
+  yearsLeft: number;
+}
+
+// Per-team P&L for one season (snapshot written at closeSeason).
+export interface TeamSeasonEconomy {
+  year: number;
+  gateReceipts: number;    // 90% of home match gate
+  sponsorIncome: number;
+  prizeIncome: number;
+  transferIncome: number;  // fees received from player sales this window
+  wageExpenses: number;
+  transferExpenses: number; // fees paid for player purchases this window
+  infrastructureExpenses: number;
+  net: number;
+  treasuryAfter: number;
+}
+
+// Log entry written when the commissioner rescues a team.
+export interface RescueEntry {
+  year: number;
+  teamId: number;
+  teamName: string;
+  amount: number;
+}
+
 export interface Team {
   id: number;
   name: string;
@@ -60,6 +90,16 @@ export interface Team {
   wageCap: number;
   stadiumCapacity: number;
   academia: number;
+  // Club finances (team-level, independent of federation treasury).
+  treasury: number;
+  sponsors: TeamSponsor[];
+  lastTeamEconomy: TeamSeasonEconomy | null;
+  // Commissioner rescue flag: when true, this team's league/cup prizes are
+  // withheld (stay in federation treasury) until the flag is cleared.
+  prizesWithheld: boolean;
+  // Match engine realism fields (Phase 2 — initialised here to avoid a separate migration).
+  recentForm: ('W' | 'D' | 'L')[];   // last 5 results, oldest first
+  matchesPlayedThisSeason: number;
 }
 
 // How the player's league is contested (§4.4 "define su liga como quiera").
@@ -342,7 +382,7 @@ export interface PlayerSeed {
 
 // Norms & sanctions (§4.7). The commissioner defines rules; autonomous teams
 // may breach them; the commissioner sanctions the offenders.
-export type NormType = 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media';
+export type NormType = 'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media' | 'tope_deficit';
 
 export interface Norm {
   id: number;
@@ -659,6 +699,10 @@ export interface GameState {
   recordBook: RecordBook | null;
   federationCoefficients: FederationCoefficient[];
   schemaVersion: number;
+  // Club rescue log: every commissioner injection appears here.
+  rescueLog: RescueEntry[];
+  // Counter for team sponsor IDs (independent of federation contract IDs).
+  nextTeamSponsorId: number;
 }
 
 export interface RecordBook {

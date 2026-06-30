@@ -12,6 +12,7 @@ import {
   Stack,
   Table,
   Text,
+  Tooltip,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
@@ -22,6 +23,7 @@ import {
   IconArrowUp,
   IconArrowDown,
   IconArrowRight,
+  IconLifebuoy,
 } from '@tabler/icons-react';
 import type { FinancialHealth } from '@football-gm/contracts';
 import { api } from '../api';
@@ -61,6 +63,18 @@ export function EconomyPage() {
   const transfersData = useQuery({
     queryKey: QK.transfers(id),
     queryFn: () => api.transfers(id),
+  });
+  const teamEcos = useQuery({
+    queryKey: QK.teamEconomies(id),
+    queryFn: () => api.teamEconomies(id),
+  });
+  const [rescueTeamId, setRescueTeamId] = useState<number | null>(null);
+  const [rescueAmount, setRescueAmount] = useState(1_000_000);
+  const [rescueWithhold, setRescueWithhold] = useState(false);
+  const rescue = useMutationWithFeedback({
+    mutationFn: () => api.rescueTeam(id, rescueTeamId!, rescueAmount, rescueWithhold),
+    queryKeyToInvalidate: ['teamEconomies', 'economy', 'summary'],
+    successMessage: 'Rescate inyectado correctamente',
   });
 
   const [talent, setTalent] = useState(0);
@@ -625,6 +639,174 @@ export function EconomyPage() {
           <Text c="dimmed" size="sm">
             Sin actividad de fichajes en la temporada actual.
           </Text>
+        )}
+      </Paper>
+
+      {/* Team Finances */}
+      <Paper withBorder p="md">
+        <Group justify="space-between" mb="sm">
+          <Text fw={700}>Finanzas de equipos</Text>
+          {teamEcos.data && (
+            <Text size="xs" c="dimmed">
+              Tesorería federación: <span style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>{money(teamEcos.data.federationTreasury)}</span>
+            </Text>
+          )}
+        </Group>
+        <Text size="xs" c="dimmed" mb="sm">
+          Vista de solo lectura de las finanzas de cada club. Puedes inyectar capital de rescate desde la tesorería federativa.
+        </Text>
+        {!teamEcos.data || teamEcos.data.teams.length === 0 ? (
+          <Text c="dimmed" size="sm">Sin equipos en competición.</Text>
+        ) : (
+          <Table striped>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Equipo</Table.Th>
+                <Table.Th>División</Table.Th>
+                <Table.Th ta="right">Tesorería</Table.Th>
+                <Table.Th ta="right">Forma</Table.Th>
+                <Table.Th ta="right">Neto últ. temp.</Table.Th>
+                <Table.Th ta="right">Patrocinadores</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {teamEcos.data.teams.map((t, i) => {
+                const healthColor = t.financialHealth === 'saneada' ? 'green'
+                  : t.financialHealth === 'ajustada' ? 'blue'
+                  : t.financialHealth === 'en_riesgo' ? 'yellow'
+                  : 'red';
+                return (
+                  <Table.Tr key={t.teamId} className="stagger-item" style={{ animationDelay: `${i * 50}ms` }}>
+                    <Table.Td fw={600}>
+                      {t.teamName}
+                      {t.prizesWithheld && (
+                        <Badge size="xs" color="orange" variant="light" ml="xs">Premios retenidos</Badge>
+                      )}
+                    </Table.Td>
+                    <Table.Td c="dimmed">{t.divisionName ?? '—'}</Table.Td>
+                    <Table.Td ta="right">
+                      <Tooltip label={t.financialHealth}>
+                        <Text
+                          fw={600}
+                          style={{
+                            fontFamily: 'var(--mantine-font-family-monospace)',
+                            color: t.treasury >= 0 ? '#10B981' : '#EF4444',
+                          }}
+                        >
+                          {t.treasury >= 0 ? '' : '−'}{money(Math.abs(t.treasury))}
+                        </Text>
+                      </Tooltip>
+                      <Badge size="xs" color={healthColor} variant="light" mt={2}>
+                        {t.financialHealth === 'saneada' ? 'Saneada'
+                          : t.financialHealth === 'ajustada' ? 'Ajustada'
+                          : t.financialHealth === 'en_riesgo' ? 'En riesgo'
+                          : 'Quiebra'}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Group gap={2} justify="flex-end">
+                        {t.recentForm.slice(0, 5).map((r, j) => (
+                          <Badge
+                            key={j}
+                            size="xs"
+                            color={r === 'W' ? 'green' : r === 'D' ? 'gray' : 'red'}
+                            variant="filled"
+                            style={{ minWidth: 20, padding: '0 4px' }}
+                          >
+                            {r === 'W' ? 'G' : r === 'D' ? 'E' : 'P'}
+                          </Badge>
+                        ))}
+                      </Group>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      {t.lastEconomy ? (
+                        <Text
+                          size="sm"
+                          fw={600}
+                          style={{
+                            fontFamily: 'var(--mantine-font-family-monospace)',
+                            color: t.lastEconomy.net >= 0 ? '#10B981' : '#EF4444',
+                          }}
+                        >
+                          {t.lastEconomy.net >= 0 ? '+' : '−'}{money(Math.abs(t.lastEconomy.net))}
+                        </Text>
+                      ) : (
+                        <Text c="dimmed" size="sm">—</Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+                        {t.sponsors.length > 0
+                          ? money(t.sponsors.reduce((a, s) => a + s.valorAnual, 0))
+                          : '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color="orange"
+                        leftSection={<IconLifebuoy size={12} />}
+                        disabled={t.financialHealth !== 'en_riesgo' && t.financialHealth !== 'quiebra'}
+                        onClick={() => {
+                          setRescueTeamId(t.teamId);
+                          setRescueAmount(1_000_000);
+                          setRescueWithhold(false);
+                          modals.open({
+                            title: `Rescatar a ${t.teamName}`,
+                            children: (
+                              <Stack gap="sm">
+                                <Text size="sm">
+                                  Inyecta capital de la tesorería federativa ({money(teamEcos.data!.federationTreasury)} disponibles) en el club.
+                                </Text>
+                                <NumberInput
+                                  label="Importe (€)"
+                                  value={rescueAmount}
+                                  onChange={(v) => setRescueAmount(Number(v) || 0)}
+                                  min={1}
+                                  step={500_000}
+                                  thousandSeparator="."
+                                  decimalSeparator=","
+                                />
+                                <Button
+                                  fullWidth
+                                  color="orange"
+                                  leftSection={<IconLifebuoy size={16} />}
+                                  loading={rescue.isPending}
+                                  onClick={() => {
+                                    rescue.mutate(undefined as void);
+                                    modals.closeAll();
+                                  }}
+                                >
+                                  Confirmar rescate
+                                </Button>
+                              </Stack>
+                            ),
+                          });
+                        }}
+                      >
+                        Rescatar
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        )}
+        {teamEcos.data && teamEcos.data.rescueLog.length > 0 && (
+          <Paper withBorder p="sm" mt="md" bg="dark.9">
+            <Text size="xs" fw={600} c="dimmed" mb="xs">Historial de rescates</Text>
+            {teamEcos.data.rescueLog.slice(-5).reverse().map((r, i) => (
+              <Group key={i} justify="space-between">
+                <Text size="xs">Año {r.year} · {r.teamName}</Text>
+                <Text size="xs" fw={600} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#F97316' }}>
+                  {money(r.amount)}
+                </Text>
+              </Group>
+            ))}
+          </Paper>
         )}
       </Paper>
 

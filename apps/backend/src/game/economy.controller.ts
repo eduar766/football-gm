@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  RescueTeamRequest,
   SetCupPrizeRequest,
   SetEconomyPolicyRequest,
   SetLeaguePrizeRequest,
@@ -50,6 +51,19 @@ export class EconomyController {
     @Param('contractId', ParseIntPipe) contractId: number,
   ) {
     return this.games.cancelContract(id, contractId);
+  }
+
+  @Get(':id/economy/teams')
+  teamEconomies(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getTeamEconomies(id);
+  }
+
+  @Post(':id/economy/rescue')
+  rescueTeam(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(RescueTeamRequest)) body: RescueTeamRequest,
+  ) {
+    return this.games.rescueTeam(id, body.teamId, body.amount, body.withholdPrizes);
   }
 
   @Get(':id/economy/compliance')

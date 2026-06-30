@@ -66,7 +66,10 @@ export {
   signContract,
   cancelContract,
   setEconomyPolicy,
+  teamFinancialHealth,
+  rescueTeam,
 } from './economy';
+export type { TeamFinancialHealth } from './economy';
 
 // ── Salaries ─────────────────────────────────────────────────────────────────
 export { playerSalary, wageBill } from './salaries';

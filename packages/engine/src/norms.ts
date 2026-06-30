@@ -30,6 +30,8 @@ function valorActual(team: Team, norm: Norm, players: Player[]): number {
       return squad.length > 0
         ? Math.round(squad.reduce((a, p) => a + p.age, 0) / squad.length)
         : 0;
+    case 'tope_deficit':
+      return team.treasury; // negative values indicate deficit
     default:
       return team.strength;
   }
@@ -50,6 +52,8 @@ function breaches(team: Team, norm: Norm, players: Player[]): boolean {
       return actual < norm.valor;      // too few homegrown
     case 'tope_edad_media':
       return actual > norm.valor;      // squad too old
+    case 'tope_deficit':
+      return actual < -norm.valor;     // treasury below allowed deficit threshold
     default:
       return false;
   }
@@ -96,6 +100,10 @@ export function addNorm(
   let v: number;
   if (tipo === 'tope_salarial') {
     v = Math.max(0, Math.min(MAX_SALARY_CAP, Math.round(valor)));
+  } else if (tipo === 'tope_deficit') {
+    // Valor is the maximum allowed deficit in absolute €. E.g. 5_000_000 means
+    // treasury can go as low as -5M before breaching.
+    v = Math.max(0, Math.min(500_000_000, Math.round(valor)));
   } else if (tipo === 'tope_edad_media') {
     v = Math.max(16, Math.min(40, Math.round(valor)));
   } else if (tipo === 'tope_extrangeros' || tipo === 'minimo_cantera') {
@@ -144,7 +152,9 @@ export function sanctionTeam(
             ? `No alcanza el mínimo de cantera (${actual} < ${norm.valor})`
             : norm.tipo === 'tope_edad_media'
               ? `Supera el tope de edad media (${actual} > ${norm.valor})`
-              : `Supera el tope salarial (${actual.toLocaleString('es-ES')} € > ${norm.valor.toLocaleString('es-ES')} €)`;
+              : norm.tipo === 'tope_deficit'
+                ? `Déficit excesivo (${actual.toLocaleString('es-ES')} € < −${norm.valor.toLocaleString('es-ES')} €)`
+                : `Supera el tope salarial (${actual.toLocaleString('es-ES')} € > ${norm.valor.toLocaleString('es-ES')} €)`;
   s.sanctions.push({
     id: s.nextSanctionId,
     teamId,

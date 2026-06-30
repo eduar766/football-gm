@@ -96,11 +96,14 @@ function record(
   competitionLabel: string,
   ranking: Array<{ teamId: number; teamName: string }>,
   amounts: number[],
+  withheldIds: Set<number> = new Set(),
 ): void {
   for (let i = 0; i < amounts.length; i++) {
     const team = ranking[i];
     const amount = amounts[i];
     if (!team || amount <= 0) continue;
+    // Withheld teams: prize stays in federation treasury (commissioner retains it).
+    if (withheldIds.has(team.teamId)) continue;
     s.treasury -= amount;
     s.prizePayments.push({
       year: s.year,
@@ -128,7 +131,8 @@ export function payLeaguePrize(s: GameState): void {
   );
   const amounts = distribute(prize.pool, prize.shares);
   const named = standings.map((row) => ({ teamId: row.teamId, teamName: row.name }));
-  record(s, 'Liga', named, amounts);
+  const withheld = new Set(s.teams.filter((t) => t.prizesWithheld).map((t) => t.id));
+  record(s, 'Liga', named, amounts, withheld);
 }
 
 // Pay a cup prize from the cup's final ranking. For knockout cups: 1=champion,
@@ -190,5 +194,6 @@ export function payCupPrize(s: GameState, cup: Cup): void {
   }
 
   const amounts = distribute(prize.pool, prize.shares);
-  record(s, cup.name, ranking, amounts);
+  const withheld = new Set(s.teams.filter((t) => t.prizesWithheld).map((t) => t.id));
+  record(s, cup.name, ranking, amounts, withheld);
 }

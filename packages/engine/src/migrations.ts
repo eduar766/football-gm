@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -113,6 +113,29 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 2;
+  }
+
+  // v2 → v3: team-level economy (treasury, sponsors, P&L, rescue log).
+  if (v < 3) {
+    for (const t of state.teams) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const any = t as any;
+      if (any.treasury === undefined) {
+        // Seed initial treasury from strength so older saves feel plausible.
+        any.treasury = t.strength * 200_000 + 5_000_000;
+      }
+      if (!any.sponsors) any.sponsors = [];
+      if (!any.lastTeamEconomy) any.lastTeamEconomy = null;
+      if (any.prizesWithheld === undefined) any.prizesWithheld = false;
+      if (!any.recentForm) any.recentForm = [];
+      if (any.matchesPlayedThisSeason === undefined) any.matchesPlayedThisSeason = 0;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.rescueLog) gs.rescueLog = [];
+    if (gs.nextTeamSponsorId === undefined) gs.nextTeamSponsorId = 1;
+
+    state.schemaVersion = 3;
   }
 
   return state;
