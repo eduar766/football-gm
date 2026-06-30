@@ -125,9 +125,13 @@ function distributeCardsForTeam(
   return { yellowCards, redCards };
 }
 
-function maybeInjureTeam(state: GameState, available: Player[]): void {
+function maybeInjureTeam(state: GameState, available: Player[], teamId: number): void {
   if (available.length === 0) return;
-  if (rngNext(state.attributionRng) >= INJURY_PROB) return;
+  const team = state.teams.find(t => t.id === teamId);
+  const matchesPlayed = team?.matchesPlayedThisSeason ?? 0;
+  // Probability rises 0.5 pp per 10 matches played, capped at 8%.
+  const injuryProb = Math.min(0.08, INJURY_PROB + Math.floor(matchesPlayed / 10) * 0.005);
+  if (rngNext(state.attributionRng) >= injuryProb) return;
   const idx = Math.floor(rngNext(state.attributionRng) * available.length);
   const p = available[idx];
   p.injuredMatchesLeft = randInt(
@@ -171,8 +175,8 @@ export function attributeMatchGoals(
   // §7: cards + injuries from the same independent rng.
   const homeCards = distributeCardsForTeam(state, homeAvailable);
   const awayCards = distributeCardsForTeam(state, awayAvailable);
-  maybeInjureTeam(state, homeAvailable);
-  maybeInjureTeam(state, awayAvailable);
+  maybeInjureTeam(state, homeAvailable, homeTeamId);
+  maybeInjureTeam(state, awayAvailable, awayTeamId);
 
   return {
     goalscorers: [...homeScorers, ...awayScorers],

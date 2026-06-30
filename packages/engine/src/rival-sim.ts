@@ -239,6 +239,14 @@ export function stepRivalMatchdays(s: GameState, targetMatchday: number): void {
       if (!home || !away) continue;
       const { homeGoals, awayGoals } = simulateMatch(home, away, s.rivalRng);
 
+      // Update form and fatigue for rival teams so subsequent matches are realistic.
+      const homeResult: 'W' | 'D' | 'L' = homeGoals > awayGoals ? 'W' : homeGoals === awayGoals ? 'D' : 'L';
+      const awayResult: 'W' | 'D' | 'L' = awayGoals > homeGoals ? 'W' : awayGoals === homeGoals ? 'D' : 'L';
+      home.recentForm = [homeResult, ...home.recentForm].slice(0, 5) as ('W' | 'D' | 'L')[];
+      away.recentForm = [awayResult, ...away.recentForm].slice(0, 5) as ('W' | 'D' | 'L')[];
+      home.matchesPlayedThisSeason += 1;
+      away.matchesPlayedThisSeason += 1;
+
       const key = `${fx.federationId}:${fx.divisionOrden}`;
       if (!s.rivalStandings[key]) {
         // Safety: initialize if somehow missing

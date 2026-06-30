@@ -630,6 +630,25 @@ export function advanceMatchday(prev: GameState): GameState {
   // means "miss the next match".
   tickAvailability(s, playingTeams);
 
+  // Detect last matchday per player-division for match-importance pressure boost.
+  // Computed once here (no RNG) and referenced inside the fixture loop.
+  const maxMdByDiv = new Map<number, number>();
+  for (const fx of s.fixtures) {
+    const cur = maxMdByDiv.get(fx.divisionOrden) ?? 0;
+    if (fx.matchday > cur) maxMdByDiv.set(fx.divisionOrden, fx.matchday);
+  }
+  const divStandingsForImp = new Map<number, StandingRow[]>();
+  for (const fx of s.fixtures) {
+    if (fx.matchday !== md || maxMdByDiv.get(fx.divisionOrden) !== md) continue;
+    if (divStandingsForImp.has(fx.divisionOrden)) continue;
+    const divTeams = s.teams.filter(
+      (t) => t.federationId === s.playerFederationId && t.divisionOrden === fx.divisionOrden,
+    );
+    const rows = computeStandings(divTeams, s.results);
+    rows.sort((a, b) => b.points - a.points || b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor);
+    divStandingsForImp.set(fx.divisionOrden, rows);
+  }
+
   for (const fx of s.fixtures.filter((f) => f.matchday === md)) {
     const home = byId.get(fx.homeId);
     const away = byId.get(fx.awayId);
@@ -637,7 +656,27 @@ export function advanceMatchday(prev: GameState): GameState {
     const imp = s.pendingImpulses.find(
       (p) => p.matchday === md && p.homeId === fx.homeId && p.awayId === fx.awayId,
     );
-    const { homeGoals, awayGoals, goalscorers } = simulateMatch(home, away, s.rng, imp?.favoredTeamId, s.players);
+    // Pressure boost on decisive last-matchday fixtures (title or relegation within reach).
+    let pressureBoost = 0;
+    const divRows = divStandingsForImp.get(fx.divisionOrden);
+    if (divRows && divRows.length >= 4) {
+      const n = divRows.length;
+      const leader = divRows[0];
+      const relegCount = n > 6 ? 2 : 1;
+      const safetyRow = divRows[n - relegCount - 1];
+      const hasStakes = (teamId: number): boolean => {
+        const idx = divRows.findIndex((r) => r.teamId === teamId);
+        if (idx < 0) return false;
+        const row = divRows[idx];
+        return (
+          leader.points - row.points <= 3 ||
+          idx >= n - relegCount ||
+          (!!safetyRow && safetyRow.points - row.points <= 3)
+        );
+      };
+      if (hasStakes(fx.homeId) || hasStakes(fx.awayId)) pressureBoost = 5;
+    }
+    const { homeGoals, awayGoals, goalscorers } = simulateMatch(home, away, s.rng, imp?.favoredTeamId, s.players, pressureBoost);
     const goalMinutes = goalscorers.map((g) => g.minute);
     const attribution = attributeMatchGoals(s, fx.homeId, fx.awayId, homeGoals, awayGoals, goalMinutes);
     s.results.push({ ...fx, homeGoals, awayGoals });

@@ -46,12 +46,14 @@ function availabilityPenalty(players: Player[], teamId: number): number {
 
 // Main match simulator. `players` is optional — when empty (default), availability
 // modifier is skipped but all other realism factors (form, fatigue, stadium) apply.
+// `pressureBoost` raises both teams' effective ratings equally (last-matchday stakes).
 export function simulateMatch(
   home: Team,
   away: Team,
   rng: RngState,
   favoredTeamId?: number,
   players: Player[] = [],
+  pressureBoost: number = 0,
 ): {
   homeGoals: number;
   awayGoals: number;
@@ -68,8 +70,8 @@ export function simulateMatch(
   const homeAvail = players.length > 0 ? availabilityPenalty(players, home.id) : 0;
   const awayAvail = players.length > 0 ? availabilityPenalty(players, away.id) : 0;
 
-  let homeRating = home.strength + homeAdv + homeForm + homeFatigue + homeAvail;
-  let awayRating = away.strength + awayForm + awayFatigue + awayAvail;
+  let homeRating = home.strength + homeAdv + homeForm + homeFatigue + homeAvail + pressureBoost;
+  let awayRating = away.strength + awayForm + awayFatigue + awayAvail + pressureBoost;
   if (favoredTeamId === home.id) homeRating += IMPULSE_BOOST;
   if (favoredTeamId === away.id) awayRating += IMPULSE_BOOST;
 
