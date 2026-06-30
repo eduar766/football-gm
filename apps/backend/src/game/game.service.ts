@@ -1087,8 +1087,8 @@ export class GameService {
     });
   }
 
-  async listTeams(gameId: number): Promise<TeamListItem[]> {
-    const rows = await this.db
+  async listTeams(gameId: number, limit?: number, offset?: number): Promise<TeamListItem[]> {
+    let query = this.db
       .select({
         id: s.teams.id,
         name: s.teams.name,
@@ -1102,7 +1102,11 @@ export class GameService {
       .leftJoin(s.divisions, eq(s.teams.divisionId, s.divisions.id))
       .leftJoin(s.federations, eq(s.teams.federationId, s.federations.id))
       .where(eq(s.teams.gameId, gameId))
-      .orderBy(desc(s.teams.strength));
+      .orderBy(desc(s.teams.strength))
+      .$dynamic();
+    if (limit !== undefined) query = query.limit(limit);
+    if (offset !== undefined) query = query.offset(offset);
+    const rows = await query;
     return rows.map((r) => ({
       id: r.id,
       name: r.name,

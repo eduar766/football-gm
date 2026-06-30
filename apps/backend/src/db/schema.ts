@@ -253,6 +253,7 @@ export const players = pgTable(
     cantera: boolean('cantera').notNull().default(false),
   },
   (t) => [
+    index('players_game_idx').on(t.gameId),
     index('players_team_idx').on(t.teamId),
     uniqueIndex('players_engine_uq').on(t.gameId, t.enginePlayerId),
   ],
@@ -402,7 +403,10 @@ export const norms = pgTable(
     tipo: normType('tipo').notNull(),
     valor: text('valor').notNull(),
   },
-  (t) => [index('norms_game_id_idx').on(t.gameId)],
+  (t) => [
+    index('norms_game_id_idx').on(t.gameId),
+    uniqueIndex('norms_game_tipo_uq').on(t.gameId, t.tipo),
+  ],
 );
 
 export const sanctions = pgTable(
@@ -420,7 +424,10 @@ export const sanctions = pgTable(
     motivo: text('motivo').notNull(),
     castigo: text('castigo').notNull(),
   },
-  (t) => [index('sanctions_game_id_idx').on(t.gameId)],
+  (t) => [
+    index('sanctions_game_id_idx').on(t.gameId),
+    index('sanctions_team_idx').on(t.teamId),
+  ],
 );
 
 // Impulse hangs off Season (annual counter) and points to a concrete match (§4.6).
@@ -523,7 +530,10 @@ export const trajectories = pgTable(
     divisionOrden: integer('division_orden'),
     puestoFinal: integer('puesto_final').notNull(),
   },
-  (t) => [uniqueIndex('trajectories_game_team_year_uq').on(t.gameId, t.teamId, t.anio)],
+  (t) => [
+    index('trajectories_game_idx').on(t.gameId),
+    uniqueIndex('trajectories_game_team_year_uq').on(t.gameId, t.teamId, t.anio),
+  ],
 );
 
 export const awards = pgTable(
@@ -541,7 +551,10 @@ export const awards = pgTable(
     teamId: integer('team_id').references(() => teams.id),
     valor: integer('valor').notNull(),
   },
-  (t) => [index('awards_game_year_idx').on(t.gameId, t.anio)],
+  (t) => [
+    index('awards_game_year_idx').on(t.gameId, t.anio),
+    index('awards_player_idx').on(t.playerId),
+  ],
 );
 
 /* ------------------------------- derived views: NOT stored (§6) */

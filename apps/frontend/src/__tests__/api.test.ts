@@ -74,4 +74,15 @@ describe('api.req — successful response', () => {
     const headers = call[1]?.headers as Record<string, string>;
     expect(headers.authorization).toBe('Bearer test-token-123');
   });
+
+  it('omits Authorization header when no token stored', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify([]), { status: 200 }),
+    );
+
+    await api.listGames();
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const headers = call[1]?.headers as Record<string, string>;
+    expect(headers.authorization).toBeUndefined();
+  });
 });

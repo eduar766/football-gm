@@ -22,6 +22,14 @@ describe('QK query key factory', () => {
     expect(QK.team(5, 10)).toEqual(['team', 5, 10]);
   });
 
+  it('commissionerReports returns ["commissionerReports", id]', () => {
+    expect(QK.commissionerReports(7)).toEqual(['commissionerReports', 7]);
+  });
+
+  it('teamEconomies returns ["teamEconomies", id]', () => {
+    expect(QK.teamEconomies(3)).toEqual(['teamEconomies', 3]);
+  });
+
   it('each factory produces a unique key shape', () => {
     const keys = [
       QK.summary(1),
@@ -34,6 +42,7 @@ describe('QK query key factory', () => {
       QK.negotiations(1),
       QK.structure(1),
       QK.economy(1),
+      QK.teamEconomies(1),
       QK.norms(1),
       QK.events(1),
       QK.cups(1),
@@ -43,6 +52,7 @@ describe('QK query key factory', () => {
       QK.compliance(1),
       QK.worldRanking(1),
       QK.worldStandings(1),
+      QK.commissionerReports(1),
       QK.nextFixtures(1),
       QK.games(),
     ];

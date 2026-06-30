@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -53,8 +54,12 @@ export class CompetitionController {
   }
 
   @Get(':id/teams')
-  teams(@Param('id', ParseIntPipe) id: number) {
-    return this.games.listTeams(id);
+  teams(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.games.listTeams(id, limit ? parseInt(limit, 10) : undefined, offset ? parseInt(offset, 10) : undefined);
   }
 
   @Get(':id/teams/:teamId')
