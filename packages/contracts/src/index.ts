@@ -843,9 +843,10 @@ export const TransferEntryDto = z.object({
   toTeamId: Id,
   toTeamName: z.string(),
   calidad: z.number().int(),
-  // Fase 11.3: inter-league arrivals from rival federations.
+  // Fase 11.3: inter-league transfers (arrivals and departures).
   isInternational: z.boolean().optional(),
-  fromFederationName: z.string().optional(),
+  fromFederationName: z.string().optional(), // set when player arrives from a rival league
+  toFederationName: z.string().optional(),   // set when player departs to a rival league
 });
 export type TransferEntryDto = z.infer<typeof TransferEntryDto>;
 

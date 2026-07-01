@@ -2036,7 +2036,8 @@ export class GameService {
       calidad: t.calidad,
       ...(t.isInternational && {
         isInternational: t.isInternational,
-        fromFederationName: t.fromFederationName,
+        ...(t.fromFederationName && { fromFederationName: t.fromFederationName }),
+        ...(t.toFederationName && { toFederationName: t.toFederationName }),
       }),
     }));
     // Latest year present in the log; 0 when there's no history yet.

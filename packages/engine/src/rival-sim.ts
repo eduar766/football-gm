@@ -218,6 +218,70 @@ export function processInterLeagueTransfers(s: GameState): void {
   }
 }
 
+// ── Outgoing inter-league transfers ──────────────────────────────────────────
+
+// Called at startSeason after processInterLeagueTransfers. Rival federations
+// that are meaningfully stronger than the player's federation poach high-quality
+// players from the player's league. Selling team receives the transfer fee.
+// All randomness via rivalRng — never touches state.rng.
+export function processOutgoingInterLeagueTransfers(s: GameState): void {
+  const playerFed = s.federations.find(f => f.isPlayer);
+  if (!playerFed) return;
+
+  const playerTeams = s.teams.filter(
+    t => t.federationId === s.playerFederationId && t.divisionOrden !== null,
+  );
+  if (playerTeams.length === 0) return;
+
+  // Candidates: high-quality available players in the player's league.
+  const playerTeamIds = new Set(playerTeams.map(t => t.id));
+  const candidates = s.players
+    .filter(p => playerTeamIds.has(p.teamId) && p.calidad >= 55 && p.injuredMatchesLeft <= 2)
+    .sort((a, b) => b.calidad - a.calidad);
+  if (candidates.length === 0) return;
+
+  const poachedIds = new Set<number>();
+
+  for (const rivalFed of s.federations) {
+    if (rivalFed.isPlayer) continue;
+    const prestigeDiff = rivalFed.prestige - playerFed.prestige;
+    if (prestigeDiff < 15) continue; // rival must be meaningfully stronger
+
+    // Probability scales with prestige gap: 15% base + 1% per point over 15, cap 50%.
+    const prob = Math.min(0.50, 0.15 + (prestigeDiff - 15) * 0.01);
+    if (randInt(s.rivalRng, 0, 99) >= Math.round(prob * 100)) continue;
+
+    // Pick the best available unpoached candidate.
+    const target = candidates.find(p => !poachedIds.has(p.id));
+    if (!target) break; // no candidates left
+
+    const sellingTeam = s.teams.find(t => t.id === target.teamId);
+    const fee = Math.round(target.calidad * 60_000);
+
+    // Selling team pockets the fee.
+    if (sellingTeam) sellingTeam.treasury += fee;
+
+    s.transfers.push({
+      year: s.year,
+      playerId: target.id,
+      playerName: target.name,
+      fromTeamId: target.teamId,
+      fromTeamName: sellingTeam?.name ?? '',
+      toTeamId: 0,
+      toTeamName: rivalFed.name,
+      calidad: target.calidad,
+      transferFee: fee,
+      isInternational: true,
+      toFederationName: rivalFed.name,
+    });
+
+    // Remove the player from the player's league.
+    const idx = s.players.indexOf(target);
+    if (idx !== -1) s.players.splice(idx, 1);
+    poachedIds.add(target.id);
+  }
+}
+
 // ── Fase 11.1: stepRivalMatchdays ────────────────────────────────────────────
 
 // Called from advanceMatchday. Advances rival leagues from rivalCurrentMatchday+1

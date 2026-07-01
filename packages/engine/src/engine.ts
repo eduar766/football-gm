@@ -39,6 +39,7 @@ import {
   generateRivalFixtures,
   generateRivalPlayers,
   processInterLeagueTransfers,
+  processOutgoingInterLeagueTransfers,
   stepRivalMatchdays,
   finalizeRivalSeason,
 } from './rival-sim';
@@ -515,7 +516,8 @@ export function startSeason(prev: GameState): GameState {
   if (s.confederations.length > 0) {
     generateRivalPlayers(s); // resets goals; generates players first season only
     generateRivalFixtures(s);
-    processInterLeagueTransfers(s); // stars from weaker rivals join player's league
+    processInterLeagueTransfers(s);         // stars from weaker rivals join player's league
+    processOutgoingInterLeagueTransfers(s); // stronger rivals poach player-league stars
   }
 
   // Team sponsors: auto-negotiate at the start of each season (uses independent rng).
