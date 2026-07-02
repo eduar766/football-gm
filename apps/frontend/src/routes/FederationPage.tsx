@@ -1,8 +1,11 @@
-import { Badge, Box, Card, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
+import { useMemo } from 'react';
+import { Badge, Box, Button, Card, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconBuilding, IconTrophy } from '@tabler/icons-react';
+import { IconBuilding, IconTrophy, IconUserPlus } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 
 const TIER_CONFIG: Record<number, { label: string; color: string; gradient: string }> = {
   1: { label: 'Tier 1', color: '#F59E0B', gradient: 'linear-gradient(135deg, #D97706, #F59E0B)' },
@@ -19,13 +22,41 @@ export function FederationPage() {
   };
   const id = Number(gameId);
 
-  // If fedId is provided, show that federation; otherwise show the player's.
   const isRival = fedId != null;
 
   const fed = useQuery({
     queryKey: isRival ? ['federation', id, fedId] : ['federation', id],
     queryFn: () => isRival ? api.federationById(id, Number(fedId)) : api.federation(id),
   });
+
+  const market = useQuery({
+    queryKey: QK.market(id),
+    queryFn: () => api.market(id),
+    enabled: isRival,
+  });
+
+  const start = useMutationWithFeedback({
+    mutationFn: (teamId: number) => api.startNegotiation(id, teamId),
+    queryKeyToInvalidate: ['market', 'negotiations', 'summary'],
+    successMessage: 'Negociación iniciada',
+  });
+
+  const negotiableIds = useMemo(
+    () => new Set((market.data?.teams ?? []).map((t) => t.teamId)),
+    [market.data],
+  );
+
+  const teamsByDivision = useMemo(() => {
+    if (!fed.data?.teams) return [];
+    const map = new Map<number, typeof fed.data.teams>();
+    for (const t of fed.data.teams) {
+      const orden = t.divisionOrden ?? 1;
+      const arr = map.get(orden) ?? [];
+      arr.push(t);
+      map.set(orden, arr);
+    }
+    return [...map.entries()].sort((a, b) => a[0] - b[0]);
+  }, [fed.data?.teams]);
 
   if (fed.isLoading || !fed.data) {
     return (
@@ -180,56 +211,86 @@ export function FederationPage() {
         </Table>
       </Paper>
 
-      {/* Rival federation team list */}
-      {f.teams && f.teams.length > 0 && (
-        <Paper p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-          <Text fw={700} mb="sm">Equipos</Text>
-          <Table>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>#</Table.Th>
-                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
-                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Fuerza</Table.Th>
-                <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Arraigo</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {f.teams.map((t, i) => (
-                <Table.Tr
-                  key={t.teamId}
-                  className="stagger-item"
-                  style={{
-                    background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                    animationDelay: `${i * 20}ms`,
-                  }}
-                >
-                  <Table.Td>
-                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{i + 1}</Text>
-                  </Table.Td>
-                  <Table.Td fw={500}>{t.name}</Table.Td>
-                  <Table.Td ta="right">
-                    <Group gap="xs" justify="flex-end" wrap="nowrap">
-                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
-                        {t.strength}
-                      </Text>
-                      <Box style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', flexShrink: 0 }}>
-                        <Box style={{ width: `${t.strength}%`, height: '100%', borderRadius: 3, background: t.strength >= 70 ? 'linear-gradient(90deg, #059669, #10B981)' : t.strength >= 50 ? 'linear-gradient(90deg, #D97706, #F59E0B)' : 'linear-gradient(90deg, #DC2626, #EF4444)' }} />
-                      </Box>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td ta="right">
-                    <Tooltip label="Lealtad del equipo (0-100)" fz="xs">
-                      <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981', cursor: 'default' }}>
-                        {t.arraigo}
-                      </Text>
-                    </Tooltip>
-                  </Table.Td>
+      {/* Rival federation team list — grouped by division */}
+      {isRival && teamsByDivision.length > 0 && teamsByDivision.map(([orden, divTeams]) => {
+        const divLabel = `${orden}ª División`;
+        const divColor = orden === 1 ? '#F59E0B' : orden === 2 ? '#10B981' : '#6B7280';
+        return (
+          <Paper key={orden} p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderTop: `2px solid ${divColor}44` }}>
+            <Group gap="sm" mb="sm">
+              <Text
+                fw={700}
+                style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', color: divColor }}
+              >
+                {divLabel}
+              </Text>
+              <Badge size="xs" variant="light" style={{ background: `${divColor}22`, color: divColor }}>
+                {divTeams.length} equipo{divTeams.length !== 1 ? 's' : ''}
+              </Badge>
+            </Group>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipo</Table.Th>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Fuerza</Table.Th>
+                  <Table.Th style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} ta="right">Arraigo</Table.Th>
+                  {isRival && <Table.Th />}
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Paper>
-      )}
+              </Table.Thead>
+              <Table.Tbody>
+                {divTeams.map((t, i) => {
+                  const canNeg = negotiableIds.has(t.teamId);
+                  return (
+                    <Table.Tr
+                      key={t.teamId}
+                      className="stagger-item"
+                      style={{
+                        background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        animationDelay: `${i * 20}ms`,
+                      }}
+                    >
+                      <Table.Td fw={500}>{t.name}</Table.Td>
+                      <Table.Td ta="right">
+                        <Group gap="xs" justify="flex-end" wrap="nowrap">
+                          <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.strength >= 70 ? '#10B981' : t.strength >= 50 ? '#F59E0B' : '#EF4444' }}>
+                            {t.strength}
+                          </Text>
+                          <Box style={{ width: 40, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', flexShrink: 0 }}>
+                            <Box style={{ width: `${t.strength}%`, height: '100%', borderRadius: 3, background: t.strength >= 70 ? 'linear-gradient(90deg, #059669, #10B981)' : t.strength >= 50 ? 'linear-gradient(90deg, #D97706, #F59E0B)' : 'linear-gradient(90deg, #DC2626, #EF4444)' }} />
+                          </Box>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Tooltip label="Lealtad del equipo (0-100)" fz="xs">
+                          <Text style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: t.arraigo >= 70 ? '#EF4444' : t.arraigo >= 40 ? '#F59E0B' : '#10B981', cursor: 'default' }}>
+                            {t.arraigo}
+                          </Text>
+                        </Tooltip>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        {canNeg ? (
+                          <Button
+                            size="xs"
+                            variant="gradient"
+                            gradient={{ from: '#10B981', to: '#059669' }}
+                            loading={start.isPending && start.variables === t.teamId}
+                            leftSection={<IconUserPlus size={13} />}
+                            onClick={() => start.mutate(t.teamId)}
+                          >
+                            Negociar
+                          </Button>
+                        ) : (
+                          <Text size="xs" c="dimmed">—</Text>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        );
+      })}
 
       {/* 11.2 — Season history (rival federations only) */}
       {f.seasonHistory && f.seasonHistory.length > 0 && (

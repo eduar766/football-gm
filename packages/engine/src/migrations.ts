@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -136,6 +136,144 @@ export function migrateState(state: GameState): GameState {
     if (gs.nextTeamSponsorId === undefined) gs.nextTeamSponsorId = 1;
 
     state.schemaVersion = 3;
+  }
+
+  // v3 → v4: renumber rival federation division ordenes from globally-unique
+  // to per-federation (each federation's top division becomes orden 1).
+  if (v < 4) {
+    const playerFedId = state.playerFederationId;
+    const rivalFedIds = new Set(
+      state.federations.filter(f => f.id !== playerFedId && !f.isPlayer).map(f => f.id),
+    );
+
+    for (const fedId of rivalFedIds) {
+      const fedDivisions = state.divisions
+        .filter(d => d.federationId === fedId)
+        .sort((a, b) => a.orden - b.orden);
+
+      fedDivisions.forEach((div, idx) => {
+        const oldOrden = div.orden;
+        const newOrden = idx + 1;
+        if (oldOrden === newOrden) return;
+
+        div.orden = newOrden;
+
+        for (const t of state.teams) {
+          if (t.federationId === fedId && t.divisionOrden === oldOrden) {
+            t.divisionOrden = newOrden;
+          }
+        }
+
+        // Fix rivalStandings keys
+        const oldKey = `${fedId}:${oldOrden}`;
+        const newKey = `${fedId}:${newOrden}`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rs = (state as any).rivalStandings as Record<string, unknown>;
+        if (rs && rs[oldKey] !== undefined) {
+          rs[newKey] = rs[oldKey];
+          delete rs[oldKey];
+        }
+      });
+    }
+
+    state.schemaVersion = 4;
+  }
+
+  // v4 → v5: remove wageCap (dead field, never enforced); add transferVetoes
+  // and outgoingTransferRevenue for Fase 13 features.
+  if (v < 5) {
+    for (const t of state.teams) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (t as any).wageCap;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.transferVetoes) gs.transferVetoes = [];
+    if (gs.outgoingTransferRevenue === undefined) gs.outgoingTransferRevenue = 0;
+
+    state.schemaVersion = 5;
+  }
+
+  // v5 → v6 (Fase 14.1): player-chosen commissioner name.
+  if (v < 6) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.commissionerName) gs.commissionerName = 'Comisionado/a';
+
+    state.schemaVersion = 6;
+  }
+
+  // v6 → v7 (Fase 14.6): federation narrative timeline. Backfill past prestige
+  // snapshots from the existing season history so old saves aren't empty.
+  if (v < 7) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.federationLog) gs.federationLog = [];
+    if (gs.nextFederationLogId == null) gs.nextFederationLogId = 1;
+
+    // One prestige snapshot per year (history has one row per division/year).
+    const seenYears = new Set<number>();
+    for (const h of state.history ?? []) {
+      if (seenYears.has(h.year)) continue;
+      seenYears.add(h.year);
+      const delta = h.delta ?? h.prestigeAfter - h.prestigeBefore;
+      gs.federationLog.push({
+        id: gs.nextFederationLogId++,
+        year: h.year,
+        matchday: 0,
+        type: 'prestige_snapshot',
+        title: 'Cierre de temporada',
+        detail: `Prestigio ${h.prestigeBefore} → ${h.prestigeAfter} (${delta >= 0 ? '+' : ''}${delta})`,
+        value: h.prestigeAfter,
+        teamId: null,
+      });
+    }
+
+    state.schemaVersion = 7;
+  }
+
+  // v7 → v8 (Fase 14.4): commissioner inbox.
+  if (v < 8) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.mailbox) gs.mailbox = [];
+    if (gs.nextMailboxId == null) gs.nextMailboxId = 1;
+
+    state.schemaVersion = 8;
+  }
+
+  // v8 → v9 (Fase 14.5): club requests + arraigo-driven exodus tracking.
+  if (v < 9) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.clubDemands) gs.clubDemands = [];
+    if (gs.nextDemandId == null) gs.nextDemandId = 1;
+    if (!gs.lowArraigoSeasons) gs.lowArraigoSeasons = {};
+    if (!gs.demandsRng) gs.demandsRng = { s: (state.seed ^ 0x0badf00d) >>> 0 };
+
+    state.schemaVersion = 9;
+  }
+
+  // v9 → v10 (Fase 14.8): board confidence + defeat.
+  if (v < 10) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.boardConfidence) gs.boardConfidence = { value: 60, history: [] };
+    if (gs.gameOver === undefined) gs.gameOver = null;
+    if (gs.negativeTreasurySeasons == null) gs.negativeTreasurySeasons = 0;
+
+    state.schemaVersion = 10;
+  }
+
+  // v10 → v11 (Fase 14.7): per-division schedule format. Backfill from the
+  // global leagueFormat so existing calendars keep the same shape.
+  if (v < 11) {
+    const fallback = state.leagueFormat ?? 'ida_vuelta';
+    for (const d of state.divisions) {
+      if (!d.format) d.format = fallback;
+    }
+
+    state.schemaVersion = 11;
   }
 
   return state;

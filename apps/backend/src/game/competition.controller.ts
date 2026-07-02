@@ -15,6 +15,7 @@ import {
   CreateInterLeagueCupRequest,
   CreateOwnTeamRequest,
   EditCupParticipantsRequest,
+  RunLevelingLeagueRequest,
   SetLeagueFormatRequest,
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
@@ -40,9 +41,17 @@ export class CompetitionController {
     return this.games.createOwnTeam(id, body.name);
   }
 
+  @Get(':id/random-team-name')
+  randomTeamName(@Param('id', ParseIntPipe) id: number) {
+    return this.games.randomTeamName(id);
+  }
+
   @Post(':id/leveling-league')
-  levelingLeague(@Param('id', ParseIntPipe) id: number) {
-    return this.games.runLevelingLeague(id);
+  levelingLeague(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(RunLevelingLeagueRequest)) body: RunLevelingLeagueRequest,
+  ) {
+    return this.games.runLevelingLeague(id, body.plan);
   }
 
   @Post(':id/league-format')

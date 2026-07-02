@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -18,6 +19,11 @@ import { GameService } from './game.service';
 @UseGuards(JwtAuthGuard, GameOwnerGuard)
 export class SeasonController {
   constructor(private readonly games: GameService) {}
+
+  @Get(':id/preseason-checklist')
+  preseasonChecklist(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getPreseasonChecklist(id);
+  }
 
   @Post(':id/start-season')
   startSeason(@Param('id', ParseIntPipe) id: number) {
@@ -87,5 +93,21 @@ export class SeasonController {
     @Body() body: { teamId: number },
   ) {
     return this.games.cultivateArraigo(id, body.teamId);
+  }
+
+  @Post(':id/veto-transfer')
+  vetoTransfer(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { playerId: number },
+  ) {
+    return this.games.vetoTransfer(id, body.playerId);
+  }
+
+  @Delete(':id/veto-transfer/:playerId')
+  cancelTransferVeto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('playerId', ParseIntPipe) playerId: number,
+  ) {
+    return this.games.cancelTransferVeto(id, playerId);
   }
 }

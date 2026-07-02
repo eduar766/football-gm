@@ -3,8 +3,19 @@
 // no state.rng — keeps the match engine golden-stable.
 
 import { wageBill } from './salaries';
+import { logFederation } from './federation-log';
 import type { StandingRow } from './standings';
 import type { GameState, Norm, NormBreach, NormType, Player, Team } from './types';
+
+const NORM_TYPE_LABELS: Record<NormType, string> = {
+  tope_plantilla: 'Tope de plantilla',
+  minimo_competitivo: 'Mínimo competitivo',
+  tope_salarial: 'Tope salarial',
+  tope_extrangeros: 'Tope de extranjeros',
+  minimo_cantera: 'Mínimo de cantera',
+  tope_edad_media: 'Tope de edad media',
+  tope_deficit: 'Tope de déficit',
+};
 
 export const SANCTION_POINTS = 3;
 const GOVERNANCE_CAP = 5;
@@ -116,6 +127,15 @@ export function addNorm(
   s.norms = s.norms.filter((n) => n.tipo !== tipo);
   s.norms.push({ id: s.nextNormId, tipo, valor: v });
   s.nextNormId += 1;
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'norm_created',
+    title: 'Norma definida',
+    detail: `${NORM_TYPE_LABELS[tipo]} · valor ${v.toLocaleString('es-ES')}`,
+    value: v,
+    teamId: null,
+  });
   return s;
 }
 
@@ -168,6 +188,15 @@ export function sanctionTeam(
   s.nextSanctionId += 1;
   if (!s.violationHistory[teamId]) s.violationHistory[teamId] = {};
   s.violationHistory[teamId][normId] = prevCount + 1;
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'sanction',
+    title: 'Sanción impuesta',
+    detail: `${team.name}: ${motivo} (−${escalatedPoints} pts)`,
+    value: escalatedPoints,
+    teamId,
+  });
   return s;
 }
 

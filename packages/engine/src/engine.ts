@@ -32,6 +32,10 @@ import {
 } from './awards';
 import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { buildChronicle } from './headlines';
+import { logFederation } from './federation-log';
+import { pushMail } from './mailbox';
+import { generateClubDemands, expireDemands, processExodus } from './demands';
+import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -39,6 +43,7 @@ import {
   generateRivalFixtures,
   generateRivalPlayers,
   processInterLeagueTransfers,
+  processOutgoingInterLeagueTransfers,
   stepRivalMatchdays,
   finalizeRivalSeason,
 } from './rival-sim';
@@ -123,7 +128,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: t.arraigo ?? DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: t.youthStrength ?? Math.max(20, t.strength - 12),
-        wageCap: 0,
+
         stadiumCapacity: t.stadiumCapacity ?? DEFAULT_STADIUM_CAPACITY,
         academia: t.academia ?? DEFAULT_ACADEMIA,
         treasury: TEAM_STARTING_TREASURY_BASE + t.strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -169,7 +174,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: Math.max(20, strength - 12),
-        wageCap: 0,
+
         stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
         academia: DEFAULT_ACADEMIA,
         treasury: TEAM_STARTING_TREASURY_BASE + strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -182,9 +187,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     }
   }
 
-  // Rival federations and their external teams (negotiation targets, not yet
-  // in any division of the player's league). Each rival federation gets its
-  // own divisions when seed data is provided (Fase 9).
+  // Rival federations with their divisional structure. Each rival federation
+  // gets its own per-federation division ordenes (1 = top, 2 = second, …).
   let nextFederationId = 2;
   const rivalDivisions: Division[] = [];
   for (const rival of options.rivals ?? []) {
@@ -196,59 +200,33 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
       isPlayer: false,
       confederationId: rival.confederationId ?? 0,
     });
-    for (const rt of rival.teams) {
-      teams.push({
-        id: nextTeamId++,
-        name: rt.name,
-        strength: rt.strength,
-        federationId: rivalId,
-        arraigo: rt.arraigo,
-        divisionOrden: null,
-        youthStrength: Math.max(20, rt.strength - 12),
-        wageCap: 0,
-        stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
-        academia: DEFAULT_ACADEMIA,
-        treasury: 0, // rival teams don't participate in player-fed economy
-        sponsors: [],
-        lastTeamEconomy: null,
-        prizesWithheld: false,
-        recentForm: [],
-        matchesPlayedThisSeason: 0,
-      });
-    }
-  }
-
-  // Fase 9: if confederations are provided, create divisions for rival federations
-  // and assign rival teams to their respective divisions.
-  if (options.confederations && options.confederations.length > 0) {
-    let rivalDivOrden = 1;
-    for (const conf of options.confederations) {
-      if (!conf.available) continue;
-      // Each league in the confederation becomes a division for its federation
-      for (const league of conf.leagues) {
-        // Find the federation for this league's country
-        const rivalFed = federations.find(f => f.name.includes(league.country) || f.name.includes(league.name) || f.name === league.name);
-        if (!rivalFed) continue;
-        // Find teams belonging to this league's country
-        const leagueTeams = teams.filter(t => t.federationId === rivalFed.id && t.divisionOrden === null);
-        if (leagueTeams.length === 0) continue;
-        const divOrden = rivalDivOrden++;
-        rivalDivisions.push({
-          orden: divOrden,
-          name: league.name,
-          federationId: rivalFed.id,
+    for (const div of rival.divisions ?? []) {
+      rivalDivisions.push({ orden: div.orden, name: div.name, federationId: rivalId });
+      for (const rt of div.teams) {
+        teams.push({
+          id: nextTeamId++,
+          name: rt.name,
+          strength: rt.strength,
+          federationId: rivalId,
+          arraigo: rt.arraigo,
+          divisionOrden: div.orden,
+          youthStrength: Math.max(20, rt.strength - 12),
+  
+          stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
+          academia: DEFAULT_ACADEMIA,
+          treasury: 0,
+          sponsors: [],
+          lastTeamEconomy: null,
+          prizesWithheld: false,
+          recentForm: [],
+          matchesPlayedThisSeason: 0,
         });
-        // Assign teams to this division (by strength, top to bottom)
-        const sorted = [...leagueTeams].sort((a, b) => b.strength - a.strength);
-        for (const t of sorted) {
-          t.divisionOrden = divOrden;
-        }
       }
     }
   }
 
   const divisions: Division[] = [
-    { orden: 1, name: divisionName(1), federationId: playerFederationId },
+    { orden: 1, name: divisionName(1), federationId: playerFederationId, format: 'ida_vuelta' },
     ...rivalDivisions,
   ];
 
@@ -262,6 +240,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     phase: 'pretemporada',
     prestige: startingPrestige,
     playerFederationId,
+    commissionerName: options.commissionerName?.trim() || 'Comisionado/a',
     leagueFormat: 'ida_vuelta',
     federations,
     divisions,
@@ -320,7 +299,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     eventImpulseLoss: 0,
     eventTreasuryInjection: 0,
     poachCooldowns: {},
-    confederations: [],
+    confederations: options.confederations?.map(c => ({ id: c.id, name: c.name, region: c.region, available: c.available ?? true })) ?? [],
     rivalRng: makeRng((seed ^ 0xabcd1234) >>> 0),
     rivalStandings: {},
     rivalChampions: [],
@@ -341,6 +320,19 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     schemaVersion: CURRENT_SCHEMA_VERSION,
     rescueLog: [],
     nextTeamSponsorId: 1,
+    transferVetoes: [],
+    outgoingTransferRevenue: 0,
+    federationLog: [],
+    nextFederationLogId: 1,
+    mailbox: [],
+    nextMailboxId: 1,
+    clubDemands: [],
+    nextDemandId: 1,
+    lowArraigoSeasons: {},
+    demandsRng: makeRng((seed ^ 0x0badf00d) >>> 0),
+    boardConfidence: { value: CONFIDENCE_START, history: [] },
+    gameOver: null,
+    negativeTreasurySeasons: 0,
   };
 }
 
@@ -499,12 +491,27 @@ export function startSeason(prev: GameState): GameState {
   s.cupSchedule = scheduleCups(s, total);
   s.seasonOver = total === 0; // no fixtures => trivially "over"
   s.phase = 'temporada';
+  // Transfer vetoes are consumed at season start (outgoing transfers already ran above).
+  s.transferVetoes = [];
 
   // Issue board mandate for this season (uses independent mandatesRng).
   const alreadyHasMandate = s.mandates.some((m) => m.year === s.year);
   if (!alreadyHasMandate) {
-    s.mandates.push(generateMandate(s));
+    const mandate = generateMandate(s);
+    s.mandates.push(mandate);
     s.nextMandateId++;
+    pushMail(s, {
+      year: s.year,
+      matchday: 0,
+      category: 'aviso',
+      title: 'Nuevo mandato de la junta',
+      body: `La junta te encomienda para esta temporada: ${mandate.description}.`,
+      actionKind: null,
+      refId: mandate.id,
+      teamId: null,
+      deadlineMatchday: null,
+      createdAtMatchday: 0,
+    });
   }
 
   // 5.4 — Chain events from the previous season (uses independent eventsRng).
@@ -515,7 +522,8 @@ export function startSeason(prev: GameState): GameState {
   if (s.confederations.length > 0) {
     generateRivalPlayers(s); // resets goals; generates players first season only
     generateRivalFixtures(s);
-    processInterLeagueTransfers(s); // stars from weaker rivals join player's league
+    processInterLeagueTransfers(s);         // stars from weaker rivals join player's league
+    processOutgoingInterLeagueTransfers(s); // stronger rivals poach player-league stars
   }
 
   // Team sponsors: auto-negotiate at the start of each season (uses independent rng).
@@ -575,7 +583,6 @@ export function createOwnTeam(
     arraigo: CREATED_TEAM_ARRAIGO,
     divisionOrden: lowestOrden,
     youthStrength: Math.max(20, CREATED_TEAM_STRENGTH - 12),
-    wageCap: 0,
     stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
     academia: DEFAULT_ACADEMIA,
     treasury: TEAM_STARTING_TREASURY_BASE + CREATED_TEAM_STRENGTH * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -609,6 +616,15 @@ export function createOwnTeam(
     }
   }
   s.treasury -= CREATE_TEAM_COST;
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'team_created',
+    title: 'Club fundado',
+    detail: `Creaste ${trimmed} desde cero (coste ${CREATE_TEAM_COST.toLocaleString('es-ES')} €)`,
+    value: CREATE_TEAM_COST,
+    teamId: nextId,
+  });
   return s;
 }
 
@@ -713,6 +729,11 @@ export function advanceMatchday(prev: GameState): GameState {
 
   // Independent-rng event spawn (§1, §2): rare polémicas to resolve.
   maybeSpawnEvent(s, md);
+
+  // 14.5 — Club requests: expire overdue ones (arraigo hit), then spawn new.
+  expireDemands(s, md);
+  generateClubDemands(s, md);
+
   s.currentMatchday = md + 1;
   if (s.currentMatchday > s.totalMatchdays) s.seasonOver = true;
 
@@ -750,6 +771,10 @@ export function setLeagueFormat(
   if (prev.leagueFormat === format) return prev;
   const s = structuredClone(prev);
   s.leagueFormat = format;
+  // 14.7: keep the global toggle and per-division formats in sync.
+  for (const d of s.divisions) {
+    if (d.federationId === s.playerFederationId) d.format = format;
+  }
   return s;
 }
 
@@ -930,7 +955,30 @@ export function closeSeason(prev: GameState): GameState {
       prestigeAfter: s.prestige,
       delta,
     });
+    // 14.6: title entry for the top flight (orden 1) champion.
+    if (d.orden === 1) {
+      logFederation(s, {
+        year: s.year,
+        matchday: 0,
+        type: 'title',
+        title: 'Campeón de liga',
+        detail: `${champion.name} campeón con ${champion.points} pts`,
+        value: null,
+        teamId: champion.teamId,
+      });
+    }
   }
+
+  // 14.6: prestige snapshot for the just-closed season (one per year).
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'prestige_snapshot',
+    title: 'Cierre de temporada',
+    detail: `Prestigio ${prestigeBefore} → ${s.prestige} (${delta >= 0 ? '+' : ''}${delta})`,
+    value: s.prestige,
+    teamId: null,
+  });
 
   // §6 awards from the just-closed year (no-op if no players are loaded).
   settleSeasonAwards(s);
@@ -1012,12 +1060,18 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
+  // 14.5 — Any club request still open when the season closes counts as ignored.
+  expireDemands(s, s.totalMatchdays + 1, true);
+
   // Arraigo decay: teams slowly lose loyalty if not maintained (-2/season).
   for (const t of s.teams) {
     if (t.federationId === s.playerFederationId) {
       t.arraigo = Math.max(0, t.arraigo - 2);
     }
   }
+
+  // 14.5 — Exodus: clubs stuck at chronically low arraigo leave the federation.
+  processExodus(s);
 
   // 11.1: finalize rival leagues from accumulated standings (independent RNG).
   if (s.confederations.length > 0) {
@@ -1037,7 +1091,35 @@ export function closeSeason(prev: GameState): GameState {
     } else {
       s.consecutiveMandateFails = 0;
     }
+    logFederation(s, {
+      year: s.year,
+      matchday: 0,
+      type: 'mandate_result',
+      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato fallido',
+      detail: currentMandate.description,
+      value: null,
+      teamId: null,
+    });
+    pushMail(s, {
+      year: s.year,
+      matchday: 0,
+      category: 'hito',
+      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato incumplido',
+      body: currentMandate.met
+        ? `Cumpliste el mandato de la junta: ${currentMandate.description}.`
+        : `No cumpliste el mandato de la junta: ${currentMandate.description}. La junta toma nota.`,
+      actionKind: null,
+      refId: currentMandate.id,
+      teamId: null,
+      deadlineMatchday: null,
+      createdAtMatchday: 0,
+    });
   }
+
+  // 14.8: board confidence + defeat check (uses the season prestige delta,
+  // the mandate result and the exodus/demands just processed above). Gated on
+  // players.length > 0 inside → golden-safe. Evaluated before the year bump.
+  evaluateBoardConfidence(s, delta);
 
   // 7.2: Record book — scan results before they are cleared at season end.
   updateRecordBook(s);
@@ -1155,7 +1237,35 @@ export function cultivateArraigo(
   return s;
 }
 
-// ─── Pretemporada: veto outgoing transfer (Fase 8 Batch 3) ──────────────────
+// ─── Pretemporada: veto outgoing transfer (Fase 13.3) ───────────────────────
+
+const MAX_TRANSFER_VETOES = 2;
+
+// Protect a player from being poached to a rival federation this season.
+// Pretemporada only; max 2 active vetoes; player must be in player federation.
+export function vetoTransfer(prev: GameState, playerId: number): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  const player = prev.players.find(p => p.id === playerId);
+  if (!player) return prev;
+  const team = prev.teams.find(t => t.id === player.teamId);
+  if (!team || team.federationId !== prev.playerFederationId) return prev;
+  if ((prev.transferVetoes ?? []).length >= MAX_TRANSFER_VETOES) return prev;
+  if ((prev.transferVetoes ?? []).includes(playerId)) return prev;
+
+  const s = structuredClone(prev);
+  s.transferVetoes = [...(s.transferVetoes ?? []), playerId];
+  return s;
+}
+
+// Remove a veto (commissioner changed their mind during pretemporada).
+export function cancelTransferVeto(prev: GameState, playerId: number): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  if (!(prev.transferVetoes ?? []).includes(playerId)) return prev;
+
+  const s = structuredClone(prev);
+  s.transferVetoes = s.transferVetoes.filter(id => id !== playerId);
+  return s;
+}
 
 // ─── Mid-season commissioner actions (Proposal 1: Mid-Season Agency) ────────
 

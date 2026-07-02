@@ -5,6 +5,8 @@
 
 import { makeRng, randInt } from './rng';
 import { wageBill } from './salaries';
+import { logFederation } from './federation-log';
+import { satisfyRescueDemand } from './demands';
 import type {
   CommercialContractType,
   ContractOffer,
@@ -85,6 +87,15 @@ export function signContract(prev: GameState, offerId: number): GameState {
   });
   s.nextContractId += 1;
   s.contractOffers = s.contractOffers.filter((o) => o.id !== offerId);
+  logFederation(s, {
+    year: s.year,
+    matchday: s.phase === 'temporada' ? s.currentMatchday : 0,
+    type: 'sponsor_signed',
+    title: 'Contrato comercial firmado',
+    detail: `${offer.nombre} · ${offer.valorAnual.toLocaleString('es-ES')} €/año durante ${offer.years} temporada(s)`,
+    value: offer.valorAnual,
+    teamId: null,
+  });
   return s;
 }
 
@@ -169,7 +180,8 @@ export function processEconomy(s: GameState): {
   const transferFees = s.transfers
     .filter((t) => t.year === s.year)
     .reduce((a, t) => a + t.transferFee, 0);
-  const transferIncome = 0; // sell-on clause is future work
+  const transferIncome = s.outgoingTransferRevenue ?? 0;
+  s.outgoingTransferRevenue = 0;
 
   let econDelta = 0;
   if (prizes > 0) econDelta += Math.min(3, Math.floor(prizes / 6_000_000));
@@ -374,5 +386,16 @@ export function rescueTeam(
   t.treasury += safeAmount;
   if (withholdPrizes) t.prizesWithheld = true;
   s.rescueLog.push({ year: s.year, teamId, teamName: t.name, amount: safeAmount });
+  logFederation(s, {
+    year: s.year,
+    matchday: s.phase === 'temporada' ? s.currentMatchday : 0,
+    type: 'rescue',
+    title: 'Rescate económico',
+    detail: `Inyectaste ${safeAmount.toLocaleString('es-ES')} € a ${t.name}${withholdPrizes ? ' (premios retenidos)' : ''}`,
+    value: safeAmount,
+    teamId,
+  });
+  // 14.5: a manual rescue also closes the club's open rescue request.
+  satisfyRescueDemand(s, teamId);
   return s;
 }

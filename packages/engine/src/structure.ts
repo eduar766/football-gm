@@ -4,10 +4,27 @@
 import { generateFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import { computeStandings } from './standings';
-import type { GameState, MatchResult, Team } from './types';
+import type { GameState, LevelingPlan, MatchResult, Team } from './types';
 
 export const MAX_DIVISION_SIZE = 12;
 export const PROMOTION_RELEGATION = 2;
+export const MAX_LEVELING_DIVISIONS = 3;
+
+// Validate a player-supplied leveling plan against the pool of player teams.
+// Returns null when valid, or a human-readable reason when not.
+export function validateLevelingPlan(plan: LevelingPlan, poolSize: number): string | null {
+  const divs = plan.divisions;
+  if (divs.length < 1) return 'El plan no tiene divisiones.';
+  if (divs.length > MAX_LEVELING_DIVISIONS) return `Máximo ${MAX_LEVELING_DIVISIONS} divisiones.`;
+  const sorted = [...divs].sort((a, b) => a.orden - b.orden);
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].orden !== i + 1) return 'Los órdenes deben ser consecutivos empezando en 1.';
+    if (sorted[i].size < 2) return 'Cada división necesita al menos 2 equipos.';
+  }
+  const total = divs.reduce((a, d) => a + d.size, 0);
+  if (total !== poolSize) return `Los tamaños suman ${total}, pero hay ${poolSize} equipos.`;
+  return null;
+}
 
 const ORDINALS = ['Primera', 'Segunda', 'Tercera', 'Cuarta', 'Quinta', 'Sexta'];
 
@@ -58,21 +75,37 @@ function rankByMiniLeague(teams: Team[], state: GameState): number[] {
 // Hold a leveling league among all player-owned teams (currently competing +
 // pending) and redistribute them across divisions by merit (§4.4). Pretemporada
 // only: startSeason will then build the calendar over the new structure.
-export function runLevelingLeague(prev: GameState): GameState {
+export function runLevelingLeague(prev: GameState, plan?: LevelingPlan): GameState {
   if (prev.phase !== 'pretemporada') return prev;
   const pool = prev.teams.filter((t) => t.federationId === prev.playerFederationId);
   if (pool.length < 2) return prev;
+
+  // Fase 14.7: reject an invalid plan up front (engine convention: return prev).
+  if (plan && validateLevelingPlan(plan, pool.length) !== null) return prev;
 
   const s = structuredClone(prev);
   const poolNow = s.teams.filter((t) => t.federationId === s.playerFederationId);
   const ranked = rankByMiniLeague(poolNow, s);
 
-  const nDiv = Math.max(1, Math.ceil(ranked.length / MAX_DIVISION_SIZE));
-  const sizes = groupSizes(ranked.length, nDiv);
+  // Division sizes + formats: from the player's plan, or the balanced default.
+  let sizes: number[];
+  let formats: (GameState['leagueFormat'] | undefined)[];
+  let names: (string | undefined)[];
+  if (plan) {
+    const sorted = [...plan.divisions].sort((a, b) => a.orden - b.orden);
+    sizes = sorted.map((d) => d.size);
+    formats = sorted.map((d) => d.format);
+    names = sorted.map((d) => d.name);
+  } else {
+    const nDiv = Math.max(1, Math.ceil(ranked.length / MAX_DIVISION_SIZE));
+    sizes = groupSizes(ranked.length, nDiv);
+    formats = sizes.map(() => s.leagueFormat);
+    names = sizes.map(() => undefined);
+  }
 
   const ordenById = new Map<number, number>();
   let cursor = 0;
-  for (let d = 0; d < nDiv; d++) {
+  for (let d = 0; d < sizes.length; d++) {
     for (let k = 0; k < sizes[d]; k++) {
       ordenById.set(ranked[cursor++], d + 1);
     }
@@ -81,10 +114,11 @@ export function runLevelingLeague(prev: GameState): GameState {
     const orden = ordenById.get(t.id);
     if (orden !== undefined) t.divisionOrden = orden;
   }
-  s.divisions = Array.from({ length: nDiv }, (_, i) => ({
+  s.divisions = sizes.map((_, i) => ({
     orden: i + 1,
-    name: divisionName(i + 1),
+    name: names[i] ?? divisionName(i + 1),
     federationId: s.playerFederationId,
+    format: formats[i] ?? s.leagueFormat,
   }));
   return s;
 }
