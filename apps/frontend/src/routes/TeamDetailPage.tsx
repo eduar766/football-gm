@@ -483,6 +483,95 @@ function FinanzasTab({ finance }: { finance: NonNullable<TeamDetail['finance']> 
 
 /* ── Main page ────────────────────────────────────────────────────────── */
 
+/* ── Rival team view (P1): rivals have no persisted squad/finance, so show
+      their league standing, titles and top scorers instead of empty panels ── */
+function RivalPanels({ t }: { t: TeamDetail }) {
+  const r = t.rival;
+  return (
+    <Stack gap="md">
+      <Paper p="md" style={{ border: '1px solid rgba(59,130,246,0.25)', borderLeft: '3px solid #3B82F6', background: 'rgba(59,130,246,0.04)' }}>
+        <Group gap="xs">
+          <IconShieldHalf size={16} color="#3B82F6" />
+          <Text fw={700}>Equipo rival</Text>
+          <Badge size="xs" variant="light" color="blue">No gestionable</Badge>
+        </Group>
+        <Text size="sm" c="dimmed" mt={4}>
+          Este club pertenece a otra federación. Solo puedes gestionar los equipos de tu liga.
+        </Text>
+      </Paper>
+
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #10B981' }}>
+        <Group gap="sm" mb="md">
+          <IconChartBar size={16} color="#10B981" />
+          <Text fw={700}>Clasificación actual</Text>
+        </Group>
+        {r && r.position != null ? (
+          <Group gap="xl">
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Posición</Text>
+              <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.position}º</Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Jugados</Text>
+              <Text fw={700} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.played}</Text>
+            </div>
+            <div>
+              <Text size="xs" c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>Puntos</Text>
+              <Text fw={800} size="xl" style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: '#10B981' }}>{r.points}</Text>
+            </div>
+            {r.divisionName && (
+              <div>
+                <Text size="xs" c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>División</Text>
+                <Text fw={600} size="md">{r.divisionName}</Text>
+              </div>
+            )}
+          </Group>
+        ) : (
+          <Text size="sm" c="dimmed">La temporada rival aún no ha comenzado.</Text>
+        )}
+      </Paper>
+
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+        <Group gap="sm" mb="md">
+          <IconTrophy size={16} color="#F59E0B" />
+          <Text fw={700}>Palmarés</Text>
+          {r && r.titles.length > 0 && (
+            <Badge size="xs" color="yellow" variant="light">{r.titles.length} título{r.titles.length !== 1 ? 's' : ''}</Badge>
+          )}
+        </Group>
+        {r && r.titles.length > 0 ? (
+          <Group gap="xs">
+            {r.titles.map((y) => (
+              <Badge key={y} variant="light" color="yellow" leftSection={<IconTrophy size={10} />}>Año {y}</Badge>
+            ))}
+          </Group>
+        ) : (
+          <Text size="sm" c="dimmed">Sin títulos de liga aún.</Text>
+        )}
+      </Paper>
+
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #8B5CF6' }}>
+        <Group gap="sm" mb="md">
+          <IconStar size={16} color="#8B5CF6" />
+          <Text fw={700}>Máximos goleadores</Text>
+        </Group>
+        {r && r.topScorers.length > 0 ? (
+          <Stack gap={4}>
+            {r.topScorers.map((p, i) => (
+              <Group key={i} justify="space-between">
+                <Text size="sm">{p.name}</Text>
+                <Badge variant="light" color="grape">{p.goals} gol{p.goals !== 1 ? 'es' : ''}</Badge>
+              </Group>
+            ))}
+          </Stack>
+        ) : (
+          <Text size="sm" c="dimmed">Sin datos de goleadores esta temporada.</Text>
+        )}
+      </Paper>
+    </Stack>
+  );
+}
+
 export function TeamDetailPage() {
   const { gameId, teamId } = useParams({ strict: false }) as { gameId: string; teamId: string };
   const id = Number(gameId);
@@ -507,6 +596,25 @@ export function TeamDetailPage() {
   }
 
   const t = team.data;
+  const isRival = !t.isPlayerTeam;
+
+  const statRows = isRival
+    ? [
+        { icon: IconBolt, label: 'Fuerza', value: String(t.strength), color: '#10B981', bar: t.strength },
+        { icon: IconTrophy, label: 'Prestigio', value: String(t.prestige), color: '#F59E0B', bar: Math.min(t.prestige * 5, 100) },
+        ...(t.rival?.position != null
+          ? [{ icon: IconChartBar, label: 'Posición', value: `${t.rival.position}º · ${t.rival.points} pts`, color: '#3B82F6', bar: null }]
+          : []),
+        { icon: IconTrophy, label: 'Títulos', value: String(t.rival?.titles.length ?? 0), color: '#F59E0B', bar: null },
+      ]
+    : [
+        { icon: IconBolt, label: 'Fuerza', value: String(t.strength), color: '#10B981', bar: t.strength },
+        { icon: IconTrophy, label: 'Prestigio', value: String(t.prestige), color: '#F59E0B', bar: Math.min(t.prestige * 5, 100) },
+        { icon: IconShieldHalf, label: 'Arraigo', value: String(t.arraigo), color: '#3B82F6', bar: t.arraigo },
+        { icon: IconCoin, label: 'Presupuesto', value: fmtMoney(t.presupuesto), color: '#059669', bar: null },
+        { icon: IconUsers, label: 'Afición', value: num(t.aficion), color: '#8B5CF6', bar: null },
+        { icon: IconBuildingStadium, label: 'Estadio', value: `${t.estadioNombre ?? '—'} (${num(t.estadioAforo ?? 0)})`, color: '#F97316', bar: null },
+      ];
 
   return (
     <Grid className="page-enter" gutter="md">
@@ -573,14 +681,7 @@ export function TeamDetailPage() {
 
           {/* Stat rows */}
           <Stack gap={6}>
-            {[
-              { icon: IconBolt, label: 'Fuerza', value: String(t.strength), color: '#10B981', bar: t.strength },
-              { icon: IconTrophy, label: 'Prestigio', value: String(t.prestige), color: '#F59E0B', bar: Math.min(t.prestige * 5, 100) },
-              { icon: IconShieldHalf, label: 'Arraigo', value: String(t.arraigo), color: '#3B82F6', bar: t.arraigo },
-              { icon: IconCoin, label: 'Presupuesto', value: fmtMoney(t.presupuesto), color: '#059669', bar: null },
-              { icon: IconUsers, label: 'Afición', value: num(t.aficion), color: '#8B5CF6', bar: null },
-              { icon: IconBuildingStadium, label: 'Estadio', value: `${t.estadioNombre ?? '—'} (${num(t.estadioAforo ?? 0)})`, color: '#F97316', bar: null },
-            ].map((s) => (
+            {statRows.map((s) => (
               <Box
                 key={s.label}
                 style={{
@@ -612,7 +713,7 @@ export function TeamDetailPage() {
             ))}
           </Stack>
 
-          {summary.data?.phase === 'pretemporada' && (
+          {!isRival && summary.data?.phase === 'pretemporada' && (
             <Button
               mt="md"
               fullWidth
@@ -663,8 +764,11 @@ export function TeamDetailPage() {
         </Card>
       </Grid.Col>
 
-      {/* ── Right: Tabbed content ── */}
+      {/* ── Right: Tabbed content (rivals get an adapted read-only view) ── */}
       <Grid.Col span={{ base: 12, md: 8 }}>
+        {isRival ? (
+          <RivalPanels t={t} />
+        ) : (
         <Tabs defaultValue="plantilla" variant="pills" radius="md">
           <Tabs.List
             mb="md"
@@ -778,6 +882,7 @@ export function TeamDetailPage() {
             </Tabs.Panel>
           )}
         </Tabs>
+        )}
       </Grid.Col>
     </Grid>
   );

@@ -1363,6 +1363,37 @@ export class GameService {
 
     // Financial data from engine state (only for teams in the player's federation).
     const engTeam = engTeamId != null ? state.teams.find((t) => t.id === engTeamId) : undefined;
+    const isPlayerTeam = !!engTeam && engTeam.federationId === state.playerFederationId;
+
+    // Rival-appropriate data (P1): current standing in their own league, league
+    // titles, and this season's top scorers from the virtual rival players.
+    let rival: TeamDetail['rival'] = null;
+    if (engTeam && !isPlayerTeam) {
+      const key = `${engTeam.federationId}:${engTeam.divisionOrden ?? 1}`;
+      const rows = state.rivalStandings[key] ?? [];
+      const idx = rows.findIndex((r) => r.teamId === engTeam.id);
+      const row = idx >= 0 ? rows[idx] : null;
+      const divName = state.divisions.find(
+        (d) => d.federationId === engTeam.federationId && d.orden === engTeam.divisionOrden,
+      )?.name ?? null;
+      const titles = (state.rivalChampions ?? [])
+        .filter((rc) => rc.championId === engTeam.id)
+        .map((rc) => rc.year);
+      const topScorers = (state.rivalPlayers ?? [])
+        .filter((p) => p.teamId === engTeam.id && p.goals > 0)
+        .sort((a, b) => b.goals - a.goals)
+        .slice(0, 5)
+        .map((p) => ({ name: p.name, goals: p.goals }));
+      rival = {
+        divisionName: divName,
+        position: row ? idx + 1 : null,
+        played: row?.played ?? 0,
+        points: row?.points ?? 0,
+        titles,
+        topScorers,
+      };
+    }
+
     const finance = engTeam && engTeam.federationId === state.playerFederationId
       ? {
           treasury: engTeam.treasury,
@@ -1399,6 +1430,8 @@ export class GameService {
         sanctions: teamSanctions,
       },
       finance,
+      isPlayerTeam,
+      rival,
     };
   }
 
