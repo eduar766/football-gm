@@ -68,6 +68,7 @@ import type {
   GameListItem,
   GameSummary,
   HistoryResponse,
+  FederationLogResponse,
   CreateCupRequest,
   ComplianceResponse,
   CupsResponse,
@@ -2694,6 +2695,15 @@ export class GameService {
       await this.repo.saveState(tx, gameId, next);
       return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
+  }
+
+  async getFederationLog(gameId: number): Promise<FederationLogResponse> {
+    const state = await this.repo.loadState(gameId);
+    // Newest first for the timeline UI.
+    const entries = [...(state.federationLog ?? [])].sort(
+      (a, b) => b.year - a.year || b.id - a.id,
+    );
+    return { entries };
   }
 
   async getCommissionerReports(gameId: number): Promise<CommissionerReportsResponse> {

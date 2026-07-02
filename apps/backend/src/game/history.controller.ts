@@ -27,4 +27,9 @@ export class HistoryController {
   commissionerReports(@Param('id', ParseIntPipe) id: number) {
     return this.games.getCommissionerReports(id);
   }
+
+  @Get(':id/federation-log')
+  federationLog(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getFederationLog(id);
+  }
 }

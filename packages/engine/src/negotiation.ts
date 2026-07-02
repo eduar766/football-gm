@@ -3,6 +3,7 @@
 // progression mutates an already-cloned state.
 
 import { rngNext } from './rng';
+import { logFederation } from './federation-log';
 import type { Federation, GameState, Negotiation, NegotiationRequirement, Team } from './types';
 
 // Prestige groups into 5 tiers; the tier is prelatory — it gates which teams a
@@ -168,6 +169,15 @@ export function startNegotiation(prev: GameState, targetTeamId: number): GameSta
     revealedCount: 0,
   });
   s.nextNegotiationId += 1;
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'negotiation_started',
+    title: 'Negociación de adhesión iniciada',
+    detail: `Comenzaste a negociar la incorporación de ${team.name}`,
+    value: null,
+    teamId: targetTeamId,
+  });
   return s;
 }
 
@@ -257,6 +267,17 @@ export function progressNegotiations(s: GameState): void {
         team.divisionOrden = null; // pending integration: leveling league will place them
         team.arraigo = 30; // fresh start: low loyalty in the new federation
         n.state = 'effective';
+        if (n.byFederationId === s.playerFederationId) {
+          logFederation(s, {
+            year: s.year,
+            matchday: 0,
+            type: 'negotiation_effective',
+            title: 'Equipo incorporado',
+            detail: `${team.name} se unió a tu federación (pendiente de ubicar en la nivelación)`,
+            value: null,
+            teamId: team.id,
+          });
+        }
       }
       continue;
     }

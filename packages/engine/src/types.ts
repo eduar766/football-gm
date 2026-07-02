@@ -713,6 +713,9 @@ export interface GameState {
   // Fase 13.4: solidarity revenue accumulated from outgoing inter-league transfers
   // during startSeason; consumed by processEconomy at closeSeason.
   outgoingTransferRevenue: number;
+  // Fase 14.6: narrative timeline of the player's federation.
+  federationLog: FederationLogEntry[];
+  nextFederationLogId: number;
 }
 
 export interface RecordBook {
@@ -732,6 +735,31 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// Fase 14.6: narrative timeline of the player's federation.
+export type FederationLogType =
+  | 'prestige_snapshot'    // season close: prestige before→after
+  | 'sponsor_signed'       // commercial contract signed
+  | 'negotiation_started'  // adhesion negotiation opened
+  | 'negotiation_effective' // team joined the federation
+  | 'team_created'         // club built from scratch
+  | 'team_left'            // club left the federation (Fase 14.5)
+  | 'rescue'               // commissioner injected cash into a club
+  | 'norm_created'         // governance rule defined
+  | 'sanction'             // a club was sanctioned
+  | 'mandate_result'       // board mandate met / failed
+  | 'title';               // player-league champion crowned
+
+export interface FederationLogEntry {
+  id: number;
+  year: number;
+  matchday: number;      // 0 = pretemporada / season close
+  type: FederationLogType;
+  title: string;
+  detail: string;
+  value: number | null;  // € or prestige points, depending on type
+  teamId: number | null;
 }
 
 export interface FederationCoefficient {
