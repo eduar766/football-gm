@@ -64,6 +64,7 @@ import {
   resolveDemand as engineResolveDemand,
   preseasonChecklist,
   preseasonBlockers,
+  validateLevelingPlan,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -77,6 +78,7 @@ import type {
   FederationLogResponse,
   MailboxResponse,
   PreseasonChecklistResponse,
+  LevelingPlan,
   CreateCupRequest,
   ComplianceResponse,
   CupsResponse,
@@ -1032,7 +1034,7 @@ export class GameService {
     };
   }
 
-  async runLevelingLeague(gameId: number): Promise<StructureResponse> {
+  async runLevelingLeague(gameId: number, plan?: LevelingPlan): Promise<StructureResponse> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'celebrar la liga de nivelación');
@@ -1041,7 +1043,15 @@ export class GameService {
           'Tesorería en negativo: no puedes permitirte expandir la estructura (§5)',
         );
       }
-      const next = engineRunLevelingLeague(state);
+      // Fase 14.7: validate a supplied plan against the real pool for a clear 400.
+      if (plan) {
+        const poolSize = state.teams.filter(
+          (t) => t.federationId === state.playerFederationId,
+        ).length;
+        const reason = validateLevelingPlan(plan, poolSize);
+        if (reason) throw new BadRequestException(`Plan de nivelación inválido: ${reason}`);
+      }
+      const next = engineRunLevelingLeague(state, plan);
       const map = await this.repo.engineToDbTeam(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       const playerDivisionsNext = next.divisions.filter(

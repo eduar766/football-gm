@@ -732,6 +732,26 @@ export const PreseasonChecklistResponse = z.object({
 });
 export type PreseasonChecklistResponse = z.infer<typeof PreseasonChecklistResponse>;
 
+// Fase 14.7: configurable division structure for the leveling league.
+export const LeagueFormat = z.enum(['ida', 'ida_vuelta']);
+export type LeagueFormat = z.infer<typeof LeagueFormat>;
+
+export const LevelingPlanDivision = z.object({
+  orden: z.number().int().min(1).max(3),
+  name: z.string().max(40).optional(),
+  size: z.number().int().min(2),
+  format: LeagueFormat,
+});
+export const LevelingPlan = z.object({
+  divisions: z.array(LevelingPlanDivision).min(1).max(3),
+});
+export type LevelingPlan = z.infer<typeof LevelingPlan>;
+
+export const RunLevelingLeagueRequest = z.object({
+  plan: LevelingPlan.optional(),
+});
+export type RunLevelingLeagueRequest = z.infer<typeof RunLevelingLeagueRequest>;
+
 /* -------------------------------- commissioner: federations & market */
 
 export const FederationListItem = z.object({
@@ -1315,9 +1335,7 @@ export type CreateInterLeagueCupRequest = z.infer<typeof CreateInterLeagueCupReq
 
 /* ----------------------------------------- league format (§4.4) */
 
-export const LeagueFormat = z.enum(['ida', 'ida_vuelta']);
-export type LeagueFormat = z.infer<typeof LeagueFormat>;
-
+// LeagueFormat is defined earlier (near the leveling-plan schemas).
 export const SetLeagueFormatRequest = z.object({ format: LeagueFormat });
 export type SetLeagueFormatRequest = z.infer<typeof SetLeagueFormatRequest>;
 

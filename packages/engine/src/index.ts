@@ -44,7 +44,9 @@ export {
 export {
   pendingIntegrationTeams,
   runLevelingLeague,
+  validateLevelingPlan,
   MAX_DIVISION_SIZE,
+  MAX_LEVELING_DIVISIONS,
   PROMOTION_RELEGATION,
 } from './structure';
 

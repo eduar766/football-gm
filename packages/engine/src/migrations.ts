@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -263,6 +263,17 @@ export function migrateState(state: GameState): GameState {
     if (gs.negativeTreasurySeasons == null) gs.negativeTreasurySeasons = 0;
 
     state.schemaVersion = 10;
+  }
+
+  // v10 → v11 (Fase 14.7): per-division schedule format. Backfill from the
+  // global leagueFormat so existing calendars keep the same shape.
+  if (v < 11) {
+    const fallback = state.leagueFormat ?? 'ida_vuelta';
+    for (const d of state.divisions) {
+      if (!d.format) d.format = fallback;
+    }
+
+    state.schemaVersion = 11;
   }
 
   return state;

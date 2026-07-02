@@ -226,7 +226,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
   }
 
   const divisions: Division[] = [
-    { orden: 1, name: divisionName(1), federationId: playerFederationId },
+    { orden: 1, name: divisionName(1), federationId: playerFederationId, format: 'ida_vuelta' },
     ...rivalDivisions,
   ];
 
@@ -771,6 +771,10 @@ export function setLeagueFormat(
   if (prev.leagueFormat === format) return prev;
   const s = structuredClone(prev);
   s.leagueFormat = format;
+  // 14.7: keep the global toggle and per-division formats in sync.
+  for (const d of s.divisions) {
+    if (d.federationId === s.playerFederationId) d.format = format;
+  }
   return s;
 }
 

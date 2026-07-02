@@ -63,8 +63,10 @@ export function buildDivisionFixtures(
     ? divisions.filter(d => d.federationId === playerFederationId)
     : divisions;
   for (const d of playerDivisions) {
+    // Fase 14.7: per-division format overrides the global default when set.
+    const divLegs: 1 | 2 = d.format ? (d.format === 'ida' ? 1 : 2) : legs;
     const ids = teams.filter((t) => t.divisionOrden === d.orden && t.federationId === d.federationId).map((t) => t.id);
-    if (ids.length >= 2) fixtures.push(...generateFixtures(ids, rng, d.orden, legs));
+    if (ids.length >= 2) fixtures.push(...generateFixtures(ids, rng, d.orden, divLegs));
   }
   const total = fixtures.length
     ? Math.max(...fixtures.map((f) => f.matchday))

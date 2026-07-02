@@ -26,6 +26,7 @@ import type {
   PrizesResponse,
   StandingsResponse,
   StructureResponse,
+  LevelingPlan,
   TransfersResponse,
   TeamDetail,
   TeamListItem,
@@ -108,8 +109,11 @@ export const api = {
   standings: (id: number, division = 1) =>
     req<StandingsResponse>(`/games/${id}/standings?division=${division}`),
   structure: (id: number) => req<StructureResponse>(`/games/${id}/structure`),
-  runLevelingLeague: (id: number) =>
-    req<StructureResponse>(`/games/${id}/leveling-league`, { method: 'POST' }),
+  runLevelingLeague: (id: number, plan?: LevelingPlan) =>
+    req<StructureResponse>(`/games/${id}/leveling-league`, {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    }),
   createOwnTeam: (id: number, name: string) =>
     req<StructureResponse>(`/games/${id}/teams`, {
       method: 'POST',
