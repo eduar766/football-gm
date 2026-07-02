@@ -34,8 +34,9 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   const value = payload[0].value;
   return (
     <Paper p="sm" radius="md" style={{
-      backgroundColor: '#1A2332',
-      border: '1px solid rgba(255,255,255,0.1)',
+      backgroundColor: 'var(--surface-2)',
+      border: '1px solid var(--border-2)',
+      boxShadow: 'var(--panel-shadow)',
     }}>
       <Text size="sm" fw={600} c="dimmed">{label}</Text>
       <Text size="sm" fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
@@ -60,15 +61,15 @@ export function PalmaresChart({ data }: { data: PalmaresItem[] }) {
       </Text>
       <ResponsiveContainer width="100%" height={250}>
         <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,176,205,0.08)" />
           <XAxis
             type="number"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
+            tick={{ fontSize: 11, fill: 'rgba(148,176,205,0.45)', fontFamily: 'var(--mantine-font-family-monospace)' }}
           />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
+            tick={{ fontSize: 11, fill: 'rgba(148,176,205,0.45)', fontFamily: 'var(--mantine-font-family-monospace)' }}
             width={100}
           />
           <Tooltip content={<CustomTooltip />} />
