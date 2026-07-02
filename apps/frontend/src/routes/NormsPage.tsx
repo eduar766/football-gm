@@ -17,6 +17,7 @@ import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { IconGavel, IconPlus, IconTrash } from '@tabler/icons-react';
+import { EmptyState } from '../components/EmptyState';
 import type { NormType } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -233,7 +234,11 @@ export function NormsPage() {
                 </Table.Tbody>
               </Table>
             ) : (
-              <Text c="dimmed" size="sm">Sin normas. La liga no tiene reglas que hacer cumplir.</Text>
+              <EmptyState
+                icon={IconGavel}
+                title="Sin normas"
+                description="La liga no tiene reglas que hacer cumplir. Crea una norma para regular a los clubes."
+              />
             )}
           </Paper>
         </Grid.Col>

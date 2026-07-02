@@ -33,6 +33,7 @@ import { QK } from '../query-keys';
 import { useAuth } from '../contexts/AuthContext';
 import { ExportReminderBanner } from '../components/ExportReminderBanner';
 import { FirstLoginModal, useOnboardingModal } from '../components/FirstLoginModal';
+import { EmptyState } from '../components/EmptyState';
 
 const ACCENT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316'];
 const GAME_LIMIT = 3;
@@ -396,7 +397,11 @@ export function GamesPage() {
               })}
             </Stack>
           ) : (
-            <Text c="dimmed">Aún no hay partidas. Crea una arriba.</Text>
+            <EmptyState
+              icon={IconShield}
+              title="Aún no hay partidas"
+              description="Crea tu primera competición arriba y empieza tu carrera como comisionado/a."
+            />
           )}
         </Box>
       </Stack>

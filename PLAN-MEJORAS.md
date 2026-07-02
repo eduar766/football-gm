@@ -20,7 +20,7 @@ de división (`federationId === playerFederationId`) en toda query de datos del 
 | P2 | Bracket de copas inusable (huecos / copas no iniciadas) | ✅ HECHO |
 | P3 | Charts no siguen el tema HUD (colores hardcodeados) | ✅ HECHO |
 | P4 | Páginas con mucha data solo con shell (Economía, Historial) | ✅ HECHO (pase enfocado) |
-| P5 | Consistencia de estados vacíos (adoptar `EmptyState`) | 🟡 Parcial (páginas clave hechas) |
+| P5 | Consistencia de estados vacíos (adoptar `EmptyState`) | ✅ HECHO |
 
 ---
 
@@ -78,10 +78,19 @@ e HistoryPage (campeones de otras federaciones, cronología vacía). typecheck+l
 **Follow-up opcional (para un design-agent si se quiere ir más lejos):** StatTile KPI strips
 + readouts mono en las tablas internas de Economía/Historial (más profundidad visual, no crítico).
 
-## P5 — Consistencia de estados vacíos 🟡 parcial
+## P5 — Consistencia de estados vacíos ✅
 
-Adoptado `EmptyState` en las páginas de data clave (Economía, Historial) como parte de P4.
-Quedan estados vacíos ad-hoc en otras páginas (Copas, Normas, etc.) — sweep menor pendiente.
+Adoptado `EmptyState` en todos los vacíos PRIMARIOS de página/sección: Economía (contratos,
+compliance), Historial (campeones rivales, cronología), Copas, Eventos, Normas, Equipos (mía/otras),
+Premios, Negociaciones, Lobby de partidas. typecheck+lint ✅.
+**Decisión de diseño:** los placeholders INLINE pequeños dentro de widgets compactos/tablas
+(pestañas de Historial "Sin títulos todavía", sub-listas de Transfers, sub-paneles de TeamDetail,
+mini-widgets del Dashboard) se dejan como texto `dimmed` — un EmptyState (icono 60px + py40)
+sería demasiado pesado ahí. Correcto por diseño, no es deuda.
+
+---
+
+## ✅ Todas las prioridades (P1–P5) completadas.
 
 ---
 

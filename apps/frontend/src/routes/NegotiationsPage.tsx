@@ -5,12 +5,14 @@ import { useParams } from '@tanstack/react-router';
 import {
   IconArrowsExchange,
   IconCheck,
+  IconAddressBook,
   IconCircleCheck,
   IconCircleX,
   IconClock,
   IconHistory,
   IconRefresh,
 } from '@tabler/icons-react';
+import { EmptyState } from '../components/EmptyState';
 import type { EngineNegotiationState, NegotiationDto, NegotiationRequirementDto } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -397,7 +399,11 @@ export function NegotiationsPage() {
 
       {negs.data && negs.data.length === 0 ? (
         <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-          <Text c="dimmed">Sin negociaciones. Inicia una desde el Mercado.</Text>
+          <EmptyState
+            icon={IconAddressBook}
+            title="Sin negociaciones"
+            description="Inicia una adhesión desde el Mercado para incorporar un club a tu liga."
+          />
         </Paper>
       ) : (
         <Tabs defaultValue="active" variant="pills" mb="md">
