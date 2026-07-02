@@ -5,6 +5,7 @@ import {
   Button,
   Container,
   Group,
+  Modal,
   Paper,
   Skeleton,
   Stack,
@@ -150,6 +151,8 @@ export function GameLayout() {
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
   const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
   const unreadMail = summary.data?.unreadMailCount ?? 0;
+  const confidence = summary.data?.boardConfidence?.value ?? null;
+  const gameOver = summary.data?.gameOver ?? null;
 
   const phaseChip = summary.data ? (
     <Box
@@ -228,7 +231,44 @@ export function GameLayout() {
         value={`${summary.data?.impulsesRemaining ?? '?'}/${summary.data?.impulsesPerSeason ?? '?'}`}
         color={theme.colors.violet[5]}
       />
+      <Stat
+        label="Confianza junta"
+        value={`${summary.data?.boardConfidence?.value ?? '—'}/100`}
+        color={
+          confidence == null
+            ? 'white'
+            : confidence <= 30
+              ? theme.colors.red[5]
+              : confidence < 60
+                ? theme.colors.gold[5]
+                : theme.colors.accent[4]
+        }
+      />
     </Stack>
+  );
+
+  const gameOverModal = (
+    <Modal
+      opened={!!gameOver}
+      onClose={() => {}}
+      withCloseButton={false}
+      centered
+      closeOnClickOutside={false}
+      closeOnEscape={false}
+      title={<Text fw={800} c="red">Has sido destituido</Text>}
+    >
+      <Stack>
+        <Text size="sm">{gameOver?.message}</Text>
+        <Text size="xs" c="dimmed">
+          Temporada {gameOver?.year}. Tu etapa como comisionado/a ha terminado.
+        </Text>
+        <Group justify="flex-end">
+          <Button variant="light" onClick={() => navigate({ to: '/' })}>
+            Volver al inicio
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 
   if (isMobile) {
@@ -249,6 +289,7 @@ export function GameLayout() {
         <Container size="xl" py="md">
           <Outlet />
         </Container>
+        {gameOverModal}
 
         <Box
           style={{
@@ -536,6 +577,7 @@ export function GameLayout() {
 
       <BugReportBanner />
       <ChangelogModal opened={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      {gameOverModal}
     </Group>
   );
 }

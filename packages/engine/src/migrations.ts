@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -252,6 +252,17 @@ export function migrateState(state: GameState): GameState {
     if (!gs.demandsRng) gs.demandsRng = { s: (state.seed ^ 0x0badf00d) >>> 0 };
 
     state.schemaVersion = 9;
+  }
+
+  // v9 → v10 (Fase 14.8): board confidence + defeat.
+  if (v < 10) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.boardConfidence) gs.boardConfidence = { value: 60, history: [] };
+    if (gs.gameOver === undefined) gs.gameOver = null;
+    if (gs.negativeTreasurySeasons == null) gs.negativeTreasurySeasons = 0;
+
+    state.schemaVersion = 10;
   }
 
   return state;
