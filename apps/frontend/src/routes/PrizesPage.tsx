@@ -23,6 +23,7 @@ import {
   IconTrash,
   IconUsers,
 } from '@tabler/icons-react';
+import { EmptyState } from '../components/EmptyState';
 import type { CompetitionPrizeDto } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -500,7 +501,11 @@ export function PrizesPage() {
           )}
         </Group>
         {prizes.data.payments.length === 0 ? (
-          <Text c="dimmed" size="sm">Aún no se ha cerrado ninguna competición con premio.</Text>
+          <EmptyState
+            icon={IconMedal}
+            title="Sin premios repartidos aún"
+            description="Cuando se cierre una competición con bolsa de premios verás aquí los pagos."
+          />
         ) : (
           <Table>
             <Table.Thead>

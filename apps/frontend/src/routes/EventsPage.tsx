@@ -3,6 +3,7 @@ import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { IconAlertTriangle, IconEye, IconEyeOff } from '@tabler/icons-react';
+import { EmptyState } from '../components/EmptyState';
 import type { EventAction, EventStatus, EventType } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -104,7 +105,11 @@ export function EventsPage() {
           </Box>
         </Group>
         {pending.length === 0 ? (
-          <Text c="dimmed" size="sm">Sin incidentes abiertos.</Text>
+          <EmptyState
+            icon={IconEye}
+            title="Sin incidentes abiertos"
+            description="No hay polémicas pendientes de resolver. Aparecerán aquí durante la temporada."
+          />
         ) : (
           <Table>
             <Table.Thead>

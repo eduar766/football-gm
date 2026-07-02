@@ -2,6 +2,7 @@ import { Box, Group, Paper, Skeleton, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { IconBuilding, IconUsers } from '@tabler/icons-react';
+import { EmptyState } from '../components/EmptyState';
 import { api } from '../api';
 import { PageHero } from '../components/PageHero';
 
@@ -209,7 +210,11 @@ export function TeamsPage() {
         <Tabs.Panel value="mine">
           {myTeams.length === 0 ? (
             <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-              <Text c="dimmed">No hay equipos en tu federación.</Text>
+              <EmptyState
+                icon={IconUsers}
+                title="No hay equipos en tu federación"
+                description="Incorpora clubes por negociación o crea uno desde Estructura."
+              />
             </Paper>
           ) : (
             <TeamTable teams={myTeams} gameId={gameId} groupBy="division" />
@@ -219,7 +224,11 @@ export function TeamsPage() {
         <Tabs.Panel value="others">
           {otherTeams.length === 0 ? (
             <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-              <Text c="dimmed">No hay equipos en otras federaciones.</Text>
+              <EmptyState
+                icon={IconBuilding}
+                title="No hay equipos en otras federaciones"
+                description="Las federaciones rivales aparecerán aquí a medida que exploras el mundo."
+              />
             </Paper>
           ) : (
             <TeamTable teams={otherTeams} gameId={gameId} groupBy="federation" />

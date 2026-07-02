@@ -46,6 +46,7 @@ import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { BracketView } from '../components/BracketView';
+import { EmptyState } from '../components/EmptyState';
 import { PageHero } from '../components/PageHero';
 
 const TIPO_LABEL: Record<CupType, string> = {
@@ -1114,10 +1115,13 @@ export function CupsPage() {
 
         <Tabs.Panel value="copas">
           {totalCups === 0 ? (
-            <Paper p="xl" style={{ border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
-              <IconTrophy size={36} color="rgba(255,255,255,0.1)" style={{ marginBottom: 12 }} />
-              <Text c="dimmed" size="sm">Sin copas todavía.</Text>
-              <Text size="xs" c="dimmed" mt={4}>Crea una copa en pretemporada para que aparezca aquí.</Text>
+            <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+              <EmptyState
+                icon={IconTrophy}
+                title="Sin copas todavía"
+                description="Crea una copa en pretemporada para que aparezca aquí y se juegue durante la temporada."
+                color="#F59E0B"
+              />
             </Paper>
           ) : (
             <>
