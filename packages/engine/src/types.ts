@@ -37,6 +37,21 @@ export interface Division {
   orden: number;
   name: string;
   federationId: number; // which federation owns this division (player or rival)
+  // Fase 14.7: per-division schedule format. Falls back to the global
+  // leagueFormat when absent (older saves before the leveling-plan feature).
+  format?: LeagueFormat;
+}
+
+// Fase 14.7: a player-defined structure applied when running the leveling
+// league — chooses how many divisions, their sizes, and their format.
+export interface LevelingPlanDivision {
+  orden: number;
+  name?: string;
+  size: number; // how many teams land in this division
+  format: LeagueFormat;
+}
+export interface LevelingPlan {
+  divisions: LevelingPlanDivision[];
 }
 
 // Club sponsorship contract (autonomous — signed by the club, not the commissioner).
