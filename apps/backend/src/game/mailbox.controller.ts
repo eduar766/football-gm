@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -6,6 +7,8 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ResolveDemandRequest } from '@football-gm/contracts';
+import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GameOwnerGuard } from './game-owner.guard';
 import { GameService } from './game.service';
@@ -31,5 +34,14 @@ export class MailboxController {
   @Post(':id/mailbox/read-all')
   markAllRead(@Param('id', ParseIntPipe) id: number) {
     return this.games.markAllMailRead(id);
+  }
+
+  @Post(':id/demands/:demandId/resolve')
+  resolveDemand(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('demandId', ParseIntPipe) demandId: number,
+    @Body(new ZodValidationPipe(ResolveDemandRequest)) body: ResolveDemandRequest,
+  ) {
+    return this.games.resolveDemand(id, demandId, body.accept, body.amount);
   }
 }

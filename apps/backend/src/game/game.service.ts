@@ -61,6 +61,7 @@ import {
   markMailRead as engineMarkMailRead,
   markAllMailRead as engineMarkAllMailRead,
   unreadMailCount,
+  resolveDemand as engineResolveDemand,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -2707,7 +2708,45 @@ export class GameService {
     const messages = [...(state.mailbox ?? [])].sort(
       (a, b) => b.id - a.id,
     );
-    return { messages, unread: unreadMailCount(state) };
+    const teamById = new Map(state.teams.map((t) => [t.id, t]));
+    const demands = (state.clubDemands ?? [])
+      .filter((d) => !d.resolved)
+      .map((d) => {
+        const team = teamById.get(d.teamId);
+        return {
+          id: d.id,
+          teamId: d.teamId,
+          teamName: team?.name ?? 'Desconocido',
+          teamArraigo: team?.arraigo ?? 0,
+          type: d.type,
+          year: d.year,
+          createdMatchday: d.createdMatchday,
+          deadlineMatchday: d.deadlineMatchday,
+          amount: d.amount,
+          resolved: d.resolved,
+          satisfied: d.satisfied,
+        };
+      });
+    return { messages, unread: unreadMailCount(state), demands };
+  }
+
+  async resolveDemand(
+    gameId: number,
+    demandId: number,
+    accept: boolean,
+    amount?: number,
+  ): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineResolveDemand(state, demandId, accept, amount);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo resolver la petición: ya resuelta o fondos insuficientes.',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
+    });
   }
 
   async getMailbox(gameId: number): Promise<MailboxResponse> {

@@ -719,6 +719,11 @@ export interface GameState {
   // Fase 14.4: Commissioner inbox.
   mailbox: MailboxMessage[];
   nextMailboxId: number;
+  // Fase 14.5: club requests + arraigo-driven exodus tracking.
+  clubDemands: ClubDemand[];
+  nextDemandId: number;
+  lowArraigoSeasons: Record<number, number>; // teamId → consecutive low-arraigo closes
+  demandsRng: RngState; // independent stream so demands never perturb events/match
 }
 
 export interface RecordBook {
@@ -738,6 +743,22 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// Fase 14.5: club requests to the commissioner. Ignoring them erodes arraigo;
+// chronic low arraigo makes a club leave the federation.
+export type ClubDemandType = 'rescate' | 'inversion_estadio';
+
+export interface ClubDemand {
+  id: number;
+  teamId: number;
+  type: ClubDemandType;
+  year: number;
+  createdMatchday: number;
+  deadlineMatchday: number;
+  amount: number | null;     // € requested (rescue injection / stadium works)
+  resolved: boolean;
+  satisfied: boolean | null; // true if attended in time, false if ignored/rejected
 }
 
 // Fase 14.4: Commissioner inbox message.

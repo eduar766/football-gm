@@ -30,6 +30,7 @@ import {
   IconReportMoney,
   IconAlertTriangle,
 } from '@tabler/icons-react';
+import type { TeamDetail } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
@@ -62,12 +63,12 @@ function strengthBg(v: number) {
 
 /* ── Squad Table ──────────────────────────────────────────────────────── */
 
-function SquadTable({ squad }: { squad: any[] }) {
+function SquadTable({ squad }: { squad: TeamDetail['squad'] }) {
   const grouped = ['POR', 'DEF', 'MED', 'DEL'].flatMap((pos) =>
-    (squad as any[]).filter((p: any) => p.posicion.slice(0, 3).toUpperCase() === pos)
+    squad.filter((p) => p.posicion.slice(0, 3).toUpperCase() === pos)
   );
-  const rest = (squad as any[]).filter(
-    (p: any) => !['POR', 'DEF', 'MED', 'DEL'].includes(p.posicion.slice(0, 3).toUpperCase())
+  const rest = squad.filter(
+    (p) => !['POR', 'DEF', 'MED', 'DEL'].includes(p.posicion.slice(0, 3).toUpperCase())
   );
   const ordered = [...grouped, ...rest];
 
@@ -83,7 +84,7 @@ function SquadTable({ squad }: { squad: any[] }) {
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
-        {ordered.map((p: any, i: number) => {
+        {ordered.map((p, i) => {
           const posKey = p.posicion.slice(0, 3).toUpperCase();
           const posCol = POS_COLORS[posKey] ?? { bg: '#6B7280', text: '#F9FAFB', label: posKey };
           const qColor = p.calidad >= 70 ? '#10B981' : p.calidad >= 50 ? '#F59E0B' : '#EF4444';
@@ -170,7 +171,7 @@ function SquadTable({ squad }: { squad: any[] }) {
 
 /* ── Position breakdown mini bar ─────────────────────────────────────── */
 
-function PositionBreakdown({ squad }: { squad: any[] }) {
+function PositionBreakdown({ squad }: { squad: TeamDetail['squad'] }) {
   const counts = { POR: 0, DEF: 0, MED: 0, DEL: 0 };
   for (const p of squad) {
     const k = p.posicion.slice(0, 3).toUpperCase() as keyof typeof counts;
@@ -198,12 +199,12 @@ function PositionBreakdown({ squad }: { squad: any[] }) {
 
 /* ── Trajectory section ───────────────────────────────────────────────── */
 
-function TrajectorySection({ trajectory }: { trajectory: any[] }) {
+function TrajectorySection({ trajectory }: { trajectory: TeamDetail['trajectory'] }) {
   if (trajectory.length === 0) {
     return <Text c="dimmed" size="sm">Sin temporadas cerradas todavía.</Text>;
   }
 
-  const best = Math.min(...trajectory.map((r: any) => r.puestoFinal));
+  const best = Math.min(...trajectory.map((r) => r.puestoFinal));
 
   return (
     <>
@@ -228,7 +229,7 @@ function TrajectorySection({ trajectory }: { trajectory: any[] }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {trajectory.map((r: any, i: number) => {
+          {trajectory.map((r, i) => {
             const prev = i < trajectory.length - 1 ? trajectory[i + 1] : null;
             let delta: number | null = null;
             if (prev) delta = prev.puestoFinal - r.puestoFinal; // positive = improved
@@ -274,7 +275,7 @@ function TrajectorySection({ trajectory }: { trajectory: any[] }) {
 
 /* ── Palmarés section ─────────────────────────────────────────────────── */
 
-function PalmaresSection({ palmares }: { palmares: any[] }) {
+function PalmaresSection({ palmares }: { palmares: TeamDetail['palmares'] }) {
   if (palmares.length === 0) {
     return (
       <Group gap="sm" mt="xs">
@@ -286,7 +287,7 @@ function PalmaresSection({ palmares }: { palmares: any[] }) {
 
   return (
     <SimpleGrid cols={2} spacing="sm">
-      {palmares.map((p: any, i: number) => (
+      {palmares.map((p, i) => (
         <Paper
           key={`${p.competition}-${p.isYouth ? 'j' : 'a'}`}
           p="sm"
@@ -331,7 +332,7 @@ function PalmaresSection({ palmares }: { palmares: any[] }) {
 
 /* ── Club Structure ───────────────────────────────────────────────────── */
 
-function ClubStructure({ t }: { t: any }) {
+function ClubStructure({ t }: { t: TeamDetail }) {
   const ratings = [
     { label: 'Cantera', value: t.academiaRating, icon: IconUsers, color: '#8B5CF6' },
     { label: 'Cuerpo médico', value: t.medicoRating, icon: IconHeart, color: '#EF4444' },
@@ -395,7 +396,7 @@ const HEALTH_LABEL: Record<string, string> = {
   quiebra: 'Quiebra',
 };
 
-function FinanzasTab({ finance }: { finance: NonNullable<any> }) {
+function FinanzasTab({ finance }: { finance: NonNullable<TeamDetail['finance']> }) {
   const hc = HEALTH_COLOR[finance.financialHealth] ?? '#6B7280';
   const eco = finance.lastEconomy;
 
@@ -462,7 +463,7 @@ function FinanzasTab({ finance }: { finance: NonNullable<any> }) {
           <Text c="dimmed" size="sm">Sin patrocinadores.</Text>
         ) : (
           <Stack gap={4}>
-            {finance.sponsors.map((sp: any) => (
+            {finance.sponsors.map((sp) => (
               <Group key={sp.id} justify="space-between" py={4} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <Box>
                   <Text size="sm" fw={600}>{sp.name}</Text>
@@ -632,7 +633,7 @@ export function TeamDetailPage() {
                 <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.05em' }}>Rivalidades</Text>
               </Group>
               <Stack gap={4}>
-                {t.rivalries.map((r: any) => {
+                {t.rivalries.map((r) => {
                   const rival = r.teamBName;
                   const { wins, draws, losses } = r.headToHead;
                   return (
@@ -717,7 +718,7 @@ export function TeamDetailPage() {
                   <IconTrophy size={16} color="#F59E0B" />
                   <Text fw={700}>Palmarés</Text>
                   {t.palmares.length > 0 && (
-                    <Badge size="xs" color="yellow" variant="light">{t.palmares.reduce((acc: number, p: any) => acc + p.count, 0)} título{t.palmares.reduce((acc: number, p: any) => acc + p.count, 0) !== 1 ? 's' : ''}</Badge>
+                    <Badge size="xs" color="yellow" variant="light">{t.palmares.reduce((acc, p) => acc + p.count, 0)} título{t.palmares.reduce((acc, p) => acc + p.count, 0) !== 1 ? 's' : ''}</Badge>
                   )}
                 </Group>
                 <PalmaresSection palmares={t.palmares} />
@@ -730,7 +731,7 @@ export function TeamDetailPage() {
                   {t.requirements.breaches.length > 0 && (
                     <Stack gap={4} mb="sm">
                       <Text size="xs" fw={600} c="red" tt="uppercase" style={{ letterSpacing: '0.04em' }}>Incumplimientos activos</Text>
-                      {t.requirements.breaches.map((b: any) => (
+                      {t.requirements.breaches.map((b) => (
                         <Group key={b.normId} gap="xs">
                           <Box style={{ width: 6, height: 6, borderRadius: '50%', background: b.sanctioned ? '#EF4444' : '#F59E0B', flexShrink: 0 }} />
                           <Text size="xs">
@@ -746,7 +747,7 @@ export function TeamDetailPage() {
                   {t.requirements.sanctions.length > 0 && (
                     <Stack gap={4}>
                       <Text size="xs" fw={600} c="red" tt="uppercase" style={{ letterSpacing: '0.04em' }}>Sanciones</Text>
-                      {t.requirements.sanctions.map((sa: any, i: number) => (
+                      {t.requirements.sanctions.map((sa, i) => (
                         <Group key={i} gap="xs">
                           <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>Año {sa.year}</Text>
                           <Text size="xs">{sa.motivo}</Text>

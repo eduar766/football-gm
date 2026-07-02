@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -240,6 +240,18 @@ export function migrateState(state: GameState): GameState {
     if (gs.nextMailboxId == null) gs.nextMailboxId = 1;
 
     state.schemaVersion = 8;
+  }
+
+  // v8 → v9 (Fase 14.5): club requests + arraigo-driven exodus tracking.
+  if (v < 9) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.clubDemands) gs.clubDemands = [];
+    if (gs.nextDemandId == null) gs.nextDemandId = 1;
+    if (!gs.lowArraigoSeasons) gs.lowArraigoSeasons = {};
+    if (!gs.demandsRng) gs.demandsRng = { s: (state.seed ^ 0x0badf00d) >>> 0 };
+
+    state.schemaVersion = 9;
   }
 
   return state;
