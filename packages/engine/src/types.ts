@@ -610,6 +610,8 @@ export interface GameState {
   // `federations` (kept in sync); the season-close delta drives it.
   prestige: number;
   playerFederationId: number;
+  // Player-chosen commissioner name (§ identity). Purely cosmetic/narrative.
+  commissionerName: string;
   leagueFormat: LeagueFormat;
   federations: Federation[];
   divisions: Division[];
@@ -767,6 +769,7 @@ export interface CreateGameOptions {
   // Fase 9: confederations + league structure for rival sim.
   confederations?: Array<Confederation & { leagues: Array<{ name: string; country: string; flag: string }> }>;
   playerFederationName?: string;
+  commissionerName?: string;
   impulsesPerSeason?: number;
   startingPrestige?: number;
   startingTreasury?: number;

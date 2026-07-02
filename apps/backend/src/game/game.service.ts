@@ -56,6 +56,8 @@ import {
   editCupParticipants as engineEditCupParticipants,
   teamFinancialHealth,
   rescueTeam as engineRescueTeam,
+  makeRng,
+  randomTeamName,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -238,9 +240,10 @@ export class GameService {
       if (c >= 3) throw new BadRequestException('GAME_LIMIT_REACHED');
     }
     const seed = input.seed ?? Math.floor(Math.random() * 2_147_483_647);
-    const world = generateWorld(seed);
+    const world = generateWorld(seed, { size: input.worldSize ?? 'estandar' });
     const state = engineCreateGame(seed, {
-      playerFederationName: world.federationName,
+      playerFederationName: input.federationName?.trim() || world.federationName,
+      commissionerName: input.commissionerName?.trim() || undefined,
       confederations: world.confederations,
       teams: world.teams.map((t) => ({
         name: t.name,
@@ -1035,6 +1038,16 @@ export class GameService {
         pending: pendingIntegrationTeams(next).map(toDto),
       };
     });
+  }
+
+  // Suggest a random, unused club name for the create-team modal (Fase 14.2).
+  // Read-only: uses an ephemeral RNG so it never touches the simulation stream
+  // (state.rng) — keeping the golden master deterministic.
+  async randomTeamName(gameId: number): Promise<{ name: string }> {
+    const state = await this.repo.loadState(gameId);
+    const used = new Set(state.teams.map((t) => t.name));
+    const rng = makeRng((Date.now() ^ (state.teams.length * 0x9e3779b9)) >>> 0);
+    return { name: randomTeamName(rng, used) };
   }
 
   async createOwnTeam(

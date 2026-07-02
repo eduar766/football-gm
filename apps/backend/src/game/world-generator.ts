@@ -3,7 +3,24 @@
 // simulation core. This runs once at game creation; the engine then owns its
 // own RNG stream for the simulation.
 
-import { makeRng, randInt, rngNext, type RngState, CONFEDERATIONS } from '@football-gm/engine';
+import {
+  makeRng,
+  randInt,
+  rngNext,
+  type RngState,
+  CONFEDERATIONS,
+  TEAM_PLACES,
+  randomTeamName,
+  randomFederationName,
+} from '@football-gm/engine';
+
+// Team count per world size (Fase 14.2). Default is 'estandar' (15 teams).
+export type WorldSizeKey = 'pequeno' | 'estandar' | 'grande';
+const WORLD_TEAM_COUNT: Record<WorldSizeKey, number> = {
+  pequeno: 10,
+  estandar: 15,
+  grande: 20,
+};
 
 export interface WorldPlayer {
   name: string;
@@ -60,15 +77,6 @@ export interface World {
   confederations: Array<{ id: number; name: string; region: string; available: boolean; leagues: Array<{ name: string; country: string; flag: string }> }>;
 }
 
-const PREFIXES = [
-  'Atlético', 'Unión', 'Deportivo', 'CD', 'Racing', 'Sporting',
-  'CF', 'Club', 'AD', 'Real', 'CA', 'UD',
-];
-const PLACES = [
-  'Riveras', 'Porteña', 'Sauces', 'Maravillas', 'del Valle', 'Aldea',
-  'Peñalba', 'Marítimo', 'Ferroviaria', 'Montaña', 'del Norte', 'Costa Brava',
-  'Sierra', 'Robledo', 'Laguna', 'Olivar',
-];
 const FIRST_NAMES = [
   'Iker', 'Sergio', 'Marco', 'Andrés', 'Lucas', 'Diego', 'Pablo', 'Mateo',
   'Hugo', 'Adrián', 'Álvaro', 'Bruno', 'Nico', 'Rubén', 'Iván', 'Gonzalo',
@@ -89,19 +97,6 @@ const SQUAD_PLAN: Array<{ pos: WorldPlayer['posicion']; count: number }> = [
 
 function pick<T>(rng: RngState, arr: T[]): T {
   return arr[Math.floor(rngNext(rng) * arr.length)];
-}
-
-function makeUniqueNamer(rng: RngState) {
-  const used = new Set<string>();
-  return (): string => {
-    let name = '';
-    let guard = 0;
-    do {
-      name = `${pick(rng, PREFIXES)} ${pick(rng, PLACES)}`;
-    } while (used.has(name) && guard++ < 1000);
-    used.add(name);
-    return name;
-  };
 }
 
 function buildSquad(rng: RngState, baseQuality: number): WorldPlayer[] {
@@ -128,11 +123,15 @@ export function buildWeakSquad(seed: number, teamEngineId: number): WorldPlayer[
   return buildSquad(rng, 30);
 }
 
-export function generateWorld(seed: number): World {
+export function generateWorld(
+  seed: number,
+  opts: { size?: WorldSizeKey } = {},
+): World {
   const rng = makeRng(seed);
-  const nextName = makeUniqueNamer(rng);
+  const usedTeamNames = new Set<string>();
+  const teamCount = WORLD_TEAM_COUNT[opts.size ?? 'estandar'];
 
-  const teams: WorldTeam[] = Array.from({ length: 10 }, () => {
+  const teams: WorldTeam[] = Array.from({ length: teamCount }, () => {
     const baseQuality = randInt(rng, 42, 72);
     const squad = buildSquad(rng, baseQuality);
     const strength = Math.round(
@@ -140,13 +139,13 @@ export function generateWorld(seed: number): World {
     );
     const prestige = Math.min(100, Math.max(0, strength + randInt(rng, -8, 8)));
     return {
-      name: nextName(),
+      name: randomTeamName(rng, usedTeamNames),
       strength,
       prestige,
       arraigo: randInt(rng, 25, 85),
       presupuesto: strength * 100_000 + randInt(rng, 0, 2_000_000),
       aficion: randInt(rng, 4_000, 60_000),
-      estadioNombre: `Estadio ${pick(rng, PLACES)}`,
+      estadioNombre: `Estadio ${pick(rng, TEAM_PLACES)}`,
       estadioAforo: 6_000 + strength * randInt(rng, 400, 700),
       academiaRating: randInt(rng, 38, 75),
       medicoRating: randInt(rng, 38, 75),
@@ -193,7 +192,7 @@ export function generateWorld(seed: number): World {
   }
 
   return {
-    federationName: 'Federación del Comisionado',
+    federationName: randomFederationName(rng),
     leagueName: 'Liga Principal',
     divisionName: 'Primera División',
     teams,

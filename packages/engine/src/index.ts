@@ -11,6 +11,16 @@ export { CURRENT_SCHEMA_VERSION, migrateState } from './migrations';
 export { makeRng, randInt, rngNext } from './rng';
 export type { RngState } from './rng';
 
+// ── Name pools & deterministic name generators (world-gen + create-team) ──────
+export {
+  randomTeamName,
+  randomFederationName,
+  TEAM_PREFIXES,
+  TEAM_PLACES,
+  FEDERATION_ADJECTIVES,
+  FEDERATION_REGIONS,
+} from './names';
+
 // ── Main season loop ─────────────────────────────────────────────────────────
 export {
   CREATE_TEAM_COST,

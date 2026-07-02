@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -192,6 +192,15 @@ export function migrateState(state: GameState): GameState {
     if (gs.outgoingTransferRevenue === undefined) gs.outgoingTransferRevenue = 0;
 
     state.schemaVersion = 5;
+  }
+
+  // v5 → v6 (Fase 14.1): player-chosen commissioner name.
+  if (v < 6) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.commissionerName) gs.commissionerName = 'Comisionado/a';
+
+    state.schemaVersion = 6;
   }
 
   return state;

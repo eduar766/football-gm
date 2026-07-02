@@ -236,6 +236,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     phase: 'pretemporada',
     prestige: startingPrestige,
     playerFederationId,
+    commissionerName: options.commissionerName?.trim() || 'Comisionado/a',
     leagueFormat: 'ida_vuelta',
     federations,
     divisions,

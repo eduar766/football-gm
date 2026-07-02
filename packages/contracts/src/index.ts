@@ -65,11 +65,21 @@ export type Tier = z.infer<typeof Tier>;
 
 /* ------------------------------------------------------ requests / loop */
 
+// World size: number of teams generated in the player's league (Fase 14.2).
+export const WorldSize = z.enum(['pequeno', 'estandar', 'grande']); // 10 / 15 / 20
+export type WorldSize = z.infer<typeof WorldSize>;
+
 export const CreateGameRequest = z.object({
   name: z.string().min(1).max(80),
   seed: z.number().int().nonnegative().optional(),
+  commissionerName: z.string().min(1).max(60).optional(),
+  federationName: z.string().min(1).max(60).optional(),
+  worldSize: WorldSize.optional(),
 });
 export type CreateGameRequest = z.infer<typeof CreateGameRequest>;
+
+export const RandomTeamNameResponse = z.object({ name: z.string() });
+export type RandomTeamNameResponse = z.infer<typeof RandomTeamNameResponse>;
 
 export const GameListItem = z.object({
   id: Id,
