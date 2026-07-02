@@ -413,6 +413,17 @@ export const TeamDetail = z.object({
     lastEconomy: TeamSeasonEconomyDto.nullable(),
     prizesWithheld: z.boolean(),
   }).nullable(),
+  // Fase 14 follow-up (P1): distinguish the player's own teams from rivals so the
+  // UI can render a rival-appropriate view instead of an empty player layout.
+  isPlayerTeam: z.boolean().default(true),
+  rival: z.object({
+    divisionName: z.string().nullable(),
+    position: z.number().int().nullable(), // current position in their own league
+    played: z.number().int(),
+    points: z.number().int(),
+    titles: z.array(z.number().int()).default([]), // years won as league champion
+    topScorers: z.array(z.object({ name: z.string(), goals: z.number().int() })).default([]),
+  }).nullable().default(null),
 });
 export type TeamDetail = z.infer<typeof TeamDetail>;
 
