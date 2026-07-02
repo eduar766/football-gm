@@ -87,7 +87,6 @@ export interface Team {
   // Strength of the club's academy/reserve side (§4.4 youth competitions). Set
   // from the academy rating; falls back to a value below the first team.
   youthStrength: number;
-  wageCap: number;
   stadiumCapacity: number;
   academia: number;
   // Club finances (team-level, independent of federation treasury).
@@ -334,6 +333,8 @@ export interface Headline {
   text: string;
   teamId: number | null;
   importance: number; // 1-3 (3 = most prominent)
+  isRival?: boolean;          // true when the headline originates from a rival federation
+  rivalFederationId?: number; // set when isRival === true
 }
 
 export interface SeasonChronicle {
@@ -557,6 +558,7 @@ export interface RivalSeasonRecord {
   runnerUpName: string | null;
   topScorer: { playerId: number; name: string; teamName: string; goals: number } | null;
   relegated: string[];
+  promoted: string[]; // teams that came up from div2 this season
   points: number; // champion's final league points
   // Fase 11.4: winner of the top-4 mini-cup simulated at closeSeason.
   cupWinner?: { name: string; teamId: number };
@@ -704,6 +706,11 @@ export interface GameState {
   rescueLog: RescueEntry[];
   // Counter for team sponsor IDs (independent of federation contract IDs).
   nextTeamSponsorId: number;
+  // Fase 13.3: player IDs protected from outgoing inter-league transfer this season.
+  transferVetoes: number[];
+  // Fase 13.4: solidarity revenue accumulated from outgoing inter-league transfers
+  // during startSeason; consumed by processEconomy at closeSeason.
+  outgoingTransferRevenue: number;
 }
 
 export interface RecordBook {
@@ -746,12 +753,16 @@ export interface CreateGameOptions {
     academia?: number;
     squad?: PlayerSeed[];
   }>;
-  // Rival federations and the external teams they own (negotiation targets).
+  // Rival federations with their divisional structure (negotiation targets).
   rivals?: Array<{
     name: string;
     prestige: number;
     confederationId?: number;
-    teams: Array<{ name: string; strength: number; arraigo: number }>;
+    divisions: Array<{
+      orden: number;
+      name: string;
+      teams: Array<{ name: string; strength: number; arraigo: number }>;
+    }>;
   }>;
   // Fase 9: confederations + league structure for rival sim.
   confederations?: Array<Confederation & { leagues: Array<{ name: string; country: string; flag: string }> }>;

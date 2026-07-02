@@ -2,17 +2,21 @@ import { useMemo, useState } from 'react';
 import {
   Badge,
   Box,
+  Button,
   Group,
   Paper,
   Select,
   Skeleton,
   Table,
   Text,
+  Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconArrowRight, IconWorld } from '@tabler/icons-react';
+import { IconArrowRight, IconShield, IconShieldOff, IconWorld } from '@tabler/icons-react';
 import { api } from '../api';
+import { useMutationWithFeedback } from '../useMutationWithFeedback';
+import { QK } from '../query-keys';
 import { PageHero } from '../components/PageHero';
 
 export function TransfersPage() {
@@ -23,6 +27,26 @@ export function TransfersPage() {
     queryKey: ['transfers', id],
     queryFn: () => api.transfers(id),
   });
+
+  const summary = useQuery({
+    queryKey: QK.summary(id),
+    queryFn: () => api.summary(id),
+  });
+
+  const veto = useMutationWithFeedback({
+    mutationFn: (playerId: number) => api.vetoTransfer(id, playerId),
+    queryKeyToInvalidate: ['transfers', 'summary'],
+    successMessage: 'Traspaso vetado — el jugador está protegido esta temporada',
+  });
+
+  const cancelVeto = useMutationWithFeedback({
+    mutationFn: (playerId: number) => api.cancelTransferVeto(id, playerId),
+    queryKeyToInvalidate: ['transfers', 'summary'],
+    successMessage: 'Veto cancelado',
+  });
+
+  const isPretemporada = summary.data?.phase === 'pretemporada';
+  const activeVetoes = summary.data?.transferVetoes ?? [];
 
   const years = useMemo(() => {
     if (!q.data) return [] as number[];
@@ -89,6 +113,60 @@ export function TransfersPage() {
         title="Ventana de fichajes"
         subtitle="Movimientos reales entre clubes en la pretemporada. Los clubes son autónomos: el comisionado no firma fichajes, los observa."
       />
+
+      {isPretemporada && q.data && q.data.vetoCandidates.length > 0 && (
+        <Paper p="md" mb="md" style={{ border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.04)' }}>
+          <Group gap="xs" mb="sm">
+            <IconShield size={16} color="#EF4444" />
+            <Text fw={700} size="sm" c="red.4">Veto de traspaso saliente</Text>
+            <Badge size="xs" variant="light" color="red">{activeVetoes.length}/2 activos</Badge>
+          </Group>
+          <Text size="xs" c="dimmed" mb="sm">
+            Protege hasta 2 jugadores de calidad ≥55 para que ligas rivales no puedan fichárlos esta temporada.
+          </Text>
+          <Table>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', textTransform: 'uppercase' }}>Jugador</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', textTransform: 'uppercase' }}>Equipo</Table.Th>
+                <Table.Th style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', textTransform: 'uppercase' }} ta="right">Cal.</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {q.data.vetoCandidates.map((p) => {
+                const isVetoed = activeVetoes.includes(p.playerId);
+                return (
+                  <Table.Tr key={p.playerId} style={{ background: isVetoed ? 'rgba(239,68,68,0.06)' : 'transparent' }}>
+                    <Table.Td fw={600}>{p.playerName} {isVetoed && <Badge size="xs" color="red" variant="light" ml={4}>Protegido</Badge>}</Table.Td>
+                    <Table.Td><Text size="xs" c="dimmed">{p.teamName}</Text></Table.Td>
+                    <Table.Td ta="right">
+                      <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: p.calidad >= 70 ? '#10B981' : '#F59E0B', fontSize: '13px' }}>
+                        {p.calidad}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      {isVetoed ? (
+                        <Tooltip label="Quitar protección">
+                          <Button size="xs" variant="subtle" color="red" loading={cancelVeto.isPending && cancelVeto.variables === p.playerId} leftSection={<IconShieldOff size={12} />} onClick={() => cancelVeto.mutate(p.playerId)}>
+                            Quitar
+                          </Button>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip label={activeVetoes.length >= 2 ? 'Límite de 2 vetos alcanzado' : 'Vetar traspaso'}>
+                          <Button size="xs" variant="light" color="red" loading={veto.isPending && veto.variables === p.playerId} leftSection={<IconShield size={12} />} disabled={activeVetoes.length >= 2} onClick={() => veto.mutate(p.playerId)}>
+                            Vetar
+                          </Button>
+                        </Tooltip>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
 
       <Group justify="flex-end" mb="md">
         <Select

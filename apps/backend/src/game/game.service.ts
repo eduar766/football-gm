@@ -23,6 +23,8 @@ import {
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
   cultivateArraigo as engineCultivateArraigo,
+  vetoTransfer as engineVetoTransfer,
+  cancelTransferVeto as engineCancelTransferVeto,
   emergencyMeeting as engineEmergencyMeeting,
   financialHealth,
   negotiableTeams,
@@ -221,6 +223,7 @@ export class GameService {
           teamName: state.teams.find(t => t.id === state.players.find(p => p.id === g.playerId)?.teamId)?.name ?? '',
         })),
       })),
+      transferVetoes: state.transferVetoes ?? [],
     };
   }
 
@@ -253,10 +256,14 @@ export class GameService {
         name: r.name,
         prestige: r.prestige,
         confederationId: r.confederationId,
-        teams: r.teams.map((rt) => ({
-          name: rt.name,
-          strength: rt.strength,
-          arraigo: rt.arraigo,
+        divisions: r.divisions.map((d) => ({
+          orden: d.orden,
+          name: d.name,
+          teams: d.teams.map((rt) => ({
+            name: rt.name,
+            strength: rt.strength,
+            arraigo: rt.arraigo,
+          })),
         })),
       })),
     });
@@ -316,20 +323,30 @@ export class GameService {
           .values(rivalFeds.map((r) => ({ gameId: game.id, federationId: r.fedDbId!, name: r.rival.name })))
           .returning({ id: s.leagues.id });
 
-        const rivalDivRows = await tx
-          .insert(s.divisions)
-          .values(
-            rivalFeds.map((r, i) => ({
+        // Flatten all divisions across all rival federations, preserving order for mapping.
+        const divMeta: Array<{ engFedId: number; orden: number }> = [];
+        const divInserts: Array<{ gameId: number; leagueId: number; name: string; orden: number; plazas: number }> = [];
+        rivalFeds.forEach((r, i) => {
+          for (const div of r.rival.divisions) {
+            divMeta.push({ engFedId: r.engFedId, orden: div.orden });
+            divInserts.push({
               gameId: game.id,
               leagueId: rivalLeagueRows[i].id,
-              name: r.rival.name,
-              orden: 1,
-              plazas: r.rival.teams.length,
-            })),
-          )
+              name: div.name,
+              orden: div.orden,
+              plazas: div.teams.length,
+            });
+          }
+        });
+
+        const rivalDivRows = await tx
+          .insert(s.divisions)
+          .values(divInserts)
           .returning({ id: s.divisions.id });
 
-        rivalFeds.forEach((r, i) => rivalDivByOrden.set(`${r.engFedId}:1`, rivalDivRows[i].id));
+        rivalDivRows.forEach((row, i) =>
+          rivalDivByOrden.set(`${divMeta[i].engFedId}:${divMeta[i].orden}`, row.id),
+        );
       }
 
       // Compute all team insert values (preserves leagueIdx order).
@@ -637,6 +654,34 @@ export class GameService {
         throw new BadRequestException(
           'No se pudo cultivar arraigo: límite de 2 equipos/temporada alcanzado, falta presupuesto, o no estás en pretemporada',
         );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async vetoTransfer(gameId: number, playerId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      this.assertPretemporada(state, 'vetar traspaso');
+      const next = engineVetoTransfer(state, playerId);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo vetar: jugador no encontrado en tu federación, límite de 2 vetos alcanzado, o ya está vetado',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async cancelTransferVeto(gameId: number, playerId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      this.assertPretemporada(state, 'cancelar veto');
+      const next = engineCancelTransferVeto(state, playerId);
+      if (next === state) {
+        throw new BadRequestException('No hay veto activo para este jugador');
       }
       await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
@@ -1438,8 +1483,8 @@ export class GameService {
     const teamsForFed = !isPlayer
       ? state.teams
           .filter((t) => t.federationId === federationId)
-          .sort((a, b) => b.strength - a.strength)
-          .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo }))
+          .sort((a, b) => (a.divisionOrden ?? 99) - (b.divisionOrden ?? 99) || b.strength - a.strength)
+          .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo, divisionOrden: t.divisionOrden ?? undefined }))
       : undefined;
 
     const seasonHistory = !isPlayer
@@ -1749,8 +1794,12 @@ export class GameService {
     const state = await this.repo.loadState(gameId);
     const map = await this.repo.engineToDbTeam(gameId);
     const fedName = new Map(state.federations.map((f) => [f.id, f]));
+    const divNameByKey = new Map(
+      state.divisions.map((d) => [`${d.federationId}:${d.orden}`, d.name ?? `División ${d.orden}`]),
+    );
     const teams = negotiableTeams(state).map((t) => {
       const owner = fedName.get(t.federationId);
+      const divOrden = t.divisionOrden ?? 1;
       return {
         teamId: map.get(t.id) ?? t.id,
         name: t.name,
@@ -1759,6 +1808,8 @@ export class GameService {
         tier: tierOf(owner?.prestige ?? 0),
         currentFederationId: t.federationId,
         currentFederationName: owner?.name ?? '—',
+        divisionOrden: divOrden,
+        divisionName: divNameByKey.get(`${t.federationId}:${divOrden}`) ?? `División ${divOrden}`,
       };
     });
     return { playerTier: playerTier(state), teams };
@@ -2042,10 +2093,30 @@ export class GameService {
     }));
     // Latest year present in the log; 0 when there's no history yet.
     const latestYear = dto.reduce((acc, t) => Math.max(acc, t.year), 0);
+
+    // Build veto candidates: high-quality players in player federation
+    const playerTeamIds = new Set(
+      state.teams
+        .filter(t => t.federationId === state.playerFederationId && t.divisionOrden !== null)
+        .map(t => t.id),
+    );
+    const teamById = new Map(state.teams.map(t => [t.id, t]));
+    const vetoCandidates = state.players
+      .filter(p => playerTeamIds.has(p.teamId) && p.calidad >= 55)
+      .sort((a, b) => b.calidad - a.calidad)
+      .map(p => ({
+        playerId: p.id,
+        playerName: p.name,
+        calidad: p.calidad,
+        teamId: map.get(p.teamId) ?? p.teamId,
+        teamName: teamById.get(p.teamId)?.name ?? '',
+      }));
+
     return {
       year: latestYear,
       entries: dto.filter((t) => t.year === latestYear),
       history: dto,
+      vetoCandidates,
     };
   }
 

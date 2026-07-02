@@ -26,6 +26,8 @@ export {
   emergencyMeeting,
   postponeMatchday,
   cultivateArraigo,
+  vetoTransfer,
+  cancelTransferVeto,
 } from './engine';
 
 // ── Structural actions (pretemporada) ────────────────────────────────────────

@@ -124,7 +124,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: t.arraigo ?? DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: t.youthStrength ?? Math.max(20, t.strength - 12),
-        wageCap: 0,
+
         stadiumCapacity: t.stadiumCapacity ?? DEFAULT_STADIUM_CAPACITY,
         academia: t.academia ?? DEFAULT_ACADEMIA,
         treasury: TEAM_STARTING_TREASURY_BASE + t.strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -170,7 +170,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
         arraigo: DEFAULT_ARRAIGO,
         divisionOrden: 1,
         youthStrength: Math.max(20, strength - 12),
-        wageCap: 0,
+
         stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
         academia: DEFAULT_ACADEMIA,
         treasury: TEAM_STARTING_TREASURY_BASE + strength * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -183,9 +183,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     }
   }
 
-  // Rival federations and their external teams (negotiation targets, not yet
-  // in any division of the player's league). Each rival federation gets its
-  // own divisions when seed data is provided (Fase 9).
+  // Rival federations with their divisional structure. Each rival federation
+  // gets its own per-federation division ordenes (1 = top, 2 = second, …).
   let nextFederationId = 2;
   const rivalDivisions: Division[] = [];
   for (const rival of options.rivals ?? []) {
@@ -197,53 +196,27 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
       isPlayer: false,
       confederationId: rival.confederationId ?? 0,
     });
-    for (const rt of rival.teams) {
-      teams.push({
-        id: nextTeamId++,
-        name: rt.name,
-        strength: rt.strength,
-        federationId: rivalId,
-        arraigo: rt.arraigo,
-        divisionOrden: null,
-        youthStrength: Math.max(20, rt.strength - 12),
-        wageCap: 0,
-        stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
-        academia: DEFAULT_ACADEMIA,
-        treasury: 0, // rival teams don't participate in player-fed economy
-        sponsors: [],
-        lastTeamEconomy: null,
-        prizesWithheld: false,
-        recentForm: [],
-        matchesPlayedThisSeason: 0,
-      });
-    }
-  }
-
-  // Fase 9: if confederations are provided, create divisions for rival federations
-  // and assign rival teams to their respective divisions.
-  if (options.confederations && options.confederations.length > 0) {
-    let rivalDivOrden = 1;
-    for (const conf of options.confederations) {
-      if (!conf.available) continue;
-      // Each league in the confederation becomes a division for its federation
-      for (const league of conf.leagues) {
-        // Find the federation for this league's country
-        const rivalFed = federations.find(f => f.name.includes(league.country) || f.name.includes(league.name) || f.name === league.name);
-        if (!rivalFed) continue;
-        // Find teams belonging to this league's country
-        const leagueTeams = teams.filter(t => t.federationId === rivalFed.id && t.divisionOrden === null);
-        if (leagueTeams.length === 0) continue;
-        const divOrden = rivalDivOrden++;
-        rivalDivisions.push({
-          orden: divOrden,
-          name: league.name,
-          federationId: rivalFed.id,
+    for (const div of rival.divisions ?? []) {
+      rivalDivisions.push({ orden: div.orden, name: div.name, federationId: rivalId });
+      for (const rt of div.teams) {
+        teams.push({
+          id: nextTeamId++,
+          name: rt.name,
+          strength: rt.strength,
+          federationId: rivalId,
+          arraigo: rt.arraigo,
+          divisionOrden: div.orden,
+          youthStrength: Math.max(20, rt.strength - 12),
+  
+          stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
+          academia: DEFAULT_ACADEMIA,
+          treasury: 0,
+          sponsors: [],
+          lastTeamEconomy: null,
+          prizesWithheld: false,
+          recentForm: [],
+          matchesPlayedThisSeason: 0,
         });
-        // Assign teams to this division (by strength, top to bottom)
-        const sorted = [...leagueTeams].sort((a, b) => b.strength - a.strength);
-        for (const t of sorted) {
-          t.divisionOrden = divOrden;
-        }
       }
     }
   }
@@ -321,7 +294,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     eventImpulseLoss: 0,
     eventTreasuryInjection: 0,
     poachCooldowns: {},
-    confederations: [],
+    confederations: options.confederations?.map(c => ({ id: c.id, name: c.name, region: c.region, available: c.available ?? true })) ?? [],
     rivalRng: makeRng((seed ^ 0xabcd1234) >>> 0),
     rivalStandings: {},
     rivalChampions: [],
@@ -342,6 +315,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     schemaVersion: CURRENT_SCHEMA_VERSION,
     rescueLog: [],
     nextTeamSponsorId: 1,
+    transferVetoes: [],
+    outgoingTransferRevenue: 0,
   };
 }
 
@@ -500,6 +475,8 @@ export function startSeason(prev: GameState): GameState {
   s.cupSchedule = scheduleCups(s, total);
   s.seasonOver = total === 0; // no fixtures => trivially "over"
   s.phase = 'temporada';
+  // Transfer vetoes are consumed at season start (outgoing transfers already ran above).
+  s.transferVetoes = [];
 
   // Issue board mandate for this season (uses independent mandatesRng).
   const alreadyHasMandate = s.mandates.some((m) => m.year === s.year);
@@ -577,7 +554,6 @@ export function createOwnTeam(
     arraigo: CREATED_TEAM_ARRAIGO,
     divisionOrden: lowestOrden,
     youthStrength: Math.max(20, CREATED_TEAM_STRENGTH - 12),
-    wageCap: 0,
     stadiumCapacity: DEFAULT_STADIUM_CAPACITY,
     academia: DEFAULT_ACADEMIA,
     treasury: TEAM_STARTING_TREASURY_BASE + CREATED_TEAM_STRENGTH * TEAM_STARTING_TREASURY_PER_STRENGTH,
@@ -1157,7 +1133,35 @@ export function cultivateArraigo(
   return s;
 }
 
-// ─── Pretemporada: veto outgoing transfer (Fase 8 Batch 3) ──────────────────
+// ─── Pretemporada: veto outgoing transfer (Fase 13.3) ───────────────────────
+
+const MAX_TRANSFER_VETOES = 2;
+
+// Protect a player from being poached to a rival federation this season.
+// Pretemporada only; max 2 active vetoes; player must be in player federation.
+export function vetoTransfer(prev: GameState, playerId: number): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  const player = prev.players.find(p => p.id === playerId);
+  if (!player) return prev;
+  const team = prev.teams.find(t => t.id === player.teamId);
+  if (!team || team.federationId !== prev.playerFederationId) return prev;
+  if ((prev.transferVetoes ?? []).length >= MAX_TRANSFER_VETOES) return prev;
+  if ((prev.transferVetoes ?? []).includes(playerId)) return prev;
+
+  const s = structuredClone(prev);
+  s.transferVetoes = [...(s.transferVetoes ?? []), playerId];
+  return s;
+}
+
+// Remove a veto (commissioner changed their mind during pretemporada).
+export function cancelTransferVeto(prev: GameState, playerId: number): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  if (!(prev.transferVetoes ?? []).includes(playerId)) return prev;
+
+  const s = structuredClone(prev);
+  s.transferVetoes = s.transferVetoes.filter(id => id !== playerId);
+  return s;
+}
 
 // ─── Mid-season commissioner actions (Proposal 1: Mid-Season Agency) ────────
 

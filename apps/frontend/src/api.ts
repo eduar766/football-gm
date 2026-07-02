@@ -232,4 +232,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ teamId }),
     }),
+  vetoTransfer: (id: number, playerId: number) =>
+    req<GameSummary>(`/games/${id}/veto-transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ playerId }),
+    }),
+  cancelTransferVeto: (id: number, playerId: number) =>
+    req<GameSummary>(`/games/${id}/veto-transfer/${playerId}`, { method: 'DELETE' }),
 };

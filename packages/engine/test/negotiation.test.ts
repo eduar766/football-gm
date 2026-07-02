@@ -23,12 +23,12 @@ function world(seed: number) {
       {
         name: 'Rival Débil', // tier 1 -> reachable
         prestige: 10,
-        teams: [{ name: 'Objetivo Asequible', strength: 60, arraigo: 5 }],
+        divisions: [{ orden: 1, name: 'Liga', teams: [{ name: 'Objetivo Asequible', strength: 60, arraigo: 5 }] }],
       },
       {
         name: 'Rival Élite', // tier 5 -> blocked by the tier gate
         prestige: 90,
-        teams: [{ name: 'Intocable', strength: 80, arraigo: 70 }],
+        divisions: [{ orden: 1, name: 'Liga', teams: [{ name: 'Intocable', strength: 80, arraigo: 70 }] }],
       },
     ],
   });

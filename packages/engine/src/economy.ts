@@ -169,7 +169,8 @@ export function processEconomy(s: GameState): {
   const transferFees = s.transfers
     .filter((t) => t.year === s.year)
     .reduce((a, t) => a + t.transferFee, 0);
-  const transferIncome = 0; // sell-on clause is future work
+  const transferIncome = s.outgoingTransferRevenue ?? 0;
+  s.outgoingTransferRevenue = 0;
 
   let econDelta = 0;
   if (prizes > 0) econDelta += Math.min(3, Math.floor(prizes / 6_000_000));

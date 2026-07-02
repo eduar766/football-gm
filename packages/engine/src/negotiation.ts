@@ -254,6 +254,7 @@ export function progressNegotiations(s: GameState): void {
         if (by) by.prestige += transfer;
         if (from) from.prestige = Math.max(0, from.prestige - transfer);
         team.federationId = n.byFederationId; // adhesion effective
+        team.divisionOrden = null; // pending integration: leveling league will place them
         team.arraigo = 30; // fresh start: low loyalty in the new federation
         n.state = 'effective';
       }

@@ -140,6 +140,8 @@ export const HeadlineDto = z.object({
   text: z.string(),
   teamId: Id.nullable(),
   importance: z.number().int(),
+  isRival: z.boolean().optional(),
+  rivalFederationId: z.number().int().optional(),
 });
 export type HeadlineDto = z.infer<typeof HeadlineDto>;
 
@@ -210,6 +212,7 @@ export const GameSummary = z.object({
   lastChronicle: SeasonChronicleDto.nullable().default(null),
   rivalLastMatchday: z.array(RivalMatchResultDto).default([]),
   matchReports: z.array(MatchReportDto).default([]),
+  transferVetoes: z.array(z.number().int()).default([]),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 
@@ -391,6 +394,7 @@ export const FederationTeamItem = z.object({
   name: z.string(),
   strength: z.number().int(),
   arraigo: z.number().int(),
+  divisionOrden: z.number().int().optional(),
 });
 export type FederationTeamItem = z.infer<typeof FederationTeamItem>;
 
@@ -617,6 +621,8 @@ export const MarketTeam = z.object({
   tier: Tier,
   currentFederationId: Id,
   currentFederationName: z.string(),
+  divisionOrden: z.number().int(),
+  divisionName: z.string(),
 });
 export type MarketTeam = z.infer<typeof MarketTeam>;
 
@@ -850,12 +856,23 @@ export const TransferEntryDto = z.object({
 });
 export type TransferEntryDto = z.infer<typeof TransferEntryDto>;
 
+export const VetoCandidate = z.object({
+  playerId: z.number().int(),
+  playerName: z.string(),
+  calidad: z.number().int(),
+  teamId: Id,
+  teamName: z.string(),
+});
+export type VetoCandidate = z.infer<typeof VetoCandidate>;
+
 export const TransfersResponse = z.object({
   year: z.number().int(),
   entries: z.array(TransferEntryDto),
   // All transfer history (across years), oldest first. Lets the UI show the
   // last window and link back to earlier ones if useful.
   history: z.array(TransferEntryDto),
+  // Players in the player federation with calidad ≥ 55 who could be poached.
+  vetoCandidates: z.array(VetoCandidate).default([]),
 });
 export type TransfersResponse = z.infer<typeof TransfersResponse>;
 

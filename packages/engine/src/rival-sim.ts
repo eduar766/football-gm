@@ -235,8 +235,9 @@ export function processOutgoingInterLeagueTransfers(s: GameState): void {
 
   // Candidates: high-quality available players in the player's league.
   const playerTeamIds = new Set(playerTeams.map(t => t.id));
+  const vetoedIds = new Set(s.transferVetoes ?? []);
   const candidates = s.players
-    .filter(p => playerTeamIds.has(p.teamId) && p.calidad >= 55 && p.injuredMatchesLeft <= 2)
+    .filter(p => playerTeamIds.has(p.teamId) && p.calidad >= 55 && p.injuredMatchesLeft <= 2 && !vetoedIds.has(p.id))
     .sort((a, b) => b.calidad - a.calidad);
   if (candidates.length === 0) return;
 
@@ -258,8 +259,13 @@ export function processOutgoingInterLeagueTransfers(s: GameState): void {
     const sellingTeam = s.teams.find(t => t.id === target.teamId);
     const fee = Math.round(target.calidad * 60_000);
 
-    // Selling team pockets the fee.
+    // Selling team pockets the full fee.
     if (sellingTeam) sellingTeam.treasury += fee;
+
+    // Federation receives a 5% solidarity levy on top of the club fee.
+    const solidarity = Math.round(fee * 0.05);
+    s.treasury += solidarity;
+    s.outgoingTransferRevenue = (s.outgoingTransferRevenue ?? 0) + solidarity;
 
     s.transfers.push({
       year: s.year,
@@ -414,6 +420,38 @@ export function finalizeRivalSeason(s: GameState): void {
     const relegationCount = rows.length > 6 ? 2 : 1;
     const relegated = rows.slice(-relegationCount).map(r => r.name);
 
+    // 13.1 — Promotion / relegation swap between div1 and div2.
+    // Only runs for div1 when a div2 exists for the same federation.
+    let promoted: string[] = [];
+    if (div.orden === 1) {
+      const div2Key = `${div.federationId}:2`;
+      const div2Rows = s.rivalStandings[div2Key];
+      if (div2Rows && div2Rows.length > 0) {
+        const swapCount = Math.min(relegationCount, div2Rows.length);
+
+        // Teams leaving div1 (bottom N)
+        const demoted = rows.slice(-swapCount);
+        // Teams leaving div2 (top N)
+        const ascending = div2Rows.slice(0, swapCount);
+        promoted = ascending.map(r => r.name);
+
+        for (const row of demoted) {
+          const t = teamById.get(row.teamId);
+          if (t) {
+            t.divisionOrden = 2;
+            t.strength = Math.max(20, t.strength - 2);
+          }
+        }
+        for (const row of ascending) {
+          const t = teamById.get(row.teamId);
+          if (t) {
+            t.divisionOrden = 1;
+            t.strength = Math.min(95, t.strength + 3);
+          }
+        }
+      }
+    }
+
     // 11.4 — Mini-cup: top 4 of the top division (orden 1) per federation.
     let cupWinner: { name: string; teamId: number } | undefined;
     if (div.orden === 1 && rows.length >= 4) {
@@ -438,6 +476,7 @@ export function finalizeRivalSeason(s: GameState): void {
       runnerUpName,
       topScorer,
       relegated,
+      promoted,
       points: champion.points,
       cupWinner,
     });

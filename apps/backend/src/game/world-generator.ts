@@ -38,11 +38,17 @@ export interface WorldRivalTeam {
   flag: string;
 }
 
+export interface WorldRivalDivision {
+  orden: number;
+  name: string;
+  teams: WorldRivalTeam[];
+}
+
 export interface WorldRival {
   name: string;
   prestige: number;
   confederationId: number;
-  teams: WorldRivalTeam[];
+  divisions: WorldRivalDivision[];
 }
 
 export interface World {
@@ -170,8 +176,10 @@ export function generateWorld(seed: number): World {
         name: fedName,
         prestige,
         confederationId: conf.id,
-        teams: league.divisions.flatMap(d =>
-          d.teams.map(t => ({
+        divisions: league.divisions.map(d => ({
+          orden: d.orden,
+          name: d.name,
+          teams: d.teams.map(t => ({
             name: t.name,
             strength: t.strength,
             arraigo: t.arraigo,
@@ -179,7 +187,7 @@ export function generateWorld(seed: number): World {
             country: league.country,
             flag: league.flag,
           })),
-        ),
+        })),
       });
     }
   }
