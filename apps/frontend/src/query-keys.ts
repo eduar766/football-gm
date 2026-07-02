@@ -12,6 +12,7 @@ export const QK = {
   teamEconomies: (id: number) => ['teamEconomies', id],
   norms: (id: number) => ['norms', id],
   events: (id: number) => ['events', id],
+  mailbox: (id: number) => ['mailbox', id],
   cups: (id: number) => ['cups', id],
   prizes: (id: number) => ['prizes', id],
   transfers: (id: number) => ['transfers', id],

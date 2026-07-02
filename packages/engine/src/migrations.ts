@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -230,6 +230,16 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 7;
+  }
+
+  // v7 → v8 (Fase 14.4): commissioner inbox.
+  if (v < 8) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.mailbox) gs.mailbox = [];
+    if (gs.nextMailboxId == null) gs.nextMailboxId = 1;
+
+    state.schemaVersion = 8;
   }
 
   return state;

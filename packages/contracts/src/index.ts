@@ -213,6 +213,7 @@ export const GameSummary = z.object({
   impulsesPerSeason: z.number().int(),
   pendingEventsCount: z.number().int(),
   normBreachCount: z.number().int().default(0),
+  unreadMailCount: z.number().int().default(0),
   reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
@@ -632,6 +633,36 @@ export const FederationLogResponse = z.object({
   entries: z.array(FederationLogEntryDto),
 });
 export type FederationLogResponse = z.infer<typeof FederationLogResponse>;
+
+// Fase 14.4: Commissioner inbox.
+export const MailboxCategory = z.enum(['peticion', 'evento', 'aviso', 'hito', 'financiero']);
+export type MailboxCategory = z.infer<typeof MailboxCategory>;
+export const MailboxStatus = z.enum(['sin_leer', 'leido', 'resuelto', 'caducado']);
+export type MailboxStatus = z.infer<typeof MailboxStatus>;
+export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event']);
+export type MailboxActionKind = z.infer<typeof MailboxActionKind>;
+
+export const MailboxMessageDto = z.object({
+  id: z.number().int(),
+  year: z.number().int(),
+  matchday: z.number().int(),
+  category: MailboxCategory,
+  title: z.string(),
+  body: z.string(),
+  status: MailboxStatus,
+  actionKind: MailboxActionKind.nullable(),
+  refId: z.number().int().nullable(),
+  teamId: z.number().int().nullable(),
+  deadlineMatchday: z.number().int().nullable(),
+  createdAtMatchday: z.number().int(),
+});
+export type MailboxMessageDto = z.infer<typeof MailboxMessageDto>;
+
+export const MailboxResponse = z.object({
+  messages: z.array(MailboxMessageDto),
+  unread: z.number().int(),
+});
+export type MailboxResponse = z.infer<typeof MailboxResponse>;
 
 /* -------------------------------- commissioner: federations & market */
 

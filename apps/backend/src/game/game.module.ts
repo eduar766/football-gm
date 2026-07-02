@@ -6,6 +6,7 @@ import { GovernanceController } from './governance.controller';
 import { EconomyController } from './economy.controller';
 import { NegotiationController } from './negotiation.controller';
 import { HistoryController } from './history.controller';
+import { MailboxController } from './mailbox.controller';
 import { IoController } from './io.controller';
 import { GameService } from './game.service';
 import { GameOwnerGuard } from './game-owner.guard';
@@ -20,6 +21,7 @@ import { GameStateRepository } from './game-state.repository';
     EconomyController,
     NegotiationController,
     HistoryController,
+    MailboxController,
     IoController,
   ],
   providers: [GameService, GameOwnerGuard, GameStateRepository],

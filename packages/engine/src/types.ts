@@ -716,6 +716,9 @@ export interface GameState {
   // Fase 14.6: narrative timeline of the player's federation.
   federationLog: FederationLogEntry[];
   nextFederationLogId: number;
+  // Fase 14.4: Commissioner inbox.
+  mailbox: MailboxMessage[];
+  nextMailboxId: number;
 }
 
 export interface RecordBook {
@@ -735,6 +738,27 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// Fase 14.4: Commissioner inbox message.
+export type MailboxCategory = 'peticion' | 'evento' | 'aviso' | 'hito' | 'financiero';
+export type MailboxStatus = 'sin_leer' | 'leido' | 'resuelto' | 'caducado';
+export type MailboxActionKind = 'rescue_request' | 'demand' | 'event';
+
+export interface MailboxMessage {
+  id: number;
+  year: number;
+  matchday: number; // 0 in pretemporada
+  category: MailboxCategory;
+  title: string;
+  body: string;
+  status: MailboxStatus;
+  // If actionable, describes the linked domain object:
+  actionKind: MailboxActionKind | null;
+  refId: number | null; // GameEvent id / demand id / team id
+  teamId: number | null;
+  deadlineMatchday: number | null; // if it expires unresolved → consequence (14.5)
+  createdAtMatchday: number;
 }
 
 // Fase 14.6: narrative timeline of the player's federation.
