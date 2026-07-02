@@ -62,6 +62,8 @@ import {
   markAllMailRead as engineMarkAllMailRead,
   unreadMailCount,
   resolveDemand as engineResolveDemand,
+  preseasonChecklist,
+  preseasonBlockers,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -74,6 +76,7 @@ import type {
   HistoryResponse,
   FederationLogResponse,
   MailboxResponse,
+  PreseasonChecklistResponse,
   CreateCupRequest,
   ComplianceResponse,
   CupsResponse,
@@ -554,11 +557,32 @@ export class GameService {
     }
   }
 
+  // Fase 14.3: the mandatory pre-season checklist is enforced here (imperative
+  // shell), not in the pure engine — so unit tests / golden can still start a
+  // season without wiring prizes.
+  private assertPreseasonReady(state: GameState): void {
+    const blockers = preseasonBlockers(state);
+    if (blockers.length > 0) {
+      throw new BadRequestException({
+        code: 'PRESEASON_INCOMPLETE',
+        message: `Faltan requisitos para comenzar: ${blockers.map((b) => b.label).join('; ')}`,
+        blockers,
+      });
+    }
+  }
+
+  async getPreseasonChecklist(gameId: number): Promise<PreseasonChecklistResponse> {
+    const state = await this.repo.loadState(gameId);
+    const items = preseasonChecklist(state);
+    return { items, ready: items.every((i) => !i.blocking || i.done) };
+  }
+
   // Build the season's calendar and start the playable phase (§4.8).
   async startSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'comenzar la temporada');
+      this.assertPreseasonReady(state);
       const next = engineStartSeason(state);
       await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);

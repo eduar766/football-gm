@@ -20,6 +20,11 @@ import { GameService } from './game.service';
 export class SeasonController {
   constructor(private readonly games: GameService) {}
 
+  @Get(':id/preseason-checklist')
+  preseasonChecklist(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getPreseasonChecklist(id);
+  }
+
   @Post(':id/start-season')
   startSeason(@Param('id', ParseIntPipe) id: number) {
     return this.games.startSeason(id);

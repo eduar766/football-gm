@@ -13,6 +13,7 @@ export const QK = {
   norms: (id: number) => ['norms', id],
   events: (id: number) => ['events', id],
   mailbox: (id: number) => ['mailbox', id],
+  preseason: (id: number) => ['preseason', id],
   cups: (id: number) => ['cups', id],
   prizes: (id: number) => ['prizes', id],
   transfers: (id: number) => ['transfers', id],

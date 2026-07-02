@@ -108,6 +108,10 @@ export { markMailRead, markAllMailRead, unreadMailCount } from './mailbox';
 // ── Club demands (Fase 14.5) ─────────────────────────────────────────────────
 export { resolveDemand } from './demands';
 
+// ── Pre-season checklist (Fase 14.3) ─────────────────────────────────────────
+export { preseasonChecklist, preseasonBlockers } from './preseason';
+export type { ChecklistItem } from './preseason';
+
 // ── Transfers ────────────────────────────────────────────────────────────────
 export { teamStrengthFromSquad, transfersForYear } from './transfers';
 

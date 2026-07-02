@@ -690,6 +690,21 @@ export const ResolveDemandRequest = z.object({
 });
 export type ResolveDemandRequest = z.infer<typeof ResolveDemandRequest>;
 
+// Fase 14.3: mandatory pre-season checklist.
+export const ChecklistItemDto = z.object({
+  id: z.string(),
+  label: z.string(),
+  done: z.boolean(),
+  blocking: z.boolean(),
+});
+export type ChecklistItemDto = z.infer<typeof ChecklistItemDto>;
+
+export const PreseasonChecklistResponse = z.object({
+  items: z.array(ChecklistItemDto),
+  ready: z.boolean(), // no blocking item is pending
+});
+export type PreseasonChecklistResponse = z.infer<typeof PreseasonChecklistResponse>;
+
 /* -------------------------------- commissioner: federations & market */
 
 export const FederationListItem = z.object({
