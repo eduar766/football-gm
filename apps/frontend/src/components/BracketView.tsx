@@ -15,8 +15,12 @@ const SLOT_H = 80;
 const COL_W = 210;
 const CONN_W = 36;
 
-function getCenter(roundIdx: number, matchIdx: number, maxSlots: number): number {
-  const scale = maxSlots / Math.pow(2, roundIdx);
+// Vertical center of a match card. Round 0 fills one slot each (adjacent);
+// each later round doubles the spacing so a match sits between its two feeders.
+// (The old formula inverted the scale — round 0 got maxSlots-wide gaps, which
+// left first-round ties floating hundreds of px apart.)
+function getCenter(roundIdx: number, matchIdx: number): number {
+  const scale = Math.pow(2, roundIdx);
   return (matchIdx * scale + scale / 2) * SLOT_H;
 }
 
@@ -146,9 +150,9 @@ export function BracketView({ rounds, championTeamName }: BracketViewProps) {
             const nextRound = cleanRounds[ri + 1];
             if (!nextRound) return null;
             return nextRound.matches.map((_, mi) => {
-              const feeder1Center = getCenter(ri, mi * 2, maxSlots);
-              const feeder2Center = getCenter(ri, mi * 2 + 1, maxSlots);
-              const nextCenter = getCenter(ri + 1, mi, maxSlots);
+              const feeder1Center = getCenter(ri, mi * 2);
+              const feeder2Center = getCenter(ri, mi * 2 + 1);
+              const nextCenter = getCenter(ri + 1, mi);
 
               const feederX = ri * (COL_W + CONN_W) + COL_W;
               const nextX = (ri + 1) * (COL_W + CONN_W);
@@ -233,7 +237,7 @@ export function BracketView({ rounds, championTeamName }: BracketViewProps) {
 
             {/* Matches */}
             {round.matches.map((match, mi) => {
-              const center = getCenter(ri, mi, maxSlots);
+              const center = getCenter(ri, mi);
                   const isChampion = Boolean(
                     championTeamName &&
                     match.played &&
