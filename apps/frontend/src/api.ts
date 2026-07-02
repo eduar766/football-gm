@@ -15,6 +15,7 @@ import type {
   GameSummary,
   HistoryResponse,
   FederationLogResponse,
+  MailboxResponse,
   LoginResponse,
   MarketResponse,
   NegotiationDto,
@@ -120,6 +121,11 @@ export const api = {
   history: (id: number) => req<HistoryResponse>(`/games/${id}/history`),
   federationLog: (id: number) =>
     req<FederationLogResponse>(`/games/${id}/federation-log`),
+  mailbox: (id: number) => req<MailboxResponse>(`/games/${id}/mailbox`),
+  markMailRead: (id: number, msgId: number) =>
+    req<MailboxResponse>(`/games/${id}/mailbox/${msgId}/read`, { method: 'POST' }),
+  markAllMailRead: (id: number) =>
+    req<MailboxResponse>(`/games/${id}/mailbox/read-all`, { method: 'POST' }),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
   federationById: (id: number, fedId: number) =>
     req<FederationOverview>(`/games/${id}/federations/${fedId}`),

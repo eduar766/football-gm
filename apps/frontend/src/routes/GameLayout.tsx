@@ -30,6 +30,7 @@ import {
   IconExchange,
   IconGlobe,
   IconHome,
+  IconInbox,
   IconHierarchy,
   IconHistory,
   IconMessageCircle,
@@ -44,6 +45,7 @@ import { CURRENT_VERSION } from '../changelog';
 
 const TAB_ICONS = {
   dashboard: IconHome,
+  mailbox: IconInbox,
   world: IconGlobe,
   teams: IconUsers,
   federations: IconBuildingBank,
@@ -64,6 +66,7 @@ const NAV_SECTIONS = [
     title: 'RESUMEN',
     items: [
       { value: 'dashboard', label: 'Resumen' },
+      { value: 'mailbox', label: 'Buzón' },
       { value: 'world', label: 'Mundo' },
     ],
   },
@@ -115,6 +118,7 @@ const ROUTES: Record<string, string> = {
   teams: '/games/$gameId/teams',
   history: '/games/$gameId/history',
   world: '/games/$gameId/world',
+  mailbox: '/games/$gameId/mailbox',
   dashboard: '/games/$gameId',
 };
 
@@ -145,6 +149,7 @@ export function GameLayout() {
 
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
   const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
+  const unreadMail = summary.data?.unreadMailCount ?? 0;
 
   const phaseChip = summary.data ? (
     <Box
@@ -268,6 +273,7 @@ export function GameLayout() {
                 const Icon = TAB_ICONS[item.value as keyof typeof TAB_ICONS];
                 const isActive = active === item.value;
                 const isEvents = item.value === 'events';
+                const isMailbox = item.value === 'mailbox';
                 return (
                   <Tooltip
                     key={item.value}
@@ -319,6 +325,17 @@ export function GameLayout() {
                           }}
                         >
                           {summary.data!.pendingEventsCount}
+                        </Badge>
+                      )}
+                      {isMailbox && unreadMail > 0 && (
+                        <Badge
+                          size="xs"
+                          color="blue"
+                          variant="filled"
+                          circle
+                          style={{ position: 'absolute', top: 2, right: 4 }}
+                        >
+                          {unreadMail}
                         </Badge>
                       )}
                     </Box>
@@ -384,6 +401,7 @@ export function GameLayout() {
                 const isActive = active === item.value;
                 const isEvents = item.value === 'events';
                 const isNorms = item.value === 'norms';
+                const isMailbox = item.value === 'mailbox';
                 return (
                   <Box
                     key={item.value}
@@ -450,6 +468,17 @@ export function GameLayout() {
                         ml="auto"
                       >
                         {summary.data!.normBreachCount}
+                      </Badge>
+                    )}
+                    {isMailbox && unreadMail > 0 && (
+                      <Badge
+                        size="xs"
+                        color="blue"
+                        variant="filled"
+                        circle
+                        ml="auto"
+                      >
+                        {unreadMail}
                       </Badge>
                     )}
                   </Box>

@@ -58,6 +58,9 @@ import {
   rescueTeam as engineRescueTeam,
   makeRng,
   randomTeamName,
+  markMailRead as engineMarkMailRead,
+  markAllMailRead as engineMarkAllMailRead,
+  unreadMailCount,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -69,6 +72,7 @@ import type {
   GameSummary,
   HistoryResponse,
   FederationLogResponse,
+  MailboxResponse,
   CreateCupRequest,
   ComplianceResponse,
   CupsResponse,
@@ -185,6 +189,7 @@ export class GameService {
       impulsesPerSeason: state.impulsesPerSeason,
       pendingEventsCount: pendingEvents(state).length,
       normBreachCount: normBreaches(state).length,
+      unreadMailCount: unreadMailCount(state),
       reviewsUsedThisSeason: state.actionHistory.filter(
         (a) => a.year === state.year && a.type === 'call_review',
       ).length,
@@ -2694,6 +2699,37 @@ export class GameService {
 
       await this.repo.saveState(tx, gameId, next);
       return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
+    });
+  }
+
+  private buildMailboxResponse(state: GameState): MailboxResponse {
+    // Newest first; unread ones bubble to the top within the same recency.
+    const messages = [...(state.mailbox ?? [])].sort(
+      (a, b) => b.id - a.id,
+    );
+    return { messages, unread: unreadMailCount(state) };
+  }
+
+  async getMailbox(gameId: number): Promise<MailboxResponse> {
+    const state = await this.repo.loadState(gameId);
+    return this.buildMailboxResponse(state);
+  }
+
+  async markMailRead(gameId: number, msgId: number): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineMarkMailRead(state, msgId);
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
+    });
+  }
+
+  async markAllMailRead(gameId: number): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineMarkAllMailRead(state);
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
     });
   }
 

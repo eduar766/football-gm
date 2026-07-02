@@ -33,6 +33,7 @@ import {
 import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
+import { pushMail } from './mailbox';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -321,6 +322,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     outgoingTransferRevenue: 0,
     federationLog: [],
     nextFederationLogId: 1,
+    mailbox: [],
+    nextMailboxId: 1,
   };
 }
 
@@ -485,8 +488,21 @@ export function startSeason(prev: GameState): GameState {
   // Issue board mandate for this season (uses independent mandatesRng).
   const alreadyHasMandate = s.mandates.some((m) => m.year === s.year);
   if (!alreadyHasMandate) {
-    s.mandates.push(generateMandate(s));
+    const mandate = generateMandate(s);
+    s.mandates.push(mandate);
     s.nextMandateId++;
+    pushMail(s, {
+      year: s.year,
+      matchday: 0,
+      category: 'aviso',
+      title: 'Nuevo mandato de la junta',
+      body: `La junta te encomienda para esta temporada: ${mandate.description}.`,
+      actionKind: null,
+      refId: mandate.id,
+      teamId: null,
+      deadlineMatchday: null,
+      createdAtMatchday: 0,
+    });
   }
 
   // 5.4 — Chain events from the previous season (uses independent eventsRng).
@@ -1059,6 +1075,20 @@ export function closeSeason(prev: GameState): GameState {
       detail: currentMandate.description,
       value: null,
       teamId: null,
+    });
+    pushMail(s, {
+      year: s.year,
+      matchday: 0,
+      category: 'hito',
+      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato incumplido',
+      body: currentMandate.met
+        ? `Cumpliste el mandato de la junta: ${currentMandate.description}.`
+        : `No cumpliste el mandato de la junta: ${currentMandate.description}. La junta toma nota.`,
+      actionKind: null,
+      refId: currentMandate.id,
+      teamId: null,
+      deadlineMatchday: null,
+      createdAtMatchday: 0,
     });
   }
 
