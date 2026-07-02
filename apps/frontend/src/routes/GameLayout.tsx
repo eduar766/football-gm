@@ -154,30 +154,44 @@ export function GameLayout() {
   const confidence = summary.data?.boardConfidence?.value ?? null;
   const gameOver = summary.data?.gameOver ?? null;
 
+  const isPre = summary.data?.phase === 'pretemporada';
+  const phaseColor = isPre ? theme.colors.gold[5] : theme.colors.accent[3];
   const phaseChip = summary.data ? (
     <Box
-      py={6}
-      px={10}
+      py={7}
+      px={11}
+      mt="sm"
       mb="sm"
       style={{
-        borderRadius: 8,
-        background: summary.data.phase === 'pretemporada'
-          ? 'rgba(245,158,11,0.12)'
-          : 'rgba(16,185,129,0.10)',
-        border: `1px solid ${summary.data.phase === 'pretemporada' ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.25)'}`,
+        borderRadius: 9,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: isPre ? 'rgba(245,158,11,0.10)' : 'rgba(16,185,129,0.08)',
+        border: `1px solid ${isPre ? 'rgba(245,158,11,0.28)' : 'rgba(16,185,129,0.22)'}`,
       }}
     >
+      <Box
+        className="pulse-dot"
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: phaseColor,
+          flexShrink: 0,
+        }}
+      />
       <Text
         size="xs"
         fw={700}
         tt="uppercase"
         style={{
-          color: summary.data.phase === 'pretemporada' ? theme.colors.gold[5] : theme.colors.accent[4],
-          letterSpacing: '0.04em',
+          color: phaseColor,
+          letterSpacing: '0.06em',
           fontFamily: theme.fontFamilyMonospace,
         }}
       >
-        {summary.data.phase === 'pretemporada'
+        {isPre
           ? `Pretemporada · Año ${summary.data.year}`
           : summary.data.seasonOver
             ? `Temporada ${summary.data.year} · Final`
@@ -187,17 +201,44 @@ export function GameLayout() {
   ) : null;
 
   const headerContent = (
-    <Group gap="xs" wrap="nowrap" align="center">
-      <img
-        src="/logo.png"
-        alt="Football GM"
-        style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }}
-      />
-      <div>
-        <Text fw={700} size="sm" style={{ fontFamily: theme.headings.fontFamily }}>
+    <Group gap="sm" wrap="nowrap" align="center">
+      <Box
+        style={{
+          width: 40,
+          height: 40,
+          flexShrink: 0,
+          borderRadius: 11,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(16,185,129,0.10)',
+          border: '1px solid rgba(16,185,129,0.28)',
+          boxShadow: '0 0 18px -6px rgba(16,185,129,0.6)',
+        }}
+      >
+        <img
+          src="/logo.png"
+          alt="Football GM"
+          style={{ width: 28, height: 28, objectFit: 'contain' }}
+        />
+      </Box>
+      <div style={{ minWidth: 0 }}>
+        <Text
+          component="div"
+          className="hud-eyebrow"
+          style={{ fontSize: 9, letterSpacing: '0.16em' }}
+        >
+          Comisionado
+        </Text>
+        <Text
+          fw={700}
+          size="sm"
+          truncate
+          style={{ fontFamily: 'var(--font-display)', lineHeight: 1.2 }}
+        >
           {summary.data?.federation.name ?? '...'}
         </Text>
-        <Text size="xs" c="dimmed">
+        <Text size="xs" c="dimmed" truncate>
           {summary.data?.name ?? ''}
         </Text>
       </div>
@@ -205,7 +246,19 @@ export function GameLayout() {
   );
 
   const statPills = (
-    <Stack gap={6}>
+    <Box
+      p="sm"
+      mb="sm"
+      style={{
+        borderRadius: 12,
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border-1)',
+      }}
+    >
+      <Text component="div" className="hud-eyebrow" mb={8} style={{ fontSize: 9 }}>
+        Estado de la liga
+      </Text>
+      <Stack gap={10}>
       <Stat
         label="Temporada"
         value={String(summary.data?.year ?? '—')}
@@ -244,7 +297,8 @@ export function GameLayout() {
                 : theme.colors.accent[4]
         }
       />
-    </Stack>
+      </Stack>
+    </Box>
   );
 
   const gameOverModal = (
@@ -395,11 +449,19 @@ export function GameLayout() {
   return (
     <Group gap={0} align="stretch" style={{ minHeight: '100vh' }}>
       <Paper
+        radius={0}
         style={{
-          width: 220,
-          minWidth: 220,
+          width: 236,
+          minWidth: 236,
           minHeight: '100vh',
-          borderRight: '1px solid var(--mantine-color-default-border)',
+          position: 'sticky',
+          top: 0,
+          alignSelf: 'flex-start',
+          height: '100vh',
+          overflowY: 'auto',
+          borderRight: '1px solid var(--border-2)',
+          background:
+            'linear-gradient(180deg, #0c1219 0%, var(--surface-0) 100%)',
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -428,12 +490,12 @@ export function GameLayout() {
           {NAV_SECTIONS.map((section) => (
             <Box key={section.title} mb="md">
               <Text
-                size="xs"
-                c="dimmed"
-                tt="uppercase"
-                fw={500}
-                p={8}
-                pb={4}
+                component="div"
+                className="hud-eyebrow"
+                px={8}
+                pb={6}
+                pt={2}
+                style={{ fontSize: 9.5 }}
               >
                 {section.title}
               </Text>
@@ -459,24 +521,25 @@ export function GameLayout() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 10px',
-                      marginLeft: -10,
-                      marginRight: -10,
+                      gap: 10,
+                      padding: '7px 10px',
+                      marginLeft: -6,
+                      marginRight: -6,
                       cursor: 'pointer',
-                      borderRadius: 6,
+                      borderRadius: 9,
+                      position: 'relative',
                       borderLeft: isActive
-                        ? `3px solid ${theme.colors.accent[4]}`
-                        : '3px solid transparent',
+                        ? `2px solid ${theme.colors.accent[3]}`
+                        : '2px solid transparent',
                       background: isActive
-                        ? `${theme.colors.accent[4]}14`
+                        ? 'linear-gradient(90deg, rgba(16,185,129,0.16), rgba(16,185,129,0.03))'
                         : 'transparent',
                       transition: 'background 0.15s',
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) {
                         e.currentTarget.style.background =
-                          'rgba(255,255,255,0.04)';
+                          'rgba(148,176,205,0.06)';
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -485,8 +548,20 @@ export function GameLayout() {
                       }
                     }}
                   >
-                    <Icon size={18} color={isActive ? theme.colors.accent[4] : undefined} />
-                    <Text size="sm" fw={isActive ? 600 : 400}>
+                    <Icon
+                      size={18}
+                      stroke={isActive ? 2.1 : 1.7}
+                      color={isActive ? theme.colors.accent[3] : '#8695A6'}
+                    />
+                    <Text
+                      size="sm"
+                      fw={isActive ? 700 : 500}
+                      style={{
+                        color: isActive ? '#EAF2F8' : '#B4C0CC',
+                        fontFamily: isActive ? 'var(--font-display)' : undefined,
+                        letterSpacing: isActive ? '0.01em' : undefined,
+                      }}
+                    >
                       {item.label}
                     </Text>
                     {isEvents && hasPending && (
@@ -595,26 +670,36 @@ function Stat({
 }) {
   const theme = useMantineTheme();
   return (
-    <Box aria-label={`${label}: ${value}${extra ? ` (${extra})` : ''}`}>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={500}>
+    <Group
+      justify="space-between"
+      align="center"
+      wrap="nowrap"
+      aria-label={`${label}: ${value}${extra ? ` (${extra})` : ''}`}
+    >
+      <Text
+        component="span"
+        className="hud-eyebrow"
+        style={{ fontSize: 10, letterSpacing: '0.08em' }}
+      >
         {label}
       </Text>
-      <Group gap={6} align="baseline">
+      <Group gap={6} align="baseline" wrap="nowrap">
         <Text
           fw={700}
           style={{
             fontFamily: theme.fontFamilyMonospace,
+            fontSize: 15,
             color: color ?? 'white',
           }}
         >
           {value}
         </Text>
         {extra && (
-          <Badge size="sm" variant="light" color="yellow">
+          <Badge size="sm" variant="light" color="gold">
             {extra}
           </Badge>
         )}
       </Group>
-    </Box>
+    </Group>
   );
 }

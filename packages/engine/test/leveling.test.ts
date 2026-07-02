@@ -46,6 +46,26 @@ describe('runLevelingLeague with a plan (Fase 14.7)', () => {
     expect(g.divisions.find((d) => d.orden === 2)?.format).toBe('ida');
   });
 
+  it('preserves rival divisions (regression: leveling used to wipe them)', () => {
+    const g0 = createGame(4321, {
+      confederations: [{ id: 1, name: 'UEFA', region: 'Europa', available: true, leagues: [] }],
+      teams: Array.from({ length: 6 }, (_, i) => ({ name: `P${i + 1}`, strength: 50 })),
+      rivals: [
+        {
+          name: 'Rival Fed',
+          prestige: 60,
+          confederationId: 1,
+          divisions: [{ orden: 1, name: 'Primera', teams: Array.from({ length: 6 }, (_, i) => ({ name: `R${i + 1}`, strength: 55, arraigo: 50 })) }],
+        },
+      ],
+    });
+    const rivalDivsBefore = g0.divisions.filter((d) => d.federationId !== g0.playerFederationId).length;
+    expect(rivalDivsBefore).toBe(1);
+    const g = runLevelingLeague(g0); // default plan
+    const rivalDivsAfter = g.divisions.filter((d) => d.federationId !== g.playerFederationId).length;
+    expect(rivalDivsAfter).toBe(1); // rival division survives
+  });
+
   it('rejects an invalid plan (returns the state unchanged)', () => {
     const before = gameWith(8);
     const after = runLevelingLeague(before, {

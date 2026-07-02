@@ -149,21 +149,56 @@ export function GamesPage() {
           )}
         </Group>
 
-        {/* Hero */}
+        {/* Hero — title screen */}
         <Paper
-          p="xl"
+          p={40}
           radius="lg"
           style={{
-            background: 'linear-gradient(180deg, #0B0F14 0%, #111820 100%)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            position: 'relative',
+            overflow: 'hidden',
+            background:
+              'radial-gradient(120% 140% at 50% -20%, rgba(16,185,129,0.14), transparent 60%), linear-gradient(180deg, #0b1218 0%, var(--surface-0) 100%)',
+            border: '1px solid var(--border-2)',
             textAlign: 'center',
+            boxShadow: 'var(--panel-shadow)',
           }}
         >
-          <Group justify="center" mb="sm">
-            <img src="/logo.png" alt="Football GM" style={{ width: 120, height: 120, objectFit: 'contain' }} />
+          <Group justify="center" mb="md">
+            <img
+              src="/logo.png"
+              alt="Football GM"
+              style={{
+                width: 104,
+                height: 104,
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 28px rgba(16,185,129,0.45))',
+              }}
+            />
           </Group>
-          <Text c="dimmed" size="sm" mt="xs" fs="italic">
-            Eres el comisionado. Dirige una competición y hazla crecer.
+          <Text
+            component="div"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 34,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: '#F4F7FA',
+              lineHeight: 1,
+            }}
+          >
+            FOOTBALL GM
+          </Text>
+          <Text
+            component="div"
+            className="hud-eyebrow"
+            mt={8}
+            style={{ letterSpacing: '0.28em' }}
+          >
+            Commissioner Console
+          </Text>
+          <Text c="dimmed" size="sm" mt="md" maw={480} mx="auto">
+            Eres el comisionado. Dirige una competición y hazla crecer hasta
+            convertirla en una liga de clase mundial.
           </Text>
         </Paper>
 

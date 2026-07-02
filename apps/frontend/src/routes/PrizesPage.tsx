@@ -45,7 +45,10 @@ function generatePreset(type: 'champion' | 'top3' | 'equal' | 'pyramid', n: numb
   }
   if (type === 'equal') {
     const each = Math.floor(100 / clamp);
-    return Array.from({ length: clamp }, (_, i) => (i < clamp - 1 ? each : 100 - each * (clamp - 1)));
+    const remainder = 100 - each * clamp;
+    // Spread the leftover points across the TOP positions — never dump them on
+    // the last place (that made the worst team earn the most).
+    return Array.from({ length: clamp }, (_, i) => each + (i < remainder ? 1 : 0));
   }
   // pyramid: rank-weighted (n, n-1, ..., 1) normalized to 100
   const weights = Array.from({ length: clamp }, (_, i) => clamp - i);

@@ -132,14 +132,15 @@ export function EconomyPage() {
             p="xl"
             radius="lg"
             style={{
-              background: 'linear-gradient(135deg, #111820 0%, #1A2332 100%)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              background:
+                'linear-gradient(135deg, var(--surface-1) 0%, #0c141a 60%, #0b1512 100%)',
+              border: '1px solid var(--border-1)',
               boxShadow: e.treasury > 0
-                ? '0 0 30px rgba(16,185,129,0.1)'
-                : '0 0 30px rgba(239,68,68,0.1)',
+                ? '0 0 40px -10px rgba(16,185,129,0.35)'
+                : '0 0 40px -10px rgba(239,68,68,0.35)',
             }}
           >
-            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
+            <Text component="div" className="hud-eyebrow" mb="xs">
               Tesorería
             </Text>
             <Text
