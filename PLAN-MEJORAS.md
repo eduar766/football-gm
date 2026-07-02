@@ -17,7 +17,7 @@ de división (`federationId === playerFederationId`) en toda query de datos del 
 | Prio | Área | Estado |
 |------|------|--------|
 | P1 | Ficha de equipo rival vacía/engañosa | ✅ HECHO |
-| P2 | Bracket de copas inusable (huecos / copas no iniciadas) | ⬜ Pendiente |
+| P2 | Bracket de copas inusable (huecos / copas no iniciadas) | ✅ HECHO |
 | P3 | Charts no siguen el tema HUD (colores hardcodeados) | ⬜ Pendiente |
 | P4 | Páginas con mucha data solo con shell (Economía, Historial) | ⬜ Pendiente |
 | P5 | Consistencia de estados vacíos (adoptar `EmptyState`) | ⬜ Pendiente |
@@ -48,12 +48,17 @@ clasificaciones) muestra `Plantilla 0`, `Afición 0`, `Estadio –(0)`, trayecto
 
 ---
 
-## P2 — Bracket de copas inusable
+## P2 — Bracket de copas inusable ✅
 
-**Causa raíz** (`components/BracketView.tsx`): `totalHeight = maxSlots * 80px` reserva la
-altura del cuadro completo aunque haya pocos partidos o la copa no haya empezado.
-**Fix:** si no hay partidos jugados → mostrar lista de participantes; reducir espacio muerto
-(altura desde partidos reales, centrar, compactar SLOT_H). Toca `BracketView.tsx`, `CupsPage.tsx`.
+**Causa raíz REAL** (`components/BracketView.tsx`): la escala de `getCenter` estaba
+**invertida** (`maxSlots / 2^roundIdx`) → los partidos de la 1ª ronda quedaban separados
+`maxSlots·80px` entre sí (640px en un cuadro de 16) → huecos enormes con partidos "flotando".
+No era espacio reservado sino posicionamiento incorrecto.
+**Fix aplicado:** `scale = 2^roundIdx` (ronda 0 adyacente; rondas posteriores duplican el
+espaciado). Conectores SVG verificados (midpoint de feeders = partido siguiente). Copas no
+iniciadas muestran los emparejamientos de 1ª ronda compactos. typecheck+lint ✅.
+**Follow-up opcional:** en `eliminatoria_ida_vuelta` se pintan ida y vuelta como 2 cards
+separadas; se podría agregar en una sola card con marcador global (no era el bug reportado).
 
 ## P3 — Charts no siguen el tema HUD
 
