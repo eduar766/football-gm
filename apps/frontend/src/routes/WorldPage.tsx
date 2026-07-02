@@ -10,7 +10,6 @@ import {
   Table,
   Tabs,
   Text,
-  Title,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from '@tanstack/react-router';
@@ -19,6 +18,7 @@ import type { WorldFederationStanding } from '@football-gm/contracts';
 import { useState } from 'react';
 import { api } from '../api';
 import { QK } from '../query-keys';
+import { PageHero } from '../components/PageHero';
 
 const TIER_COLORS: Record<number, string> = {
   1: '#F59E0B',
@@ -266,19 +266,19 @@ export function WorldPage() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="center">
-        <Group gap="sm">
-          <IconGlobe size={24} color="#10B981" />
-          <Title order={2} style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
-            Ligas del Mundo
-          </Title>
-        </Group>
-        {matchdayProgress > 0 && (
-          <Badge variant="light" color="teal" size="lg">
-            Jornada rival {matchdayProgress}
-          </Badge>
-        )}
-      </Group>
+      <PageHero
+        icon={IconGlobe}
+        eyebrow="Panorama global"
+        title="Ligas del Mundo"
+        subtitle="Sigue el pulso de las federaciones rivales y sus competiciones."
+        actions={
+          matchdayProgress > 0 ? (
+            <Badge variant="light" color="teal" size="lg">
+              Jornada rival {matchdayProgress}
+            </Badge>
+          ) : undefined
+        }
+      />
 
       <Tabs defaultValue="ligas" variant="pills" radius="md">
         <Tabs.List

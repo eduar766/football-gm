@@ -1,7 +1,8 @@
 import { CONFEDERATIONS } from './seed-data';
+import { divisionName } from './structure';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -274,6 +275,37 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 11;
+  }
+
+  // v11 → v12: repair rival divisions wiped by the pre-fix runLevelingLeague
+  // (it used to replace the whole divisions array with player-only divisions,
+  // which killed the rival simulation). Rebuild any missing rival division from
+  // the rival teams that still carry federationId + divisionOrden.
+  if (v < 12) {
+    const playerFedId = state.playerFederationId;
+    const fallback = state.leagueFormat ?? 'ida_vuelta';
+    const rivalFeds = state.federations.filter((f) => f.id !== playerFedId && !f.isPlayer);
+    for (const rf of rivalFeds) {
+      const existing = new Set(
+        state.divisions.filter((d) => d.federationId === rf.id).map((d) => d.orden),
+      );
+      const ordenes = new Set(
+        state.teams
+          .filter((t) => t.federationId === rf.id && t.divisionOrden != null)
+          .map((t) => t.divisionOrden as number),
+      );
+      for (const orden of [...ordenes].sort((a, b) => a - b)) {
+        if (existing.has(orden)) continue;
+        state.divisions.push({
+          orden,
+          name: divisionName(orden),
+          federationId: rf.id,
+          format: fallback,
+        });
+      }
+    }
+
+    state.schemaVersion = 12;
   }
 
   return state;

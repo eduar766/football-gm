@@ -795,7 +795,13 @@ export class GameService {
       for (const d of finished.divisions.filter(
         (d) => d.federationId === finished.playerFederationId,
       )) {
-        const dTeams = finished.teams.filter((t) => t.divisionOrden === d.orden);
+        // Division contamination guard: rival teams share the same divisionOrden
+        // (each federation has its own div 1/2), so filter by federation too —
+        // otherwise rival teams get lumped into the player's standings with 0
+        // points and receive bogus trajectory positions (e.g. 101º).
+        const dTeams = finished.teams.filter(
+          (t) => t.divisionOrden === d.orden && t.federationId === finished.playerFederationId,
+        );
         const dResults = finished.results.filter(
           (r) => r.divisionOrden === d.orden,
         );

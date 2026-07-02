@@ -516,8 +516,10 @@ export function TeamDetailPage() {
           p="lg"
           radius="lg"
           style={{
-            background: 'linear-gradient(160deg, #111820 0%, #1A2332 100%)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background:
+              'linear-gradient(160deg, var(--surface-1) 0%, #0c141a 60%, #0b1512 100%)',
+            border: '1px solid var(--border-1)',
+            boxShadow: 'var(--panel-shadow)',
             position: 'sticky',
             top: 16,
           }}
@@ -526,7 +528,7 @@ export function TeamDetailPage() {
           <Group gap="xs" mb={4}>
             <IconTrophy size={18} color="#F59E0B" style={{ flexShrink: 0 }} />
             <Text
-              style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontWeight: 800, fontSize: '22px', color: '#F9FAFB', lineHeight: 1.2 }}
+              style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '22px', color: '#F4F7FA', lineHeight: 1.15 }}
             >
               {t.name}
             </Text>

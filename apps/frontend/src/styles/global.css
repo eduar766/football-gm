@@ -2,6 +2,42 @@
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 400ms ease-out;
+
+  /* ── Command-center surface & accent tokens ─────────────────────── */
+  --surface-0: #080b10; /* page atmosphere */
+  --surface-1: #0f151c; /* panels */
+  --surface-2: #141d27; /* raised / rows */
+  --surface-3: #1b2733; /* hover */
+  --border-1: rgba(148, 176, 205, 0.1); /* hairline */
+  --border-2: rgba(148, 176, 205, 0.18); /* strong */
+
+  --accent: #10b981;
+  --accent-bright: #34d399;
+  --accent-dim: rgba(16, 185, 129, 0.14);
+  --gold: #f59e0b;
+  --gold-dim: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  --font-display: 'Chakra Petch', 'Plus Jakarta Sans', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', monospace;
+
+  /* Depth: light-from-borders + ambient glow, not heavy drop shadows */
+  --glow-accent: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 8px 30px -12px rgba(16, 185, 129, 0.35);
+  --panel-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 30px -18px rgba(0, 0, 0, 0.9);
+}
+
+/* ── Page atmosphere: layered radial glows + faint tactics grid ──── */
+body {
+  background-color: var(--surface-0);
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(16, 185, 129, 0.08), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(59, 130, 246, 0.05), transparent 55%),
+    linear-gradient(rgba(148, 176, 205, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 176, 205, 0.022) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 34px 34px, 34px 34px;
+  background-attachment: fixed;
 }
 
 @keyframes fadeInUp {
@@ -34,6 +70,16 @@
   }
 }
 
+@keyframes glowPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
+  }
+}
+
 @keyframes growUp {
   from {
     transform: scaleY(0);
@@ -63,21 +109,104 @@
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #1A2332 25%, #243447 50%, #1A2332 75%);
+  background: linear-gradient(90deg, #1a2332 25%, #243447 50%, #1a2332 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 4px;
 }
 
+/* HUD helpers -------------------------------------------------------- */
+.hud-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(148, 176, 205, 0.55);
+}
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.pulse-dot {
+  animation: glowPulse 1.8s ease-out infinite;
+}
+
 *:focus-visible {
-  outline: 2px solid #10B981;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Mantine input focus ring (replaces theme.ts pseudo-selector which is unsupported in inline styles) */
+/* Mantine input focus ring */
 .mantine-TextInput-wrapper:focus-within input,
 .mantine-Input-wrapper:focus-within input {
-  border-color: #10B981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12);
+}
+
+/* ── Tactile interactive states (pseudo-selectors unsupported in the
+   Mantine `styles` prop, so they live here to stay centralized) ──── */
+.mantine-Button-root {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.mantine-Button-root:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.mantine-Button-root:not(:disabled):active {
+  transform: translateY(0);
+}
+.mantine-Button-root[data-variant='filled']:not(:disabled):hover,
+.mantine-Button-root[data-variant='gradient']:not(:disabled):hover {
+  box-shadow: 0 10px 24px -10px rgba(16, 185, 129, 0.55);
+}
+
+/* Panel chrome hover glow (Card/Paper marked as interactive) */
+.panel-interactive {
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+.panel-interactive:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--glow-accent);
+  transform: translateY(-2px);
+}
+
+/* Table rows read like a data console */
+.mantine-Table-tr:hover td {
+  background-color: rgba(16, 185, 129, 0.05) !important;
+}
+
+/* Sidebar / navigation active accent bar keeps a soft glow */
+.mantine-Tabs-tab[data-active] {
+  color: var(--accent-bright);
+}
+
+/* Custom scrollbars — thin, on-brand */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 176, 205, 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 176, 205, 0.2);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.4);
+  background-clip: padding-box;
 }

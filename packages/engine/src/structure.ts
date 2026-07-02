@@ -114,11 +114,15 @@ export function runLevelingLeague(prev: GameState, plan?: LevelingPlan): GameSta
     const orden = ordenById.get(t.id);
     if (orden !== undefined) t.divisionOrden = orden;
   }
-  s.divisions = sizes.map((_, i) => ({
+  // Rebuild ONLY the player's divisions; rival federations keep theirs (else the
+  // rival simulation loses its divisions and stops running — see migration v12).
+  const rivalDivisions = s.divisions.filter((d) => d.federationId !== s.playerFederationId);
+  const playerDivisions = sizes.map((_, i) => ({
     orden: i + 1,
     name: names[i] ?? divisionName(i + 1),
     federationId: s.playerFederationId,
     format: formats[i] ?? s.leagueFormat,
   }));
+  s.divisions = [...playerDivisions, ...rivalDivisions];
   return s;
 }

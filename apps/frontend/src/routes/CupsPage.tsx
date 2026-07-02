@@ -199,9 +199,54 @@ function CupActions({ cup, isPreseason, onEdit, onDelete }: { cup: CupDto; isPre
   );
 }
 
+type LigaRow = { teamId: number; name: string; pj: number; g: number; e: number; p: number; gf: number; gc: number; pts: number };
+
+// Classification for a league-format cup, aggregated from its played matches.
+function computeCupStandings(cup: CupDto): LigaRow[] {
+  const table = new Map<number, LigaRow>();
+  const ensure = (id: number, name: string) => {
+    let r = table.get(id);
+    if (!r) { r = { teamId: id, name, pj: 0, g: 0, e: 0, p: 0, gf: 0, gc: 0, pts: 0 }; table.set(id, r); }
+    return r;
+  };
+  for (const round of cup.rounds) {
+    for (const m of round.matches) {
+      if (m.homeTeamName === 'BYE' || m.awayTeamName === 'BYE') continue;
+      const home = ensure(m.homeTeamId, m.homeTeamName);
+      const away = ensure(m.awayTeamId, m.awayTeamName);
+      if (!m.played || m.homeGoals == null || m.awayGoals == null) continue;
+      home.pj++; away.pj++;
+      home.gf += m.homeGoals; home.gc += m.awayGoals;
+      away.gf += m.awayGoals; away.gc += m.homeGoals;
+      if (m.homeGoals > m.awayGoals) { home.g++; home.pts += 3; away.p++; }
+      else if (m.homeGoals < m.awayGoals) { away.g++; away.pts += 3; home.p++; }
+      else { home.e++; away.e++; home.pts++; away.pts++; }
+    }
+  }
+  return [...table.values()].sort(
+    (a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf || a.name.localeCompare(b.name),
+  );
+}
+
 function LigaCupCard({ cup, defaultExpanded = true, isPreseason = false, onEdit, onDelete }: { cup: CupDto; defaultExpanded?: boolean; isPreseason?: boolean; onEdit: (c: CupDto) => void; onDelete: (c: CupDto) => void }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const groups = groupRounds(cup);
+  const standings = useMemo(() => computeCupStandings(cup), [cup]);
+  // Jornadas that actually have real (non-BYE) matches.
+  const jornadas = useMemo(
+    () => groups
+      .map((g) => ({ numero: g.logicalNumero, matches: g.legs.flatMap((l) => l.matches).filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE') }))
+      .filter((j) => j.matches.length > 0),
+    [groups],
+  );
+  // Default to the latest jornada with a played match (so results feel "live").
+  const lastPlayed = useMemo(() => {
+    for (let i = jornadas.length - 1; i >= 0; i--) if (jornadas[i].matches.some((m) => m.played)) return jornadas[i].numero;
+    return jornadas[0]?.numero ?? 1;
+  }, [jornadas]);
+  const [jornada, setJornada] = useState<number | null>(null);
+  const selectedJornada = jornada ?? lastPlayed;
+  const selectedMatches = jornadas.find((j) => j.numero === selectedJornada)?.matches ?? [];
 
   return (
     <Paper
@@ -234,45 +279,82 @@ function LigaCupCard({ cup, defaultExpanded = true, isPreseason = false, onEdit,
       <Collapse in={expanded}>
         <Box px="sm" pb="sm">
           <ChampionBanner cup={cup} />
-          {groups.map((g) => {
-            const realMatches = g.legs
-              .flatMap((l) => l.matches)
-              .filter((m) => m.homeTeamName !== 'BYE' && m.awayTeamName !== 'BYE');
-            if (realMatches.length === 0) return null;
-            return (
-              <Box key={g.logicalNumero} mb="sm">
-                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4} style={{ letterSpacing: '0.05em' }}>
-                  Jornada {g.logicalNumero}
-                </Text>
-                <Table>
-                  <Table.Tbody>
-                    {realMatches.map((m, i) => (
-                      <Table.Tr
-                        key={i}
-                        style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}
-                      >
-                        <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} style={{ textAlign: 'right' }}>
-                          {m.homeTeamName}
-                        </Table.Td>
-                        <Table.Td ta="center" style={{ minWidth: 60 }}>
-                          {m.played ? (
-                            <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)', fontSize: '15px' }}>
-                              {m.homeGoals} – {m.awayGoals}
-                            </Text>
-                          ) : (
-                            <Text c="dimmed" size="sm">vs</Text>
-                          )}
-                        </Table.Td>
-                        <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>
-                          {m.awayTeamName}
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </Box>
-            );
-          })}
+
+          {standings.length === 0 ? (
+            <Text size="sm" c="dimmed" py="xs">
+              El calendario se genera al comenzar la temporada.
+            </Text>
+          ) : (
+            <>
+              {/* Classification */}
+              <Table verticalSpacing={4} highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th style={{ width: 28 }}>#</Table.Th>
+                    <Table.Th>Equipo</Table.Th>
+                    <Table.Th ta="center" style={{ width: 34 }}>PJ</Table.Th>
+                    <Table.Th ta="center" style={{ width: 34 }} visibleFrom="xs">G</Table.Th>
+                    <Table.Th ta="center" style={{ width: 34 }} visibleFrom="xs">E</Table.Th>
+                    <Table.Th ta="center" style={{ width: 34 }} visibleFrom="xs">P</Table.Th>
+                    <Table.Th ta="center" style={{ width: 48 }} visibleFrom="sm">DG</Table.Th>
+                    <Table.Th ta="center" style={{ width: 40 }}>Pts</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {standings.map((r, i) => (
+                    <Table.Tr key={r.teamId} style={{ background: i === 0 ? 'rgba(16,185,129,0.08)' : undefined }}>
+                      <Table.Td c="dimmed" style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{i + 1}</Table.Td>
+                      <Table.Td fw={i === 0 ? 700 : 500}>{r.name}</Table.Td>
+                      <Table.Td ta="center">{r.pj}</Table.Td>
+                      <Table.Td ta="center" visibleFrom="xs">{r.g}</Table.Td>
+                      <Table.Td ta="center" visibleFrom="xs">{r.e}</Table.Td>
+                      <Table.Td ta="center" visibleFrom="xs">{r.p}</Table.Td>
+                      <Table.Td ta="center" visibleFrom="sm" c={r.gf - r.gc > 0 ? 'teal' : r.gf - r.gc < 0 ? 'red' : 'dimmed'}>
+                        {r.gf - r.gc > 0 ? '+' : ''}{r.gf - r.gc}
+                      </Table.Td>
+                      <Table.Td ta="center" fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{r.pts}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+
+              {/* Results by matchday (one at a time — no more endless dump) */}
+              {jornadas.length > 0 && (
+                <Box mt="sm">
+                  <Group justify="space-between" mb={6}>
+                    <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                      Resultados
+                    </Text>
+                    <Select
+                      size="xs"
+                      w={130}
+                      value={String(selectedJornada)}
+                      onChange={(v) => setJornada(v ? Number(v) : null)}
+                      data={jornadas.map((j) => ({ value: String(j.numero), label: `Jornada ${j.numero}` }))}
+                      comboboxProps={{ withinPortal: true }}
+                    />
+                  </Group>
+                  <Table verticalSpacing={4}>
+                    <Table.Tbody>
+                      {selectedMatches.map((m, i) => (
+                        <Table.Tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                          <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} ta="right">{m.homeTeamName}</Table.Td>
+                          <Table.Td ta="center" style={{ minWidth: 56 }}>
+                            {m.played ? (
+                              <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{m.homeGoals} – {m.awayGoals}</Text>
+                            ) : (
+                              <Text c="dimmed" size="sm">vs</Text>
+                            )}
+                          </Table.Td>
+                          <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>{m.awayTeamName}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </Box>
+              )}
+            </>
+          )}
         </Box>
       </Collapse>
     </Paper>

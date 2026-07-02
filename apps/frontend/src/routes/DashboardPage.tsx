@@ -7,6 +7,7 @@ import {
   Grid,
   Group,
   Paper,
+  Progress,
   Select,
   Stack,
   Table,
@@ -144,8 +145,12 @@ export function DashboardPage() {
         mb="md"
         p="xl"
         style={{
-          background: 'linear-gradient(135deg, #111820 0%, #0D2818 100%)',
-          border: '1px solid rgba(16,185,129,0.2)',
+          position: 'relative',
+          overflow: 'hidden',
+          background:
+            'linear-gradient(135deg, var(--surface-1) 0%, #0c141a 55%, #0b1512 100%)',
+          border: '1px solid var(--border-1)',
+          boxShadow: 'var(--panel-shadow)',
         }}
       >
         {isPreseason ? (
@@ -367,18 +372,77 @@ export function DashboardPage() {
             })()}
           </Stack>
         ) : (
-          <Stack gap="xs">
+          <Stack gap="md">
+            {/* HUD command header: phase context + matchday telemetry */}
+            <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">
+              <div>
+                <Text component="div" className="hud-eyebrow">
+                  Centro de mando · Temporada {summary.data?.year ?? '—'}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 24,
+                    fontWeight: 700,
+                    lineHeight: 1.1,
+                    color: '#F4F7FA',
+                  }}
+                >
+                  {over
+                    ? 'Temporada finalizada'
+                    : blocked
+                      ? 'Atención requerida'
+                      : `Jornada ${summary.data?.currentMatchday ?? 0} de ${summary.data?.totalMatchdays ?? 0}`}
+                </Text>
+              </div>
+              {!over && (summary.data?.totalMatchdays ?? 0) > 0 && (
+                <Box style={{ minWidth: 180, flex: '0 1 240px' }}>
+                  <Group justify="space-between" mb={4}>
+                    <Text className="hud-eyebrow" component="span" style={{ fontSize: 10 }}>
+                      Progreso
+                    </Text>
+                    <Text
+                      component="span"
+                      className="mono"
+                      style={{ fontSize: 12, color: '#34D399', fontWeight: 600 }}
+                    >
+                      {Math.round(
+                        ((summary.data?.currentMatchday ?? 0) /
+                          (summary.data?.totalMatchdays || 1)) *
+                          100,
+                      )}
+                      %
+                    </Text>
+                  </Group>
+                  <Progress
+                    value={
+                      ((summary.data?.currentMatchday ?? 0) /
+                        (summary.data?.totalMatchdays || 1)) *
+                      100
+                    }
+                    color="accent"
+                    size="sm"
+                  />
+                </Box>
+              )}
+            </Group>
+
             {/* Primary actions row */}
             <Group>
               <Button
                 size="lg"
-                leftSection={<IconPlayerPlay size={18} />}
+                leftSection={<IconPlayerPlay size={20} />}
                 onClick={() => mAdvanceMd.mutate(undefined as void)}
                 disabled={over || busy || blocked}
                 loading={mAdvanceMd.isPending}
                 variant="gradient"
-                gradient={{ from: '#10B981', to: '#059669' }}
-                style={{ height: 48 }}
+                gradient={{ from: '#10B981', to: '#047857' }}
+                style={{
+                  height: 52,
+                  paddingInline: 26,
+                  fontSize: 15,
+                  boxShadow: over || busy || blocked ? undefined : '0 12px 30px -10px rgba(16,185,129,0.6)',
+                }}
               >
                 Avanzar jornada
               </Button>
@@ -476,6 +540,51 @@ export function DashboardPage() {
                   isLoading={standings.isLoading}
                 />
               </Paper>
+
+              {/* Persistent cups panel: always shows active cups + when their next round lands */}
+              {!over && cups.data && (() => {
+                const sched = cups.data.schedule;
+                const curMd = cups.data.currentMatchday;
+                const active = cups.data.cups.filter((c) => c.status !== 'finalizada');
+                if (active.length === 0 && sched.length === 0) return null;
+                const nextByCup = (cupId: number) =>
+                  sched
+                    .filter((e) => e.cupId === cupId && e.matchday >= curMd)
+                    .sort((a, b) => a.matchday - b.matchday)[0]?.matchday ?? null;
+                return (
+                  <Paper withBorder p="md">
+                    <Group gap="xs" mb="sm">
+                      <IconTrophy size={18} color="#F59E0B" />
+                      <Text fw={700}>Copas</Text>
+                    </Group>
+                    <Stack gap={8}>
+                      {active.length === 0 && (
+                        <Text size="xs" c="dimmed">No hay copas activas esta temporada.</Text>
+                      )}
+                      {active.map((c) => {
+                        const nm = nextByCup(c.id);
+                        const thisJornada = nm === curMd;
+                        return (
+                          <Group key={c.id} justify="space-between" wrap="nowrap">
+                            <Text size="sm" fw={500}>{c.name}</Text>
+                            {nm == null ? (
+                              <Badge size="sm" variant="light" color="gray">Sin rondas próximas</Badge>
+                            ) : thisJornada ? (
+                              <Badge size="sm" variant="filled" color="orange" leftSection={<IconTrophy size={10} />}>
+                                ¡Ronda esta jornada!
+                              </Badge>
+                            ) : (
+                              <Badge size="sm" variant="light" color="orange">
+                                Próxima ronda · J{nm}
+                              </Badge>
+                            )}
+                          </Group>
+                        );
+                      })}
+                    </Stack>
+                  </Paper>
+                );
+              })()}
 
               {/* Next fixtures + cup rounds */}
               {!over && nextFixtures.data && (nextFixtures.data.fixtures.length > 0 || nextFixtures.data.cupRounds.length > 0) && (

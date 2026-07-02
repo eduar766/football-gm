@@ -77,9 +77,12 @@ export function FederationPage() {
         radius="lg"
         mb="md"
         style={{
-          background: 'linear-gradient(135deg, #111820 0%, #1A2332 100%)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: f.isPlayer ? '0 0 40px rgba(16,185,129,0.1)' : undefined,
+          background:
+            'linear-gradient(135deg, var(--surface-1) 0%, #0c141a 60%, #0b1512 100%)',
+          border: '1px solid var(--border-1)',
+          boxShadow: f.isPlayer
+            ? '0 0 44px -12px rgba(16,185,129,0.4)'
+            : 'var(--panel-shadow)',
         }}
       >
         <Group justify="space-between" align="flex-start">
@@ -87,11 +90,11 @@ export function FederationPage() {
             <Group gap="sm" mb="xs">
               <IconBuilding size={22} color={f.isPlayer ? '#10B981' : '#3B82F6'} />
               <Text
-                fw={800}
                 style={{
-                  fontFamily: '"Plus Jakarta Sans", sans-serif',
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 700,
                   fontSize: '28px',
-                  color: '#F9FAFB',
+                  color: '#F4F7FA',
                 }}
               >
                 {f.name}
