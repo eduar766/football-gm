@@ -36,6 +36,12 @@ export function MailboxPage() {
     queryKeyToInvalidate: ['mailbox', 'summary'],
     successMessage: 'Todo marcado como leído',
   });
+  const resolveDemand = useMutationWithFeedback({
+    mutationFn: ({ demandId, accept }: { demandId: number; accept: boolean }) =>
+      api.resolveDemand(id, demandId, accept),
+    queryKeyToInvalidate: ['mailbox', 'summary', 'teams', 'economy', 'structure'],
+    successMessage: 'Petición resuelta',
+  });
 
   if (mailbox.isLoading) {
     return (
@@ -49,6 +55,7 @@ export function MailboxPage() {
   const all = mailbox.data?.messages ?? [];
   const unread = mailbox.data?.unread ?? 0;
   const messages = filter === 'sin_leer' ? all.filter((m) => m.status === 'sin_leer') : all;
+  const demandById = new Map((mailbox.data?.demands ?? []).map((d) => [d.id, d]));
 
   const onOpen = (m: MailboxMessageDto) => {
     if (m.status === 'sin_leer') markRead.mutate(m.id);
@@ -96,6 +103,10 @@ export function MailboxPage() {
             const style = CATEGORY_STYLE[m.category];
             const unreadRow = m.status === 'sin_leer';
             const actionable = m.actionKind === 'event' && m.status !== 'resuelto' && m.status !== 'caducado';
+            const demand =
+              (m.actionKind === 'rescue_request' || m.actionKind === 'demand') && m.refId != null
+                ? demandById.get(m.refId)
+                : undefined;
             return (
               <Paper
                 key={m.id}
@@ -144,6 +155,39 @@ export function MailboxPage() {
                     )}
                   </Stack>
                 </Group>
+
+                {demand && (
+                  <Group justify="space-between" mt="sm" pl={40} wrap="nowrap">
+                    <Text size="xs" c="dimmed">
+                      Arraigo actual: <b>{demand.teamArraigo}</b>
+                      {demand.amount != null && ` · Coste: ${demand.amount.toLocaleString('es-ES')} €`}
+                      {' · '}Si ignoras: <b style={{ color: 'var(--mantine-color-red-5)' }}>−12 arraigo</b>
+                    </Text>
+                    <Group gap="xs" wrap="nowrap">
+                      <Button
+                        size="xs"
+                        color="green"
+                        loading={resolveDemand.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveDemand.mutate({ demandId: demand.id, accept: true });
+                        }}
+                      >
+                        Atender
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="default"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveDemand.mutate({ demandId: demand.id, accept: false });
+                        }}
+                      >
+                        Rechazar
+                      </Button>
+                    </Group>
+                  </Group>
+                )}
               </Paper>
             );
           })}

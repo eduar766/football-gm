@@ -34,6 +34,7 @@ import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } f
 import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
 import { pushMail } from './mailbox';
+import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -324,6 +325,10 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextFederationLogId: 1,
     mailbox: [],
     nextMailboxId: 1,
+    clubDemands: [],
+    nextDemandId: 1,
+    lowArraigoSeasons: {},
+    demandsRng: makeRng((seed ^ 0x0badf00d) >>> 0),
   };
 }
 
@@ -720,6 +725,11 @@ export function advanceMatchday(prev: GameState): GameState {
 
   // Independent-rng event spawn (§1, §2): rare polémicas to resolve.
   maybeSpawnEvent(s, md);
+
+  // 14.5 — Club requests: expire overdue ones (arraigo hit), then spawn new.
+  expireDemands(s, md);
+  generateClubDemands(s, md);
+
   s.currentMatchday = md + 1;
   if (s.currentMatchday > s.totalMatchdays) s.seasonOver = true;
 
@@ -1042,12 +1052,18 @@ export function closeSeason(prev: GameState): GameState {
     }
   }
 
+  // 14.5 — Any club request still open when the season closes counts as ignored.
+  expireDemands(s, s.totalMatchdays + 1, true);
+
   // Arraigo decay: teams slowly lose loyalty if not maintained (-2/season).
   for (const t of s.teams) {
     if (t.federationId === s.playerFederationId) {
       t.arraigo = Math.max(0, t.arraigo - 2);
     }
   }
+
+  // 14.5 — Exodus: clubs stuck at chronically low arraigo leave the federation.
+  processExodus(s);
 
   // 11.1: finalize rival leagues from accumulated standings (independent RNG).
   if (s.confederations.length > 0) {

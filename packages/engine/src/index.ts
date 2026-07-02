@@ -105,6 +105,9 @@ export { pendingEvents, resolveEvent } from './events';
 // ── Mailbox (Fase 14.4) ──────────────────────────────────────────────────────
 export { markMailRead, markAllMailRead, unreadMailCount } from './mailbox';
 
+// ── Club demands (Fase 14.5) ─────────────────────────────────────────────────
+export { resolveDemand } from './demands';
+
 // ── Transfers ────────────────────────────────────────────────────────────────
 export { teamStrengthFromSquad, transfersForYear } from './transfers';
 

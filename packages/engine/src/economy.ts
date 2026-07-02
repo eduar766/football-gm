@@ -6,6 +6,7 @@
 import { makeRng, randInt } from './rng';
 import { wageBill } from './salaries';
 import { logFederation } from './federation-log';
+import { satisfyRescueDemand } from './demands';
 import type {
   CommercialContractType,
   ContractOffer,
@@ -394,5 +395,7 @@ export function rescueTeam(
     value: safeAmount,
     teamId,
   });
+  // 14.5: a manual rescue also closes the club's open rescue request.
+  satisfyRescueDemand(s, teamId);
   return s;
 }

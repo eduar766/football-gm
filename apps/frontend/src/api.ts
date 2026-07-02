@@ -126,6 +126,11 @@ export const api = {
     req<MailboxResponse>(`/games/${id}/mailbox/${msgId}/read`, { method: 'POST' }),
   markAllMailRead: (id: number) =>
     req<MailboxResponse>(`/games/${id}/mailbox/read-all`, { method: 'POST' }),
+  resolveDemand: (id: number, demandId: number, accept: boolean, amount?: number) =>
+    req<MailboxResponse>(`/games/${id}/demands/${demandId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ accept, amount }),
+    }),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
   federationById: (id: number, fedId: number) =>
     req<FederationOverview>(`/games/${id}/federations/${fedId}`),

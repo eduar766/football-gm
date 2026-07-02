@@ -658,11 +658,37 @@ export const MailboxMessageDto = z.object({
 });
 export type MailboxMessageDto = z.infer<typeof MailboxMessageDto>;
 
+// Fase 14.5: club requests.
+export const ClubDemandType = z.enum(['rescate', 'inversion_estadio']);
+export type ClubDemandType = z.infer<typeof ClubDemandType>;
+
+export const ClubDemandDto = z.object({
+  id: z.number().int(),
+  teamId: z.number().int(),
+  teamName: z.string(),
+  teamArraigo: z.number().int(),
+  type: ClubDemandType,
+  year: z.number().int(),
+  createdMatchday: z.number().int(),
+  deadlineMatchday: z.number().int(),
+  amount: z.number().nullable(),
+  resolved: z.boolean(),
+  satisfied: z.boolean().nullable(),
+});
+export type ClubDemandDto = z.infer<typeof ClubDemandDto>;
+
 export const MailboxResponse = z.object({
   messages: z.array(MailboxMessageDto),
   unread: z.number().int(),
+  demands: z.array(ClubDemandDto).default([]),
 });
 export type MailboxResponse = z.infer<typeof MailboxResponse>;
+
+export const ResolveDemandRequest = z.object({
+  accept: z.boolean(),
+  amount: z.number().int().nonnegative().optional(),
+});
+export type ResolveDemandRequest = z.infer<typeof ResolveDemandRequest>;
 
 /* -------------------------------- commissioner: federations & market */
 
