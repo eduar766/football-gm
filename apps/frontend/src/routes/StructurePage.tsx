@@ -209,6 +209,16 @@ export function StructurePage() {
             style={{ flex: 1 }}
           />
           <Button
+            onClick={async () => {
+              const { name } = await api.randomTeamName(id);
+              setTeamName(name);
+            }}
+            variant="default"
+            leftSection={<IconRefresh size={16} />}
+          >
+            Aleatorio
+          </Button>
+          <Button
             onClick={() => create.mutate(undefined as void)}
             loading={create.isPending}
             disabled={teamName.trim().length === 0 || !isPreseason}

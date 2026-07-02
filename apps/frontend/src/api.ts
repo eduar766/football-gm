@@ -110,6 +110,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
+  randomTeamName: (id: number) =>
+    req<{ name: string }>(`/games/${id}/random-team-name`),
   teams: (id: number) => req<TeamListItem[]>(`/games/${id}/teams`),
   team: (id: number, teamId: number) =>
     req<TeamDetail>(`/games/${id}/teams/${teamId}`),

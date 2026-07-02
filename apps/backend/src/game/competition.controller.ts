@@ -40,6 +40,11 @@ export class CompetitionController {
     return this.games.createOwnTeam(id, body.name);
   }
 
+  @Get(':id/random-team-name')
+  randomTeamName(@Param('id', ParseIntPipe) id: number) {
+    return this.games.randomTeamName(id);
+  }
+
   @Post(':id/leveling-league')
   levelingLeague(@Param('id', ParseIntPipe) id: number) {
     return this.games.runLevelingLeague(id);

@@ -8,6 +8,7 @@ import {
   Group,
   Modal,
   Paper,
+  SegmentedControl,
   Skeleton,
   Stack,
   Text,
@@ -15,6 +16,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
+import type { WorldSize } from '@football-gm/contracts';
 import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -40,6 +42,9 @@ export function GamesPage() {
   const { user, isAdmin, logout } = useAuth();
   const [name, setName] = useState('');
   const [seed, setSeed] = useState('');
+  const [commissionerName, setCommissionerName] = useState('');
+  const [federationName, setFederationName] = useState('');
+  const [worldSize, setWorldSize] = useState<WorldSize>('estandar');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete confirmation modal state
@@ -56,6 +61,9 @@ export function GamesPage() {
       api.createGame({
         name: name.trim() || 'Mi competición',
         seed: seed ? Number(seed) : undefined,
+        commissionerName: commissionerName.trim() || undefined,
+        federationName: federationName.trim() || undefined,
+        worldSize,
       }),
     queryKeyToInvalidate: ['games'],
     successMessage: 'Partida creada',
@@ -186,24 +194,56 @@ export function GamesPage() {
             </Text>
           )}
 
-          <Group align="end">
-            <TextInput
-              label="Nombre"
-              placeholder="Mi competición"
-              value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
-              style={{ flex: 1 }}
-              disabled={atLimit}
-            />
-            <TextInput
-              label="Semilla (opcional)"
-              placeholder="aleatoria"
-              value={seed}
-              onChange={(e) => setSeed(e.currentTarget.value.replace(/[^0-9]/g, ''))}
-              w={160}
-              disabled={atLimit}
-              styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-            />
+          <Stack gap="sm">
+            <Group align="end" grow>
+              <TextInput
+                label="Nombre de la partida"
+                placeholder="Mi competición"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                disabled={atLimit}
+              />
+              <TextInput
+                label="Semilla (opcional)"
+                placeholder="aleatoria"
+                value={seed}
+                onChange={(e) => setSeed(e.currentTarget.value.replace(/[^0-9]/g, ''))}
+                disabled={atLimit}
+                styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
+              />
+            </Group>
+            <Group align="end" grow>
+              <TextInput
+                label="Comisionado/a (opcional)"
+                placeholder="Tu nombre"
+                value={commissionerName}
+                onChange={(e) => setCommissionerName(e.currentTarget.value)}
+                disabled={atLimit}
+              />
+              <TextInput
+                label="Federación (opcional)"
+                placeholder="aleatoria"
+                value={federationName}
+                onChange={(e) => setFederationName(e.currentTarget.value)}
+                disabled={atLimit}
+              />
+            </Group>
+            <div>
+              <Text size="sm" fw={500} mb={4}>
+                Tamaño del mundo
+              </Text>
+              <SegmentedControl
+                fullWidth
+                value={worldSize}
+                onChange={(v) => setWorldSize(v as WorldSize)}
+                disabled={atLimit}
+                data={[
+                  { label: 'Pequeño (10)', value: 'pequeno' },
+                  { label: 'Estándar (15)', value: 'estandar' },
+                  { label: 'Grande (20)', value: 'grande' },
+                ]}
+              />
+            </div>
             <Group>
               <Tooltip label={atLimit ? 'Límite alcanzado' : ''} disabled={!atLimit}>
                 <Button
@@ -242,7 +282,7 @@ export function GamesPage() {
                 }}
               />
             </Group>
-          </Group>
+          </Stack>
         </Card>
 
         {/* Saved Games */}
