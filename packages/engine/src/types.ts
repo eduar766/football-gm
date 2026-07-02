@@ -724,6 +724,10 @@ export interface GameState {
   nextDemandId: number;
   lowArraigoSeasons: Record<number, number>; // teamId → consecutive low-arraigo closes
   demandsRng: RngState; // independent stream so demands never perturb events/match
+  // Fase 14.8: board confidence + defeat.
+  boardConfidence: BoardConfidence;
+  gameOver: GameOver | null;
+  negativeTreasurySeasons: number;
 }
 
 export interface RecordBook {
@@ -743,6 +747,31 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// Fase 14.8: board confidence + defeat (destitution).
+export type GameOverReason =
+  | 'destitucion_confianza'
+  | 'quiebra'
+  | 'exodo'
+  | 'mandatos'
+  | 'liga_vacia';
+
+export interface BoardConfidenceEntry {
+  year: number;
+  value: number;
+  reason: string;
+}
+
+export interface BoardConfidence {
+  value: number; // 0-100
+  history: BoardConfidenceEntry[];
+}
+
+export interface GameOver {
+  reason: GameOverReason;
+  year: number;
+  message: string;
 }
 
 // Fase 14.5: club requests to the commissioner. Ignoring them erodes arraigo;

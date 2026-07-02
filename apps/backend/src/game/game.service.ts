@@ -194,6 +194,8 @@ export class GameService {
       pendingEventsCount: pendingEvents(state).length,
       normBreachCount: normBreaches(state).length,
       unreadMailCount: unreadMailCount(state),
+      boardConfidence: state.boardConfidence ?? { value: 60, history: [] },
+      gameOver: state.gameOver ?? null,
       reviewsUsedThisSeason: state.actionHistory.filter(
         (a) => a.year === state.year && a.type === 'call_review',
       ).length,
@@ -557,6 +559,18 @@ export class GameService {
     }
   }
 
+  // Fase 14.8: once the commissioner is dismissed the game is over — block any
+  // further progression (enforced at the shell; the engine only sets the flag).
+  private assertNotGameOver(state: GameState): void {
+    if (state.gameOver) {
+      throw new BadRequestException({
+        code: 'GAME_OVER',
+        message: state.gameOver.message,
+        reason: state.gameOver.reason,
+      });
+    }
+  }
+
   // Fase 14.3: the mandatory pre-season checklist is enforced here (imperative
   // shell), not in the pure engine — so unit tests / golden can still start a
   // season without wiring prizes.
@@ -581,6 +595,7 @@ export class GameService {
   async startSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertPretemporada(state, 'comenzar la temporada');
       this.assertPreseasonReady(state);
       const next = engineStartSeason(state);
@@ -592,6 +607,7 @@ export class GameService {
   async advanceMatchday(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertTemporada(state, 'avanzar la jornada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceMatchday(state);
@@ -728,6 +744,7 @@ export class GameService {
   async advanceSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertTemporada(state, 'avanzar la temporada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceSeason(state);
@@ -741,6 +758,7 @@ export class GameService {
   async closeSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const finished = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(finished);
       if (finished.phase !== 'temporada' || !finished.seasonOver) {
         throw new BadRequestException('Season is not finished yet');
       }

@@ -35,6 +35,7 @@ import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
+import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -329,6 +330,9 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextDemandId: 1,
     lowArraigoSeasons: {},
     demandsRng: makeRng((seed ^ 0x0badf00d) >>> 0),
+    boardConfidence: { value: CONFIDENCE_START, history: [] },
+    gameOver: null,
+    negativeTreasurySeasons: 0,
   };
 }
 
@@ -1107,6 +1111,11 @@ export function closeSeason(prev: GameState): GameState {
       createdAtMatchday: 0,
     });
   }
+
+  // 14.8: board confidence + defeat check (uses the season prestige delta,
+  // the mandate result and the exodus/demands just processed above). Gated on
+  // players.length > 0 inside → golden-safe. Evaluated before the year bump.
+  evaluateBoardConfidence(s, delta);
 
   // 7.2: Record book — scan results before they are cleared at season end.
   updateRecordBook(s);

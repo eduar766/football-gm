@@ -200,6 +200,31 @@ export const RivalMatchResultDto = z.object({
 export type RivalMatchResultDto = z.infer<typeof RivalMatchResultDto>;
 
 // Everything the dashboard header needs to render the current loop state.
+// Fase 14.8: board confidence + defeat.
+export const GameOverReason = z.enum([
+  'destitucion_confianza',
+  'quiebra',
+  'exodo',
+  'mandatos',
+  'liga_vacia',
+]);
+export type GameOverReason = z.infer<typeof GameOverReason>;
+
+export const BoardConfidenceDto = z.object({
+  value: z.number().int(),
+  history: z
+    .array(z.object({ year: z.number().int(), value: z.number().int(), reason: z.string() }))
+    .default([]),
+});
+export type BoardConfidenceDto = z.infer<typeof BoardConfidenceDto>;
+
+export const GameOverDto = z.object({
+  reason: GameOverReason,
+  year: z.number().int(),
+  message: z.string(),
+});
+export type GameOverDto = z.infer<typeof GameOverDto>;
+
 export const GameSummary = z.object({
   id: Id,
   name: z.string(),
@@ -214,6 +239,8 @@ export const GameSummary = z.object({
   pendingEventsCount: z.number().int(),
   normBreachCount: z.number().int().default(0),
   unreadMailCount: z.number().int().default(0),
+  boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
+  gameOver: GameOverDto.nullable().default(null),
   reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
