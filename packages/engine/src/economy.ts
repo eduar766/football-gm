@@ -5,6 +5,7 @@
 
 import { makeRng, randInt } from './rng';
 import { wageBill } from './salaries';
+import { logFederation } from './federation-log';
 import type {
   CommercialContractType,
   ContractOffer,
@@ -85,6 +86,15 @@ export function signContract(prev: GameState, offerId: number): GameState {
   });
   s.nextContractId += 1;
   s.contractOffers = s.contractOffers.filter((o) => o.id !== offerId);
+  logFederation(s, {
+    year: s.year,
+    matchday: s.phase === 'temporada' ? s.currentMatchday : 0,
+    type: 'sponsor_signed',
+    title: 'Contrato comercial firmado',
+    detail: `${offer.nombre} · ${offer.valorAnual.toLocaleString('es-ES')} €/año durante ${offer.years} temporada(s)`,
+    value: offer.valorAnual,
+    teamId: null,
+  });
   return s;
 }
 
@@ -375,5 +385,14 @@ export function rescueTeam(
   t.treasury += safeAmount;
   if (withholdPrizes) t.prizesWithheld = true;
   s.rescueLog.push({ year: s.year, teamId, teamName: t.name, amount: safeAmount });
+  logFederation(s, {
+    year: s.year,
+    matchday: s.phase === 'temporada' ? s.currentMatchday : 0,
+    type: 'rescue',
+    title: 'Rescate económico',
+    detail: `Inyectaste ${safeAmount.toLocaleString('es-ES')} € a ${t.name}${withholdPrizes ? ' (premios retenidos)' : ''}`,
+    value: safeAmount,
+    teamId,
+  });
   return s;
 }

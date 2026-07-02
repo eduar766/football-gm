@@ -1,7 +1,7 @@
 import { CONFEDERATIONS } from './seed-data';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -201,6 +201,35 @@ export function migrateState(state: GameState): GameState {
     if (!gs.commissionerName) gs.commissionerName = 'Comisionado/a';
 
     state.schemaVersion = 6;
+  }
+
+  // v6 → v7 (Fase 14.6): federation narrative timeline. Backfill past prestige
+  // snapshots from the existing season history so old saves aren't empty.
+  if (v < 7) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.federationLog) gs.federationLog = [];
+    if (gs.nextFederationLogId == null) gs.nextFederationLogId = 1;
+
+    // One prestige snapshot per year (history has one row per division/year).
+    const seenYears = new Set<number>();
+    for (const h of state.history ?? []) {
+      if (seenYears.has(h.year)) continue;
+      seenYears.add(h.year);
+      const delta = h.delta ?? h.prestigeAfter - h.prestigeBefore;
+      gs.federationLog.push({
+        id: gs.nextFederationLogId++,
+        year: h.year,
+        matchday: 0,
+        type: 'prestige_snapshot',
+        title: 'Cierre de temporada',
+        detail: `Prestigio ${h.prestigeBefore} → ${h.prestigeAfter} (${delta >= 0 ? '+' : ''}${delta})`,
+        value: h.prestigeAfter,
+        teamId: null,
+      });
+    }
+
+    state.schemaVersion = 7;
   }
 
   return state;

@@ -14,6 +14,7 @@ import type {
   GameListItem,
   GameSummary,
   HistoryResponse,
+  FederationLogResponse,
   LoginResponse,
   MarketResponse,
   NegotiationDto,
@@ -117,6 +118,8 @@ export const api = {
     req<TeamDetail>(`/games/${id}/teams/${teamId}`),
   federation: (id: number) => req<FederationOverview>(`/games/${id}/federation`),
   history: (id: number) => req<HistoryResponse>(`/games/${id}/history`),
+  federationLog: (id: number) =>
+    req<FederationLogResponse>(`/games/${id}/federation-log`),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
   federationById: (id: number, fedId: number) =>
     req<FederationOverview>(`/games/${id}/federations/${fedId}`),

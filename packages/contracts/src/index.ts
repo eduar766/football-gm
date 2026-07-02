@@ -600,6 +600,39 @@ export const HistoryResponse = z.object({
 });
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
 
+// Fase 14.6: federation narrative timeline.
+export const FederationLogType = z.enum([
+  'prestige_snapshot',
+  'sponsor_signed',
+  'negotiation_started',
+  'negotiation_effective',
+  'team_created',
+  'team_left',
+  'rescue',
+  'norm_created',
+  'sanction',
+  'mandate_result',
+  'title',
+]);
+export type FederationLogType = z.infer<typeof FederationLogType>;
+
+export const FederationLogEntryDto = z.object({
+  id: z.number().int(),
+  year: z.number().int(),
+  matchday: z.number().int(),
+  type: FederationLogType,
+  title: z.string(),
+  detail: z.string(),
+  value: z.number().nullable(),
+  teamId: z.number().int().nullable(),
+});
+export type FederationLogEntryDto = z.infer<typeof FederationLogEntryDto>;
+
+export const FederationLogResponse = z.object({
+  entries: z.array(FederationLogEntryDto),
+});
+export type FederationLogResponse = z.infer<typeof FederationLogResponse>;
+
 /* -------------------------------- commissioner: federations & market */
 
 export const FederationListItem = z.object({

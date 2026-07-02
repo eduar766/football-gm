@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Badge, Box, Grid, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Table, Tabs, Text } from '@mantine/core';
+import { Badge, Box, Grid, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Stack, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconHistory, IconMedal, IconTable, IconTrophy, IconWorld } from '@tabler/icons-react';
-import type { AwardType, RecordBookDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
+import { IconHistory, IconMedal, IconTable, IconTimeline, IconTrophy, IconWorld } from '@tabler/icons-react';
+import type { AwardType, FederationLogEntryDto, RecordBookDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
 import {
   CartesianGrid,
   Legend,
@@ -109,6 +109,10 @@ export function HistoryPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
   const hist = useQuery({ queryKey: ['history', id], queryFn: () => api.history(id) });
+  const fedLog = useQuery({
+    queryKey: ['federation-log', id],
+    queryFn: () => api.federationLog(id),
+  });
 
   const records = hist.data?.records ?? [];
 
@@ -176,6 +180,13 @@ export function HistoryPage() {
             style={{ fontWeight: 600 }}
           >
             Mi Liga
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="cronologia"
+            leftSection={<IconTimeline size={16} />}
+            style={{ fontWeight: 600 }}
+          >
+            Cronología
           </Tabs.Tab>
           <Tabs.Tab
             value="otras-federaciones"
@@ -426,6 +437,13 @@ export function HistoryPage() {
           </Grid>
         </Tabs.Panel>
 
+        <Tabs.Panel value="cronologia">
+          <FederationTimelinePanel
+            entries={fedLog.data?.entries ?? []}
+            loading={fedLog.isLoading}
+          />
+        </Tabs.Panel>
+
         <Tabs.Panel value="otras-federaciones">
           <RivalChampionsPanel champions={rivalChampions} />
         </Tabs.Panel>
@@ -437,6 +455,100 @@ export function HistoryPage() {
 const LINE_COLORS = [
   '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316', '#06B6D4', '#EC4899',
 ];
+
+const FED_LOG_STYLE: Record<
+  FederationLogEntryDto['type'],
+  { emoji: string; color: string }
+> = {
+  prestige_snapshot: { emoji: '📊', color: 'teal' },
+  sponsor_signed: { emoji: '🤝', color: 'green' },
+  negotiation_started: { emoji: '💬', color: 'blue' },
+  negotiation_effective: { emoji: '✅', color: 'blue' },
+  team_created: { emoji: '🏗️', color: 'grape' },
+  team_left: { emoji: '🚪', color: 'red' },
+  rescue: { emoji: '💸', color: 'orange' },
+  norm_created: { emoji: '📐', color: 'cyan' },
+  sanction: { emoji: '⚖️', color: 'red' },
+  mandate_result: { emoji: '🎯', color: 'yellow' },
+  title: { emoji: '🏆', color: 'yellow' },
+};
+
+function FederationTimelinePanel({
+  entries,
+  loading,
+}: {
+  entries: FederationLogEntryDto[];
+  loading: boolean;
+}) {
+  if (loading) return <Skeleton height={300} radius="md" />;
+  if (entries.length === 0) {
+    return (
+      <Paper p="xl" radius="md" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <Text c="dimmed" ta="center">
+          Aún no hay hitos en la cronología de tu federación. Firma patrocinios,
+          crea equipos o cierra una temporada para empezar a construir tu historia.
+        </Text>
+      </Paper>
+    );
+  }
+
+  // Entries arrive newest-first; group by year preserving that order.
+  const byYear = new Map<number, FederationLogEntryDto[]>();
+  for (const e of entries) {
+    if (!byYear.has(e.year)) byYear.set(e.year, []);
+    byYear.get(e.year)!.push(e);
+  }
+
+  return (
+    <Box>
+      {[...byYear.entries()].map(([year, group]) => (
+        <Box key={year} mb="lg">
+          <Group gap="xs" mb="xs">
+            <Badge size="lg" variant="light" color="teal">
+              Temporada {year}
+            </Badge>
+          </Group>
+          <Stack gap="xs">
+            {group.map((e) => {
+              const style = FED_LOG_STYLE[e.type];
+              return (
+                <Paper
+                  key={e.id}
+                  p="sm"
+                  radius="md"
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderLeft: `3px solid var(--mantine-color-${style.color}-6)`,
+                  }}
+                >
+                  <Group justify="space-between" wrap="nowrap">
+                    <Group gap="sm" wrap="nowrap">
+                      <Text size="lg">{style.emoji}</Text>
+                      <Box>
+                        <Text fw={600} size="sm">
+                          {e.title}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {e.detail}
+                        </Text>
+                      </Box>
+                    </Group>
+                    {e.matchday > 0 && (
+                      <Badge size="sm" variant="outline" color="gray">
+                        J{e.matchday}
+                      </Badge>
+                    )}
+                  </Group>
+                </Paper>
+              );
+            })}
+          </Stack>
+        </Box>
+      ))}
+    </Box>
+  );
+}
 
 function TrajectoryChart({ data }: { data: TeamTrajectoryData[] }) {
   // Build year-keyed data points. Only teams with ≥2 seasons, capped at 8.

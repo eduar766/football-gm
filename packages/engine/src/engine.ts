@@ -32,6 +32,7 @@ import {
 } from './awards';
 import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { buildChronicle } from './headlines';
+import { logFederation } from './federation-log';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
@@ -318,6 +319,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextTeamSponsorId: 1,
     transferVetoes: [],
     outgoingTransferRevenue: 0,
+    federationLog: [],
+    nextFederationLogId: 1,
   };
 }
 
@@ -588,6 +591,15 @@ export function createOwnTeam(
     }
   }
   s.treasury -= CREATE_TEAM_COST;
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'team_created',
+    title: 'Club fundado',
+    detail: `Creaste ${trimmed} desde cero (coste ${CREATE_TEAM_COST.toLocaleString('es-ES')} €)`,
+    value: CREATE_TEAM_COST,
+    teamId: nextId,
+  });
   return s;
 }
 
@@ -909,7 +921,30 @@ export function closeSeason(prev: GameState): GameState {
       prestigeAfter: s.prestige,
       delta,
     });
+    // 14.6: title entry for the top flight (orden 1) champion.
+    if (d.orden === 1) {
+      logFederation(s, {
+        year: s.year,
+        matchday: 0,
+        type: 'title',
+        title: 'Campeón de liga',
+        detail: `${champion.name} campeón con ${champion.points} pts`,
+        value: null,
+        teamId: champion.teamId,
+      });
+    }
   }
+
+  // 14.6: prestige snapshot for the just-closed season (one per year).
+  logFederation(s, {
+    year: s.year,
+    matchday: 0,
+    type: 'prestige_snapshot',
+    title: 'Cierre de temporada',
+    detail: `Prestigio ${prestigeBefore} → ${s.prestige} (${delta >= 0 ? '+' : ''}${delta})`,
+    value: s.prestige,
+    teamId: null,
+  });
 
   // §6 awards from the just-closed year (no-op if no players are loaded).
   settleSeasonAwards(s);
@@ -1016,6 +1051,15 @@ export function closeSeason(prev: GameState): GameState {
     } else {
       s.consecutiveMandateFails = 0;
     }
+    logFederation(s, {
+      year: s.year,
+      matchday: 0,
+      type: 'mandate_result',
+      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato fallido',
+      detail: currentMandate.description,
+      value: null,
+      teamId: null,
+    });
   }
 
   // 7.2: Record book — scan results before they are cleared at season end.
