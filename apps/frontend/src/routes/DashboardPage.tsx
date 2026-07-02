@@ -21,6 +21,7 @@ import {
   IconAlertTriangle,
   IconCalendarOff,
   IconCircleCheck,
+  IconCircleX,
   IconClipboardList,
   IconFlag,
   IconPlayerPlay,
@@ -73,8 +74,15 @@ export function DashboardPage() {
     queryFn: () => api.cups(id),
     enabled: !isPreseason,
   });
+  const preseason = useQuery({
+    queryKey: QK.preseason(id),
+    queryFn: () => api.preseasonChecklist(id),
+    enabled: isPreseason,
+  });
+  const preseasonReady = preseason.data?.ready ?? true;
+  const pendingBlockers = (preseason.data?.items ?? []).filter((i) => i.blocking && !i.done);
 
-  const REFRESH_KEYS = ['summary', 'standings', 'history', 'teams', 'nextFixtures', 'cups', 'structure', 'economy', 'events'];
+  const REFRESH_KEYS = ['summary', 'standings', 'history', 'teams', 'nextFixtures', 'cups', 'structure', 'economy', 'events', 'preseason'];
 
   const mImpulse = useMutationWithFeedback({
     mutationFn: (v: { home: number; away: number; fav: number }) =>
@@ -168,18 +176,71 @@ export function DashboardPage() {
                   aquí porque el calendario se construye al comenzar.
                 </Text>
               </div>
-              <Button
-                size="lg"
-                leftSection={<IconPlayerPlay size={18} />}
-                onClick={() => mStart.mutate(undefined as void)}
-                loading={mStart.isPending}
-                variant="gradient"
-                gradient={{ from: '#10B981', to: '#059669' }}
-                style={{ height: 48 }}
+              <Tooltip
+                multiline
+                w={280}
+                disabled={preseasonReady}
+                label={`Faltan requisitos: ${pendingBlockers.map((b) => b.label).join('; ')}`}
               >
-                Comenzar temporada
-              </Button>
+                <Button
+                  size="lg"
+                  leftSection={<IconPlayerPlay size={18} />}
+                  onClick={() => mStart.mutate(undefined as void)}
+                  loading={mStart.isPending}
+                  disabled={!preseasonReady}
+                  variant="gradient"
+                  gradient={{ from: '#10B981', to: '#059669' }}
+                  style={{ height: 48 }}
+                >
+                  Comenzar temporada
+                </Button>
+              </Tooltip>
             </Group>
+
+            {preseason.data && (
+              <Paper
+                p="md"
+                ml={52}
+                style={{
+                  background: preseasonReady ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderLeft: `3px solid ${preseasonReady ? '#10B981' : '#EF4444'}`,
+                }}
+              >
+                <Group gap="xs" mb="xs">
+                  <IconClipboardList size={18} color={preseasonReady ? '#10B981' : '#EF4444'} />
+                  <Text fw={700} size="sm">
+                    {preseasonReady
+                      ? 'Todo listo para comenzar'
+                      : 'Antes de empezar la temporada'}
+                  </Text>
+                </Group>
+                <Stack gap={6}>
+                  {preseason.data.items.map((item) => (
+                    <Group gap="xs" key={item.id} wrap="nowrap">
+                      {item.done ? (
+                        <IconCircleCheck size={18} color="#10B981" />
+                      ) : (
+                        <IconCircleX size={18} color={item.blocking ? '#EF4444' : '#6B7280'} />
+                      )}
+                      <Text size="sm" c={item.done ? undefined : 'dimmed'} style={{ flex: 1 }}>
+                        {item.label}
+                      </Text>
+                      {!item.done && item.blocking && (
+                        <Badge size="xs" color="red" variant="light">
+                          obligatorio
+                        </Badge>
+                      )}
+                      {!item.blocking && (
+                        <Badge size="xs" color="gray" variant="outline">
+                          recomendado
+                        </Badge>
+                      )}
+                    </Group>
+                  ))}
+                </Stack>
+              </Paper>
+            )}
 
             <Stack gap={8} ml={52}>
               {[

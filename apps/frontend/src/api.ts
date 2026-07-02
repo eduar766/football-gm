@@ -16,6 +16,7 @@ import type {
   HistoryResponse,
   FederationLogResponse,
   MailboxResponse,
+  PreseasonChecklistResponse,
   LoginResponse,
   MarketResponse,
   NegotiationDto,
@@ -94,6 +95,8 @@ export const api = {
     req<{ id: number }>('/games', { method: 'POST', body: JSON.stringify(body) }),
   deleteGame: (id: number) => req<{ ok: boolean }>(`/games/${id}`, { method: 'DELETE' }),
   summary: (id: number) => req<GameSummary>(`/games/${id}`),
+  preseasonChecklist: (id: number) =>
+    req<PreseasonChecklistResponse>(`/games/${id}/preseason-checklist`),
   startSeason: (id: number) =>
     req<GameSummary>(`/games/${id}/start-season`, { method: 'POST' }),
   advanceMatchday: (id: number) =>
