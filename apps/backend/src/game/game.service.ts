@@ -23,6 +23,8 @@ import {
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
   cultivateArraigo as engineCultivateArraigo,
+  vetoTransfer as engineVetoTransfer,
+  cancelTransferVeto as engineCancelTransferVeto,
   emergencyMeeting as engineEmergencyMeeting,
   financialHealth,
   negotiableTeams,
@@ -54,6 +56,15 @@ import {
   editCupParticipants as engineEditCupParticipants,
   teamFinancialHealth,
   rescueTeam as engineRescueTeam,
+  makeRng,
+  randomTeamName,
+  markMailRead as engineMarkMailRead,
+  markAllMailRead as engineMarkAllMailRead,
+  unreadMailCount,
+  resolveDemand as engineResolveDemand,
+  preseasonChecklist,
+  preseasonBlockers,
+  validateLevelingPlan,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -64,6 +75,10 @@ import type {
   GameListItem,
   GameSummary,
   HistoryResponse,
+  FederationLogResponse,
+  MailboxResponse,
+  PreseasonChecklistResponse,
+  LevelingPlan,
   CreateCupRequest,
   ComplianceResponse,
   CupsResponse,
@@ -180,6 +195,9 @@ export class GameService {
       impulsesPerSeason: state.impulsesPerSeason,
       pendingEventsCount: pendingEvents(state).length,
       normBreachCount: normBreaches(state).length,
+      unreadMailCount: unreadMailCount(state),
+      boardConfidence: state.boardConfidence ?? { value: 60, history: [] },
+      gameOver: state.gameOver ?? null,
       reviewsUsedThisSeason: state.actionHistory.filter(
         (a) => a.year === state.year && a.type === 'call_review',
       ).length,
@@ -221,6 +239,7 @@ export class GameService {
           teamName: state.teams.find(t => t.id === state.players.find(p => p.id === g.playerId)?.teamId)?.name ?? '',
         })),
       })),
+      transferVetoes: state.transferVetoes ?? [],
     };
   }
 
@@ -235,9 +254,10 @@ export class GameService {
       if (c >= 3) throw new BadRequestException('GAME_LIMIT_REACHED');
     }
     const seed = input.seed ?? Math.floor(Math.random() * 2_147_483_647);
-    const world = generateWorld(seed);
+    const world = generateWorld(seed, { size: input.worldSize ?? 'estandar' });
     const state = engineCreateGame(seed, {
-      playerFederationName: world.federationName,
+      playerFederationName: input.federationName?.trim() || world.federationName,
+      commissionerName: input.commissionerName?.trim() || undefined,
       confederations: world.confederations,
       teams: world.teams.map((t) => ({
         name: t.name,
@@ -253,10 +273,14 @@ export class GameService {
         name: r.name,
         prestige: r.prestige,
         confederationId: r.confederationId,
-        teams: r.teams.map((rt) => ({
-          name: rt.name,
-          strength: rt.strength,
-          arraigo: rt.arraigo,
+        divisions: r.divisions.map((d) => ({
+          orden: d.orden,
+          name: d.name,
+          teams: d.teams.map((rt) => ({
+            name: rt.name,
+            strength: rt.strength,
+            arraigo: rt.arraigo,
+          })),
         })),
       })),
     });
@@ -316,20 +340,30 @@ export class GameService {
           .values(rivalFeds.map((r) => ({ gameId: game.id, federationId: r.fedDbId!, name: r.rival.name })))
           .returning({ id: s.leagues.id });
 
-        const rivalDivRows = await tx
-          .insert(s.divisions)
-          .values(
-            rivalFeds.map((r, i) => ({
+        // Flatten all divisions across all rival federations, preserving order for mapping.
+        const divMeta: Array<{ engFedId: number; orden: number }> = [];
+        const divInserts: Array<{ gameId: number; leagueId: number; name: string; orden: number; plazas: number }> = [];
+        rivalFeds.forEach((r, i) => {
+          for (const div of r.rival.divisions) {
+            divMeta.push({ engFedId: r.engFedId, orden: div.orden });
+            divInserts.push({
               gameId: game.id,
               leagueId: rivalLeagueRows[i].id,
-              name: r.rival.name,
-              orden: 1,
-              plazas: r.rival.teams.length,
-            })),
-          )
+              name: div.name,
+              orden: div.orden,
+              plazas: div.teams.length,
+            });
+          }
+        });
+
+        const rivalDivRows = await tx
+          .insert(s.divisions)
+          .values(divInserts)
           .returning({ id: s.divisions.id });
 
-        rivalFeds.forEach((r, i) => rivalDivByOrden.set(`${r.engFedId}:1`, rivalDivRows[i].id));
+        rivalDivRows.forEach((row, i) =>
+          rivalDivByOrden.set(`${divMeta[i].engFedId}:${divMeta[i].orden}`, row.id),
+        );
       }
 
       // Compute all team insert values (preserves leagueIdx order).
@@ -527,11 +561,45 @@ export class GameService {
     }
   }
 
+  // Fase 14.8: once the commissioner is dismissed the game is over — block any
+  // further progression (enforced at the shell; the engine only sets the flag).
+  private assertNotGameOver(state: GameState): void {
+    if (state.gameOver) {
+      throw new BadRequestException({
+        code: 'GAME_OVER',
+        message: state.gameOver.message,
+        reason: state.gameOver.reason,
+      });
+    }
+  }
+
+  // Fase 14.3: the mandatory pre-season checklist is enforced here (imperative
+  // shell), not in the pure engine — so unit tests / golden can still start a
+  // season without wiring prizes.
+  private assertPreseasonReady(state: GameState): void {
+    const blockers = preseasonBlockers(state);
+    if (blockers.length > 0) {
+      throw new BadRequestException({
+        code: 'PRESEASON_INCOMPLETE',
+        message: `Faltan requisitos para comenzar: ${blockers.map((b) => b.label).join('; ')}`,
+        blockers,
+      });
+    }
+  }
+
+  async getPreseasonChecklist(gameId: number): Promise<PreseasonChecklistResponse> {
+    const state = await this.repo.loadState(gameId);
+    const items = preseasonChecklist(state);
+    return { items, ready: items.every((i) => !i.blocking || i.done) };
+  }
+
   // Build the season's calendar and start the playable phase (§4.8).
   async startSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertPretemporada(state, 'comenzar la temporada');
+      this.assertPreseasonReady(state);
       const next = engineStartSeason(state);
       await this.repo.saveState(tx, gameId, next);
       return this.summaryFrom(gameId, next);
@@ -541,6 +609,7 @@ export class GameService {
   async advanceMatchday(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertTemporada(state, 'avanzar la jornada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceMatchday(state);
@@ -643,12 +712,41 @@ export class GameService {
     });
   }
 
+  async vetoTransfer(gameId: number, playerId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      this.assertPretemporada(state, 'vetar traspaso');
+      const next = engineVetoTransfer(state, playerId);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo vetar: jugador no encontrado en tu federación, límite de 2 vetos alcanzado, o ya está vetado',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async cancelTransferVeto(gameId: number, playerId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      this.assertPretemporada(state, 'cancelar veto');
+      const next = engineCancelTransferVeto(state, playerId);
+      if (next === state) {
+        throw new BadRequestException('No hay veto activo para este jugador');
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
   // Simulate the remaining matchdays to the end of the season and STOP. The
   // final table stays visible so the player can review it before closing
   // (this is the validated prototype loop: advance -> see table -> close).
   async advanceSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(state);
       this.assertTemporada(state, 'avanzar la temporada');
       this.assertNoPendingEvents(state);
       const next = engineAdvanceSeason(state);
@@ -662,6 +760,7 @@ export class GameService {
   async closeSeason(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const finished = await this.repo.loadState(gameId, tx);
+      this.assertNotGameOver(finished);
       if (finished.phase !== 'temporada' || !finished.seasonOver) {
         throw new BadRequestException('Season is not finished yet');
       }
@@ -935,7 +1034,7 @@ export class GameService {
     };
   }
 
-  async runLevelingLeague(gameId: number): Promise<StructureResponse> {
+  async runLevelingLeague(gameId: number, plan?: LevelingPlan): Promise<StructureResponse> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
       this.assertPretemporada(state, 'celebrar la liga de nivelación');
@@ -944,7 +1043,15 @@ export class GameService {
           'Tesorería en negativo: no puedes permitirte expandir la estructura (§5)',
         );
       }
-      const next = engineRunLevelingLeague(state);
+      // Fase 14.7: validate a supplied plan against the real pool for a clear 400.
+      if (plan) {
+        const poolSize = state.teams.filter(
+          (t) => t.federationId === state.playerFederationId,
+        ).length;
+        const reason = validateLevelingPlan(plan, poolSize);
+        if (reason) throw new BadRequestException(`Plan de nivelación inválido: ${reason}`);
+      }
+      const next = engineRunLevelingLeague(state, plan);
       const map = await this.repo.engineToDbTeam(gameId, tx);
       const leagueId = await this.playerLeagueId(gameId, tx);
       const playerDivisionsNext = next.divisions.filter(
@@ -990,6 +1097,16 @@ export class GameService {
         pending: pendingIntegrationTeams(next).map(toDto),
       };
     });
+  }
+
+  // Suggest a random, unused club name for the create-team modal (Fase 14.2).
+  // Read-only: uses an ephemeral RNG so it never touches the simulation stream
+  // (state.rng) — keeping the golden master deterministic.
+  async randomTeamName(gameId: number): Promise<{ name: string }> {
+    const state = await this.repo.loadState(gameId);
+    const used = new Set(state.teams.map((t) => t.name));
+    const rng = makeRng((Date.now() ^ (state.teams.length * 0x9e3779b9)) >>> 0);
+    return { name: randomTeamName(rng, used) };
   }
 
   async createOwnTeam(
@@ -1438,8 +1555,8 @@ export class GameService {
     const teamsForFed = !isPlayer
       ? state.teams
           .filter((t) => t.federationId === federationId)
-          .sort((a, b) => b.strength - a.strength)
-          .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo }))
+          .sort((a, b) => (a.divisionOrden ?? 99) - (b.divisionOrden ?? 99) || b.strength - a.strength)
+          .map((t) => ({ teamId: t.id, name: t.name, strength: t.strength, arraigo: t.arraigo, divisionOrden: t.divisionOrden ?? undefined }))
       : undefined;
 
     const seasonHistory = !isPlayer
@@ -1749,8 +1866,12 @@ export class GameService {
     const state = await this.repo.loadState(gameId);
     const map = await this.repo.engineToDbTeam(gameId);
     const fedName = new Map(state.federations.map((f) => [f.id, f]));
+    const divNameByKey = new Map(
+      state.divisions.map((d) => [`${d.federationId}:${d.orden}`, d.name ?? `División ${d.orden}`]),
+    );
     const teams = negotiableTeams(state).map((t) => {
       const owner = fedName.get(t.federationId);
+      const divOrden = t.divisionOrden ?? 1;
       return {
         teamId: map.get(t.id) ?? t.id,
         name: t.name,
@@ -1759,6 +1880,8 @@ export class GameService {
         tier: tierOf(owner?.prestige ?? 0),
         currentFederationId: t.federationId,
         currentFederationName: owner?.name ?? '—',
+        divisionOrden: divOrden,
+        divisionName: divNameByKey.get(`${t.federationId}:${divOrden}`) ?? `División ${divOrden}`,
       };
     });
     return { playerTier: playerTier(state), teams };
@@ -2036,15 +2159,36 @@ export class GameService {
       calidad: t.calidad,
       ...(t.isInternational && {
         isInternational: t.isInternational,
-        fromFederationName: t.fromFederationName,
+        ...(t.fromFederationName && { fromFederationName: t.fromFederationName }),
+        ...(t.toFederationName && { toFederationName: t.toFederationName }),
       }),
     }));
     // Latest year present in the log; 0 when there's no history yet.
     const latestYear = dto.reduce((acc, t) => Math.max(acc, t.year), 0);
+
+    // Build veto candidates: high-quality players in player federation
+    const playerTeamIds = new Set(
+      state.teams
+        .filter(t => t.federationId === state.playerFederationId && t.divisionOrden !== null)
+        .map(t => t.id),
+    );
+    const teamById = new Map(state.teams.map(t => [t.id, t]));
+    const vetoCandidates = state.players
+      .filter(p => playerTeamIds.has(p.teamId) && p.calidad >= 55)
+      .sort((a, b) => b.calidad - a.calidad)
+      .map(p => ({
+        playerId: p.id,
+        playerName: p.name,
+        calidad: p.calidad,
+        teamId: map.get(p.teamId) ?? p.teamId,
+        teamName: teamById.get(p.teamId)?.name ?? '',
+      }));
+
     return {
       year: latestYear,
       entries: dto.filter((t) => t.year === latestYear),
       history: dto,
+      vetoCandidates,
     };
   }
 
@@ -2609,6 +2753,84 @@ export class GameService {
       await this.repo.saveState(tx, gameId, next);
       return this.cupsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
     });
+  }
+
+  private buildMailboxResponse(state: GameState): MailboxResponse {
+    // Newest first; unread ones bubble to the top within the same recency.
+    const messages = [...(state.mailbox ?? [])].sort(
+      (a, b) => b.id - a.id,
+    );
+    const teamById = new Map(state.teams.map((t) => [t.id, t]));
+    const demands = (state.clubDemands ?? [])
+      .filter((d) => !d.resolved)
+      .map((d) => {
+        const team = teamById.get(d.teamId);
+        return {
+          id: d.id,
+          teamId: d.teamId,
+          teamName: team?.name ?? 'Desconocido',
+          teamArraigo: team?.arraigo ?? 0,
+          type: d.type,
+          year: d.year,
+          createdMatchday: d.createdMatchday,
+          deadlineMatchday: d.deadlineMatchday,
+          amount: d.amount,
+          resolved: d.resolved,
+          satisfied: d.satisfied,
+        };
+      });
+    return { messages, unread: unreadMailCount(state), demands };
+  }
+
+  async resolveDemand(
+    gameId: number,
+    demandId: number,
+    accept: boolean,
+    amount?: number,
+  ): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineResolveDemand(state, demandId, accept, amount);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo resolver la petición: ya resuelta o fondos insuficientes.',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
+    });
+  }
+
+  async getMailbox(gameId: number): Promise<MailboxResponse> {
+    const state = await this.repo.loadState(gameId);
+    return this.buildMailboxResponse(state);
+  }
+
+  async markMailRead(gameId: number, msgId: number): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineMarkMailRead(state, msgId);
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
+    });
+  }
+
+  async markAllMailRead(gameId: number): Promise<MailboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineMarkAllMailRead(state);
+      await this.repo.saveState(tx, gameId, next);
+      return this.buildMailboxResponse(next);
+    });
+  }
+
+  async getFederationLog(gameId: number): Promise<FederationLogResponse> {
+    const state = await this.repo.loadState(gameId);
+    // Newest first for the timeline UI.
+    const entries = [...(state.federationLog ?? [])].sort(
+      (a, b) => b.year - a.year || b.id - a.id,
+    );
+    return { entries };
   }
 
   async getCommissionerReports(gameId: number): Promise<CommissionerReportsResponse> {

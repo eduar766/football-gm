@@ -37,6 +37,21 @@ export interface Division {
   orden: number;
   name: string;
   federationId: number; // which federation owns this division (player or rival)
+  // Fase 14.7: per-division schedule format. Falls back to the global
+  // leagueFormat when absent (older saves before the leveling-plan feature).
+  format?: LeagueFormat;
+}
+
+// Fase 14.7: a player-defined structure applied when running the leveling
+// league — chooses how many divisions, their sizes, and their format.
+export interface LevelingPlanDivision {
+  orden: number;
+  name?: string;
+  size: number; // how many teams land in this division
+  format: LeagueFormat;
+}
+export interface LevelingPlan {
+  divisions: LevelingPlanDivision[];
 }
 
 // Club sponsorship contract (autonomous — signed by the club, not the commissioner).
@@ -87,7 +102,6 @@ export interface Team {
   // Strength of the club's academy/reserve side (§4.4 youth competitions). Set
   // from the academy rating; falls back to a value below the first team.
   youthStrength: number;
-  wageCap: number;
   stadiumCapacity: number;
   academia: number;
   // Club finances (team-level, independent of federation treasury).
@@ -334,6 +348,8 @@ export interface Headline {
   text: string;
   teamId: number | null;
   importance: number; // 1-3 (3 = most prominent)
+  isRival?: boolean;          // true when the headline originates from a rival federation
+  rivalFederationId?: number; // set when isRival === true
 }
 
 export interface SeasonChronicle {
@@ -491,9 +507,10 @@ export interface TransferEntry {
   toTeamName: string;
   calidad: number;
   transferFee: number;
-  // Fase 11.3: set when the player arrives from a rival federation.
+  // Fase 11.3: set when the transfer crosses federation boundaries.
   isInternational?: boolean;
-  fromFederationName?: string;
+  fromFederationName?: string; // set when player arrives from a rival federation
+  toFederationName?: string;   // set when player leaves to a rival federation
 }
 
 // Mid-season commissioner actions (Proposal 1: Mid-Season Agency).
@@ -556,6 +573,7 @@ export interface RivalSeasonRecord {
   runnerUpName: string | null;
   topScorer: { playerId: number; name: string; teamName: string; goals: number } | null;
   relegated: string[];
+  promoted: string[]; // teams that came up from div2 this season
   points: number; // champion's final league points
   // Fase 11.4: winner of the top-4 mini-cup simulated at closeSeason.
   cupWinner?: { name: string; teamId: number };
@@ -607,6 +625,8 @@ export interface GameState {
   // `federations` (kept in sync); the season-close delta drives it.
   prestige: number;
   playerFederationId: number;
+  // Player-chosen commissioner name (§ identity). Purely cosmetic/narrative.
+  commissionerName: string;
   leagueFormat: LeagueFormat;
   federations: Federation[];
   divisions: Division[];
@@ -703,6 +723,26 @@ export interface GameState {
   rescueLog: RescueEntry[];
   // Counter for team sponsor IDs (independent of federation contract IDs).
   nextTeamSponsorId: number;
+  // Fase 13.3: player IDs protected from outgoing inter-league transfer this season.
+  transferVetoes: number[];
+  // Fase 13.4: solidarity revenue accumulated from outgoing inter-league transfers
+  // during startSeason; consumed by processEconomy at closeSeason.
+  outgoingTransferRevenue: number;
+  // Fase 14.6: narrative timeline of the player's federation.
+  federationLog: FederationLogEntry[];
+  nextFederationLogId: number;
+  // Fase 14.4: Commissioner inbox.
+  mailbox: MailboxMessage[];
+  nextMailboxId: number;
+  // Fase 14.5: club requests + arraigo-driven exodus tracking.
+  clubDemands: ClubDemand[];
+  nextDemandId: number;
+  lowArraigoSeasons: Record<number, number>; // teamId → consecutive low-arraigo closes
+  demandsRng: RngState; // independent stream so demands never perturb events/match
+  // Fase 14.8: board confidence + defeat.
+  boardConfidence: BoardConfidence;
+  gameOver: GameOver | null;
+  negativeTreasurySeasons: number;
 }
 
 export interface RecordBook {
@@ -722,6 +762,93 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// Fase 14.8: board confidence + defeat (destitution).
+export type GameOverReason =
+  | 'destitucion_confianza'
+  | 'quiebra'
+  | 'exodo'
+  | 'mandatos'
+  | 'liga_vacia';
+
+export interface BoardConfidenceEntry {
+  year: number;
+  value: number;
+  reason: string;
+}
+
+export interface BoardConfidence {
+  value: number; // 0-100
+  history: BoardConfidenceEntry[];
+}
+
+export interface GameOver {
+  reason: GameOverReason;
+  year: number;
+  message: string;
+}
+
+// Fase 14.5: club requests to the commissioner. Ignoring them erodes arraigo;
+// chronic low arraigo makes a club leave the federation.
+export type ClubDemandType = 'rescate' | 'inversion_estadio';
+
+export interface ClubDemand {
+  id: number;
+  teamId: number;
+  type: ClubDemandType;
+  year: number;
+  createdMatchday: number;
+  deadlineMatchday: number;
+  amount: number | null;     // € requested (rescue injection / stadium works)
+  resolved: boolean;
+  satisfied: boolean | null; // true if attended in time, false if ignored/rejected
+}
+
+// Fase 14.4: Commissioner inbox message.
+export type MailboxCategory = 'peticion' | 'evento' | 'aviso' | 'hito' | 'financiero';
+export type MailboxStatus = 'sin_leer' | 'leido' | 'resuelto' | 'caducado';
+export type MailboxActionKind = 'rescue_request' | 'demand' | 'event';
+
+export interface MailboxMessage {
+  id: number;
+  year: number;
+  matchday: number; // 0 in pretemporada
+  category: MailboxCategory;
+  title: string;
+  body: string;
+  status: MailboxStatus;
+  // If actionable, describes the linked domain object:
+  actionKind: MailboxActionKind | null;
+  refId: number | null; // GameEvent id / demand id / team id
+  teamId: number | null;
+  deadlineMatchday: number | null; // if it expires unresolved → consequence (14.5)
+  createdAtMatchday: number;
+}
+
+// Fase 14.6: narrative timeline of the player's federation.
+export type FederationLogType =
+  | 'prestige_snapshot'    // season close: prestige before→after
+  | 'sponsor_signed'       // commercial contract signed
+  | 'negotiation_started'  // adhesion negotiation opened
+  | 'negotiation_effective' // team joined the federation
+  | 'team_created'         // club built from scratch
+  | 'team_left'            // club left the federation (Fase 14.5)
+  | 'rescue'               // commissioner injected cash into a club
+  | 'norm_created'         // governance rule defined
+  | 'sanction'             // a club was sanctioned
+  | 'mandate_result'       // board mandate met / failed
+  | 'title';               // player-league champion crowned
+
+export interface FederationLogEntry {
+  id: number;
+  year: number;
+  matchday: number;      // 0 = pretemporada / season close
+  type: FederationLogType;
+  title: string;
+  detail: string;
+  value: number | null;  // € or prestige points, depending on type
+  teamId: number | null;
 }
 
 export interface FederationCoefficient {
@@ -745,16 +872,21 @@ export interface CreateGameOptions {
     academia?: number;
     squad?: PlayerSeed[];
   }>;
-  // Rival federations and the external teams they own (negotiation targets).
+  // Rival federations with their divisional structure (negotiation targets).
   rivals?: Array<{
     name: string;
     prestige: number;
     confederationId?: number;
-    teams: Array<{ name: string; strength: number; arraigo: number }>;
+    divisions: Array<{
+      orden: number;
+      name: string;
+      teams: Array<{ name: string; strength: number; arraigo: number }>;
+    }>;
   }>;
   // Fase 9: confederations + league structure for rival sim.
   confederations?: Array<Confederation & { leagues: Array<{ name: string; country: string; flag: string }> }>;
   playerFederationName?: string;
+  commissionerName?: string;
   impulsesPerSeason?: number;
   startingPrestige?: number;
   startingTreasury?: number;

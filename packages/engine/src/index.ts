@@ -11,6 +11,16 @@ export { CURRENT_SCHEMA_VERSION, migrateState } from './migrations';
 export { makeRng, randInt, rngNext } from './rng';
 export type { RngState } from './rng';
 
+// ── Name pools & deterministic name generators (world-gen + create-team) ──────
+export {
+  randomTeamName,
+  randomFederationName,
+  TEAM_PREFIXES,
+  TEAM_PLACES,
+  FEDERATION_ADJECTIVES,
+  FEDERATION_REGIONS,
+} from './names';
+
 // ── Main season loop ─────────────────────────────────────────────────────────
 export {
   CREATE_TEAM_COST,
@@ -26,13 +36,17 @@ export {
   emergencyMeeting,
   postponeMatchday,
   cultivateArraigo,
+  vetoTransfer,
+  cancelTransferVeto,
 } from './engine';
 
 // ── Structural actions (pretemporada) ────────────────────────────────────────
 export {
   pendingIntegrationTeams,
   runLevelingLeague,
+  validateLevelingPlan,
   MAX_DIVISION_SIZE,
+  MAX_LEVELING_DIVISIONS,
   PROMOTION_RELEGATION,
 } from './structure';
 
@@ -89,6 +103,16 @@ export { generateHeadlines, detectRivalries } from './headlines';
 
 // ── Events ───────────────────────────────────────────────────────────────────
 export { pendingEvents, resolveEvent } from './events';
+
+// ── Mailbox (Fase 14.4) ──────────────────────────────────────────────────────
+export { markMailRead, markAllMailRead, unreadMailCount } from './mailbox';
+
+// ── Club demands (Fase 14.5) ─────────────────────────────────────────────────
+export { resolveDemand } from './demands';
+
+// ── Pre-season checklist (Fase 14.3) ─────────────────────────────────────────
+export { preseasonChecklist, preseasonBlockers } from './preseason';
+export type { ChecklistItem } from './preseason';
 
 // ── Transfers ────────────────────────────────────────────────────────────────
 export { teamStrengthFromSquad, transfersForYear } from './transfers';

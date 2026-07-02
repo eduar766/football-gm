@@ -4,6 +4,7 @@
 // accumulate deterministically without changing simulation outcomes.
 
 import { rngNext, type RngState } from './rng';
+import { pushMail, markMailByRef } from './mailbox';
 import type {
   EventAction,
   EventSeverity,
@@ -11,6 +12,34 @@ import type {
   GameEvent,
   GameState,
 } from './types';
+
+// Human label for the inbox subject line.
+const EVENT_TITLES: Record<EventType, string> = {
+  arbitraje_dudoso: 'Polémica arbitral',
+  incidente_aficion: 'Incidente de aficionados',
+  declaraciones_polemicas: 'Declaraciones polémicas',
+  doping_positivo: 'Positivo por doping',
+  conflicto_jugadores: 'Conflicto de jugadores',
+  crisis_economica_club: 'Crisis económica de un club',
+  escandalo_directiva: 'Escándalo en una directiva',
+  manipulacion_resultados: 'Presunta manipulación de resultados',
+};
+
+// Mirror a spawned event into the commissioner inbox as an actionable message.
+function mailForEvent(s: GameState, event: GameEvent): void {
+  pushMail(s, {
+    year: event.year,
+    matchday: event.matchday,
+    category: 'evento',
+    title: EVENT_TITLES[event.tipo],
+    body: event.message,
+    actionKind: 'event',
+    refId: event.id,
+    teamId: event.teamId,
+    deadlineMatchday: null,
+    createdAtMatchday: event.matchday,
+  });
+}
 
 export const EVENT_SPAWN_PROB = 0.04;
 const INVESTIGATION_COST = 1_000_000;
@@ -91,7 +120,7 @@ export function maybeSpawnEvent(s: GameState, matchday: number): void {
   const tipo = pickType(s.eventsRng);
   const teamId = pickTeamId(s.eventsRng, competingPlayerTeamIds(s));
   const teamName = s.teams.find((t) => t.id === teamId)?.name ?? null;
-  s.events.push({
+  const event: GameEvent = {
     id: s.nextEventId++,
     year: s.year,
     matchday,
@@ -102,7 +131,9 @@ export function maybeSpawnEvent(s: GameState, matchday: number): void {
     resolvedAction: null,
     severity: SEVERITY_MAP[tipo],
     chainedFromId: null,
-  });
+  };
+  s.events.push(event);
+  mailForEvent(s, event);
 }
 
 function mirrorPlayerPrestige(s: GameState): void {
@@ -178,6 +209,7 @@ export function resolveEvent(
     event.status = 'resuelto_ignorar';
   }
   event.resolvedAction = action;
+  markMailByRef(s, 'event', event.id, 'resuelto');
   return s;
 }
 
@@ -188,6 +220,7 @@ export function expireStaleEvents(s: GameState, closedYear: number): void {
   for (const ev of s.events) {
     if (ev.status === 'pendiente' && ev.year <= closedYear) {
       ev.status = 'caducado';
+      markMailByRef(s, 'event', ev.id, 'caducado');
       penalty += PRESTIGE_CADUCO_HIT;
       if (ev.severity === 'alta') penalty += 2;
     }
@@ -249,7 +282,7 @@ export function maybeChainEvents(s: GameState, prevYear: number): void {
       const teamName = ev.teamId
         ? (s.teams.find((t) => t.id === ev.teamId)?.name ?? null)
         : null;
-      s.events.push({
+      const chained: GameEvent = {
         id: s.nextEventId++,
         year: s.year,
         matchday: 1,
@@ -260,7 +293,9 @@ export function maybeChainEvents(s: GameState, prevYear: number): void {
         resolvedAction: null,
         severity: SEVERITY_MAP[rule.to],
         chainedFromId: ev.id,
-      });
+      };
+      s.events.push(chained);
+      mailForEvent(s, chained);
     }
   }
 }

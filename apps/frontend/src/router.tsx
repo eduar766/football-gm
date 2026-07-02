@@ -18,6 +18,7 @@ const StructurePage = lazy(() => import('./routes/StructurePage').then((m) => ({
 const EconomyPage = lazy(() => import('./routes/EconomyPage').then((m) => ({ default: m.EconomyPage })));
 const NormsPage = lazy(() => import('./routes/NormsPage').then((m) => ({ default: m.NormsPage })));
 const EventsPage = lazy(() => import('./routes/EventsPage').then((m) => ({ default: m.EventsPage })));
+const MailboxPage = lazy(() => import('./routes/MailboxPage').then((m) => ({ default: m.MailboxPage })));
 const CupsPage = lazy(() => import('./routes/CupsPage').then((m) => ({ default: m.CupsPage })));
 const TransfersPage = lazy(() => import('./routes/TransfersPage').then((m) => ({ default: m.TransfersPage })));
 const PrizesPage = lazy(() => import('./routes/PrizesPage').then((m) => ({ default: m.PrizesPage })));
@@ -140,6 +141,11 @@ const eventsRoute = createRoute({
   path: 'events',
   component: () => <SuspenseWrapper><EventsPage /></SuspenseWrapper>,
 });
+const mailboxRoute = createRoute({
+  getParentRoute: () => gameRoute,
+  path: 'mailbox',
+  component: () => <SuspenseWrapper><MailboxPage /></SuspenseWrapper>,
+});
 const cupsRoute = createRoute({
   getParentRoute: () => gameRoute,
   path: 'cups',
@@ -192,6 +198,7 @@ const routeTree = rootRoute.addChildren([
       economyRoute,
       normsRoute,
       eventsRoute,
+      mailboxRoute,
       cupsRoute,
       historyRoute,
       transfersRoute,

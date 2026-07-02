@@ -99,7 +99,7 @@ describe('pending integration via leveling league', () => {
         {
           name: 'Rival',
           prestige: 10,
-          teams: [{ name: 'Fichaje', strength: 60, arraigo: 4 }],
+          divisions: [{ orden: 1, name: 'Liga', teams: [{ name: 'Fichaje', strength: 60, arraigo: 4 }] }],
         },
       ],
     });

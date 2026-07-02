@@ -14,6 +14,9 @@ import type {
   GameListItem,
   GameSummary,
   HistoryResponse,
+  FederationLogResponse,
+  MailboxResponse,
+  PreseasonChecklistResponse,
   LoginResponse,
   MarketResponse,
   NegotiationDto,
@@ -23,6 +26,7 @@ import type {
   PrizesResponse,
   StandingsResponse,
   StructureResponse,
+  LevelingPlan,
   TransfersResponse,
   TeamDetail,
   TeamListItem,
@@ -92,6 +96,8 @@ export const api = {
     req<{ id: number }>('/games', { method: 'POST', body: JSON.stringify(body) }),
   deleteGame: (id: number) => req<{ ok: boolean }>(`/games/${id}`, { method: 'DELETE' }),
   summary: (id: number) => req<GameSummary>(`/games/${id}`),
+  preseasonChecklist: (id: number) =>
+    req<PreseasonChecklistResponse>(`/games/${id}/preseason-checklist`),
   startSeason: (id: number) =>
     req<GameSummary>(`/games/${id}/start-season`, { method: 'POST' }),
   advanceMatchday: (id: number) =>
@@ -103,18 +109,35 @@ export const api = {
   standings: (id: number, division = 1) =>
     req<StandingsResponse>(`/games/${id}/standings?division=${division}`),
   structure: (id: number) => req<StructureResponse>(`/games/${id}/structure`),
-  runLevelingLeague: (id: number) =>
-    req<StructureResponse>(`/games/${id}/leveling-league`, { method: 'POST' }),
+  runLevelingLeague: (id: number, plan?: LevelingPlan) =>
+    req<StructureResponse>(`/games/${id}/leveling-league`, {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    }),
   createOwnTeam: (id: number, name: string) =>
     req<StructureResponse>(`/games/${id}/teams`, {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
+  randomTeamName: (id: number) =>
+    req<{ name: string }>(`/games/${id}/random-team-name`),
   teams: (id: number) => req<TeamListItem[]>(`/games/${id}/teams`),
   team: (id: number, teamId: number) =>
     req<TeamDetail>(`/games/${id}/teams/${teamId}`),
   federation: (id: number) => req<FederationOverview>(`/games/${id}/federation`),
   history: (id: number) => req<HistoryResponse>(`/games/${id}/history`),
+  federationLog: (id: number) =>
+    req<FederationLogResponse>(`/games/${id}/federation-log`),
+  mailbox: (id: number) => req<MailboxResponse>(`/games/${id}/mailbox`),
+  markMailRead: (id: number, msgId: number) =>
+    req<MailboxResponse>(`/games/${id}/mailbox/${msgId}/read`, { method: 'POST' }),
+  markAllMailRead: (id: number) =>
+    req<MailboxResponse>(`/games/${id}/mailbox/read-all`, { method: 'POST' }),
+  resolveDemand: (id: number, demandId: number, accept: boolean, amount?: number) =>
+    req<MailboxResponse>(`/games/${id}/demands/${demandId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ accept, amount }),
+    }),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
   federationById: (id: number, fedId: number) =>
     req<FederationOverview>(`/games/${id}/federations/${fedId}`),
@@ -232,4 +255,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ teamId }),
     }),
+  vetoTransfer: (id: number, playerId: number) =>
+    req<GameSummary>(`/games/${id}/veto-transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ playerId }),
+    }),
+  cancelTransferVeto: (id: number, playerId: number) =>
+    req<GameSummary>(`/games/${id}/veto-transfer/${playerId}`, { method: 'DELETE' }),
 };

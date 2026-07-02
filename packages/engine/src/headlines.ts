@@ -11,7 +11,7 @@ export function generateHeadlines(state: GameState): Headline[] {
   const teamById = new Map(state.teams.map((t) => [t.id, t]));
   const lastMd = state.currentMatchday;
 
-  // ── Last matchday events ─────────────────────────────────────────────────
+  // ── Last matchday events (player federation) ─────────────────────────────
   const lastReports = state.matchReports.filter(
     (r) => r.matchday === lastMd && r.divisionOrden === 1,
   );
@@ -44,7 +44,7 @@ export function generateHeadlines(state: GameState): Headline[] {
     }
   }
 
-  // ── Team streaks (last 4 results) ────────────────────────────────────────
+  // ── Team streaks (last 4 results, player federation) ─────────────────────
   const playerTeams = state.teams.filter(
     (t) => t.divisionOrden === 1 && t.federationId === state.playerFederationId,
   );
@@ -80,7 +80,55 @@ export function generateHeadlines(state: GameState): Headline[] {
     }
   }
 
-  return headlines.sort((a, b) => b.importance - a.importance).slice(0, 4);
+  // ── Rival world headlines (max 3) ────────────────────────────────────────
+  const rivalResults = state.rivalLastMatchdayResults ?? [];
+  const rivalHeadlines: Headline[] = [];
+  const fedById = new Map(state.federations.map(f => [f.id, f]));
+
+  for (const r of rivalResults) {
+    if (r.divisionOrden !== 1) continue; // only top-flight rival news
+    const fedName = fedById.get(r.federationId)?.name ?? '';
+
+    const diff = Math.abs(r.homeGoals - r.awayGoals);
+    const winnerName = r.homeGoals > r.awayGoals ? r.homeName : r.awayGoals > r.homeGoals ? r.awayName : null;
+    const loserName = r.homeGoals > r.awayGoals ? r.awayName : r.awayGoals > r.homeGoals ? r.homeName : null;
+    const wGoals = r.homeGoals > r.awayGoals ? r.homeGoals : r.awayGoals;
+    const lGoals = r.homeGoals > r.awayGoals ? r.awayGoals : r.homeGoals;
+
+    if (diff >= 4 && winnerName && loserName) {
+      rivalHeadlines.push({
+        type: 'goleada',
+        text: `[${fedName}] Goleada: ${winnerName} aplasta a ${loserName} (${wGoals}–${lGoals})`,
+        teamId: null,
+        importance: 2,
+        rivalFederationId: r.federationId,
+        isRival: true,
+      });
+    } else if (r.isShock && winnerName && loserName) {
+      rivalHeadlines.push({
+        type: 'sorpresa',
+        text: `[${fedName}] Sorpresa: ${winnerName} derrota al favorito ${loserName}`,
+        teamId: null,
+        importance: 2,
+        rivalFederationId: r.federationId,
+        isRival: true,
+      });
+    }
+  }
+
+  // Shuffle rival headlines to avoid always showing the same federations
+  for (let i = rivalHeadlines.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rivalHeadlines[i], rivalHeadlines[j]] = [rivalHeadlines[j], rivalHeadlines[i]];
+  }
+
+  headlines.push(...rivalHeadlines.slice(0, 3));
+
+  return headlines.sort((a, b) => {
+    // Player-federation headlines first, then rivals
+    if ((a.isRival ?? false) !== (b.isRival ?? false)) return (a.isRival ? 1 : -1);
+    return b.importance - a.importance;
+  }).slice(0, 6);
 }
 
 // ── Chronicle generation (called from closeSeason) ───────────────────────────

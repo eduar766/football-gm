@@ -65,11 +65,21 @@ export type Tier = z.infer<typeof Tier>;
 
 /* ------------------------------------------------------ requests / loop */
 
+// World size: number of teams generated in the player's league (Fase 14.2).
+export const WorldSize = z.enum(['pequeno', 'estandar', 'grande']); // 10 / 15 / 20
+export type WorldSize = z.infer<typeof WorldSize>;
+
 export const CreateGameRequest = z.object({
   name: z.string().min(1).max(80),
   seed: z.number().int().nonnegative().optional(),
+  commissionerName: z.string().min(1).max(60).optional(),
+  federationName: z.string().min(1).max(60).optional(),
+  worldSize: WorldSize.optional(),
 });
 export type CreateGameRequest = z.infer<typeof CreateGameRequest>;
+
+export const RandomTeamNameResponse = z.object({ name: z.string() });
+export type RandomTeamNameResponse = z.infer<typeof RandomTeamNameResponse>;
 
 export const GameListItem = z.object({
   id: Id,
@@ -140,6 +150,8 @@ export const HeadlineDto = z.object({
   text: z.string(),
   teamId: Id.nullable(),
   importance: z.number().int(),
+  isRival: z.boolean().optional(),
+  rivalFederationId: z.number().int().optional(),
 });
 export type HeadlineDto = z.infer<typeof HeadlineDto>;
 
@@ -188,6 +200,31 @@ export const RivalMatchResultDto = z.object({
 export type RivalMatchResultDto = z.infer<typeof RivalMatchResultDto>;
 
 // Everything the dashboard header needs to render the current loop state.
+// Fase 14.8: board confidence + defeat.
+export const GameOverReason = z.enum([
+  'destitucion_confianza',
+  'quiebra',
+  'exodo',
+  'mandatos',
+  'liga_vacia',
+]);
+export type GameOverReason = z.infer<typeof GameOverReason>;
+
+export const BoardConfidenceDto = z.object({
+  value: z.number().int(),
+  history: z
+    .array(z.object({ year: z.number().int(), value: z.number().int(), reason: z.string() }))
+    .default([]),
+});
+export type BoardConfidenceDto = z.infer<typeof BoardConfidenceDto>;
+
+export const GameOverDto = z.object({
+  reason: GameOverReason,
+  year: z.number().int(),
+  message: z.string(),
+});
+export type GameOverDto = z.infer<typeof GameOverDto>;
+
 export const GameSummary = z.object({
   id: Id,
   name: z.string(),
@@ -201,6 +238,9 @@ export const GameSummary = z.object({
   impulsesPerSeason: z.number().int(),
   pendingEventsCount: z.number().int(),
   normBreachCount: z.number().int().default(0),
+  unreadMailCount: z.number().int().default(0),
+  boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
+  gameOver: GameOverDto.nullable().default(null),
   reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
@@ -210,6 +250,7 @@ export const GameSummary = z.object({
   lastChronicle: SeasonChronicleDto.nullable().default(null),
   rivalLastMatchday: z.array(RivalMatchResultDto).default([]),
   matchReports: z.array(MatchReportDto).default([]),
+  transferVetoes: z.array(z.number().int()).default([]),
 });
 export type GameSummary = z.infer<typeof GameSummary>;
 
@@ -391,6 +432,7 @@ export const FederationTeamItem = z.object({
   name: z.string(),
   strength: z.number().int(),
   arraigo: z.number().int(),
+  divisionOrden: z.number().int().optional(),
 });
 export type FederationTeamItem = z.infer<typeof FederationTeamItem>;
 
@@ -586,6 +628,130 @@ export const HistoryResponse = z.object({
 });
 export type HistoryResponse = z.infer<typeof HistoryResponse>;
 
+// Fase 14.6: federation narrative timeline.
+export const FederationLogType = z.enum([
+  'prestige_snapshot',
+  'sponsor_signed',
+  'negotiation_started',
+  'negotiation_effective',
+  'team_created',
+  'team_left',
+  'rescue',
+  'norm_created',
+  'sanction',
+  'mandate_result',
+  'title',
+]);
+export type FederationLogType = z.infer<typeof FederationLogType>;
+
+export const FederationLogEntryDto = z.object({
+  id: z.number().int(),
+  year: z.number().int(),
+  matchday: z.number().int(),
+  type: FederationLogType,
+  title: z.string(),
+  detail: z.string(),
+  value: z.number().nullable(),
+  teamId: z.number().int().nullable(),
+});
+export type FederationLogEntryDto = z.infer<typeof FederationLogEntryDto>;
+
+export const FederationLogResponse = z.object({
+  entries: z.array(FederationLogEntryDto),
+});
+export type FederationLogResponse = z.infer<typeof FederationLogResponse>;
+
+// Fase 14.4: Commissioner inbox.
+export const MailboxCategory = z.enum(['peticion', 'evento', 'aviso', 'hito', 'financiero']);
+export type MailboxCategory = z.infer<typeof MailboxCategory>;
+export const MailboxStatus = z.enum(['sin_leer', 'leido', 'resuelto', 'caducado']);
+export type MailboxStatus = z.infer<typeof MailboxStatus>;
+export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event']);
+export type MailboxActionKind = z.infer<typeof MailboxActionKind>;
+
+export const MailboxMessageDto = z.object({
+  id: z.number().int(),
+  year: z.number().int(),
+  matchday: z.number().int(),
+  category: MailboxCategory,
+  title: z.string(),
+  body: z.string(),
+  status: MailboxStatus,
+  actionKind: MailboxActionKind.nullable(),
+  refId: z.number().int().nullable(),
+  teamId: z.number().int().nullable(),
+  deadlineMatchday: z.number().int().nullable(),
+  createdAtMatchday: z.number().int(),
+});
+export type MailboxMessageDto = z.infer<typeof MailboxMessageDto>;
+
+// Fase 14.5: club requests.
+export const ClubDemandType = z.enum(['rescate', 'inversion_estadio']);
+export type ClubDemandType = z.infer<typeof ClubDemandType>;
+
+export const ClubDemandDto = z.object({
+  id: z.number().int(),
+  teamId: z.number().int(),
+  teamName: z.string(),
+  teamArraigo: z.number().int(),
+  type: ClubDemandType,
+  year: z.number().int(),
+  createdMatchday: z.number().int(),
+  deadlineMatchday: z.number().int(),
+  amount: z.number().nullable(),
+  resolved: z.boolean(),
+  satisfied: z.boolean().nullable(),
+});
+export type ClubDemandDto = z.infer<typeof ClubDemandDto>;
+
+export const MailboxResponse = z.object({
+  messages: z.array(MailboxMessageDto),
+  unread: z.number().int(),
+  demands: z.array(ClubDemandDto).default([]),
+});
+export type MailboxResponse = z.infer<typeof MailboxResponse>;
+
+export const ResolveDemandRequest = z.object({
+  accept: z.boolean(),
+  amount: z.number().int().nonnegative().optional(),
+});
+export type ResolveDemandRequest = z.infer<typeof ResolveDemandRequest>;
+
+// Fase 14.3: mandatory pre-season checklist.
+export const ChecklistItemDto = z.object({
+  id: z.string(),
+  label: z.string(),
+  done: z.boolean(),
+  blocking: z.boolean(),
+});
+export type ChecklistItemDto = z.infer<typeof ChecklistItemDto>;
+
+export const PreseasonChecklistResponse = z.object({
+  items: z.array(ChecklistItemDto),
+  ready: z.boolean(), // no blocking item is pending
+});
+export type PreseasonChecklistResponse = z.infer<typeof PreseasonChecklistResponse>;
+
+// Fase 14.7: configurable division structure for the leveling league.
+export const LeagueFormat = z.enum(['ida', 'ida_vuelta']);
+export type LeagueFormat = z.infer<typeof LeagueFormat>;
+
+export const LevelingPlanDivision = z.object({
+  orden: z.number().int().min(1).max(3),
+  name: z.string().max(40).optional(),
+  size: z.number().int().min(2),
+  format: LeagueFormat,
+});
+export const LevelingPlan = z.object({
+  divisions: z.array(LevelingPlanDivision).min(1).max(3),
+});
+export type LevelingPlan = z.infer<typeof LevelingPlan>;
+
+export const RunLevelingLeagueRequest = z.object({
+  plan: LevelingPlan.optional(),
+});
+export type RunLevelingLeagueRequest = z.infer<typeof RunLevelingLeagueRequest>;
+
 /* -------------------------------- commissioner: federations & market */
 
 export const FederationListItem = z.object({
@@ -617,6 +783,8 @@ export const MarketTeam = z.object({
   tier: Tier,
   currentFederationId: Id,
   currentFederationName: z.string(),
+  divisionOrden: z.number().int(),
+  divisionName: z.string(),
 });
 export type MarketTeam = z.infer<typeof MarketTeam>;
 
@@ -843,11 +1011,21 @@ export const TransferEntryDto = z.object({
   toTeamId: Id,
   toTeamName: z.string(),
   calidad: z.number().int(),
-  // Fase 11.3: inter-league arrivals from rival federations.
+  // Fase 11.3: inter-league transfers (arrivals and departures).
   isInternational: z.boolean().optional(),
-  fromFederationName: z.string().optional(),
+  fromFederationName: z.string().optional(), // set when player arrives from a rival league
+  toFederationName: z.string().optional(),   // set when player departs to a rival league
 });
 export type TransferEntryDto = z.infer<typeof TransferEntryDto>;
+
+export const VetoCandidate = z.object({
+  playerId: z.number().int(),
+  playerName: z.string(),
+  calidad: z.number().int(),
+  teamId: Id,
+  teamName: z.string(),
+});
+export type VetoCandidate = z.infer<typeof VetoCandidate>;
 
 export const TransfersResponse = z.object({
   year: z.number().int(),
@@ -855,6 +1033,8 @@ export const TransfersResponse = z.object({
   // All transfer history (across years), oldest first. Lets the UI show the
   // last window and link back to earlier ones if useful.
   history: z.array(TransferEntryDto),
+  // Players in the player federation with calidad ≥ 55 who could be poached.
+  vetoCandidates: z.array(VetoCandidate).default([]),
 });
 export type TransfersResponse = z.infer<typeof TransfersResponse>;
 
@@ -1155,9 +1335,7 @@ export type CreateInterLeagueCupRequest = z.infer<typeof CreateInterLeagueCupReq
 
 /* ----------------------------------------- league format (§4.4) */
 
-export const LeagueFormat = z.enum(['ida', 'ida_vuelta']);
-export type LeagueFormat = z.infer<typeof LeagueFormat>;
-
+// LeagueFormat is defined earlier (near the leveling-plan schemas).
 export const SetLeagueFormatRequest = z.object({ format: LeagueFormat });
 export type SetLeagueFormatRequest = z.infer<typeof SetLeagueFormatRequest>;
 
