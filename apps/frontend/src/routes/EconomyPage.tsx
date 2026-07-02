@@ -24,6 +24,7 @@ import {
   IconArrowDown,
   IconArrowRight,
   IconLifebuoy,
+  IconUsers,
 } from '@tabler/icons-react';
 import type { FinancialHealth } from '@football-gm/contracts';
 import { api } from '../api';
@@ -31,6 +32,7 @@ import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { money } from '../utils/format';
 import { EconomyChart } from '../components/EconomyChart';
+import { EmptyState } from '../components/EmptyState';
 
 const HEALTH: Record<FinancialHealth, { label: string; color: string; gradient: string }> = {
   saneada: { label: 'Saneada', color: 'green', gradient: 'linear-gradient(135deg, #059669, #10B981)' },
@@ -383,9 +385,11 @@ export function EconomyPage() {
               Contratos activos
             </Text>
             {e.contracts.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Sin contratos. Firma alguna oferta abajo.
-              </Text>
+              <EmptyState
+                icon={IconFileInvoice}
+                title="Sin contratos activos"
+                description="Firma alguna oferta comercial de abajo para generar ingresos recurrentes."
+              />
             ) : (
               <Table striped>
                 <Table.Thead>
@@ -538,7 +542,11 @@ export function EconomyPage() {
           Crea o ajusta la norma <em>tope_salarial</em> en Normas para fijar el límite.
         </Text>
         {!compliance.data || compliance.data.rows.length === 0 ? (
-          <Text c="dimmed" size="sm">Sin equipos en competición.</Text>
+          <EmptyState
+            icon={IconUsers}
+            title="Sin equipos en competición"
+            description="Cuando tu liga tenga equipos compitiendo verás aquí su cumplimiento del tope salarial."
+          />
         ) : (
           <Table striped>
             <Table.Thead>

@@ -17,6 +17,7 @@ import {
 import { api } from '../api';
 import { PalmaresChart } from '../components/PalmaresChart';
 import { PageHero } from '../components/PageHero';
+import { EmptyState } from '../components/EmptyState';
 
 const AWARD_LABEL: Record<AwardType, string> = {
   max_goleador: 'Máximo goleador',
@@ -483,11 +484,12 @@ function FederationTimelinePanel({
   if (loading) return <Skeleton height={300} radius="md" />;
   if (entries.length === 0) {
     return (
-      <Paper p="xl" radius="md" style={{ background: 'rgba(255,255,255,0.03)' }}>
-        <Text c="dimmed" ta="center">
-          Aún no hay hitos en la cronología de tu federación. Firma patrocinios,
-          crea equipos o cierra una temporada para empezar a construir tu historia.
-        </Text>
+      <Paper p="md" radius="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+        <EmptyState
+          icon={IconTimeline}
+          title="Tu federación aún no tiene historia"
+          description="Firma patrocinios, incorpora o crea equipos y cierra temporadas para empezar a construir tu cronología."
+        />
       </Paper>
     );
   }
@@ -681,10 +683,13 @@ function RecordBookPanel({ recordBook }: { recordBook: RecordBookDto }) {
 function RivalChampionsPanel({ champions }: { champions: Array<{ year: number; federationName: string; championName: string; points: number }> }) {
   if (champions.length === 0) {
     return (
-      <Paper p="xl" style={{ border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
-        <IconWorld size={40} color="rgba(255,255,255,0.15)" style={{ marginBottom: 12 }} />
-        <Text c="dimmed" fw={500}>Aún no hay campeonatos de otras federaciones.</Text>
-        <Text size="sm" c="dimmed" mt={4}>Los resultados aparecerán después de cerrar una temporada.</Text>
+      <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+        <EmptyState
+          icon={IconWorld}
+          title="Aún no hay campeonatos de otras federaciones"
+          description="Los resultados de las ligas rivales aparecerán aquí después de cerrar una temporada."
+          color="#3B82F6"
+        />
       </Paper>
     );
   }

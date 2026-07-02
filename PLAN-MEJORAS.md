@@ -19,8 +19,8 @@ de división (`federationId === playerFederationId`) en toda query de datos del 
 | P1 | Ficha de equipo rival vacía/engañosa | ✅ HECHO |
 | P2 | Bracket de copas inusable (huecos / copas no iniciadas) | ✅ HECHO |
 | P3 | Charts no siguen el tema HUD (colores hardcodeados) | ✅ HECHO |
-| P4 | Páginas con mucha data solo con shell (Economía, Historial) | ⬜ Pendiente |
-| P5 | Consistencia de estados vacíos (adoptar `EmptyState`) | ⬜ Pendiente |
+| P4 | Páginas con mucha data solo con shell (Economía, Historial) | ✅ HECHO (pase enfocado) |
+| P5 | Consistencia de estados vacíos (adoptar `EmptyState`) | 🟡 Parcial (páginas clave hechas) |
 
 ---
 
@@ -68,14 +68,20 @@ separadas; se podría agregar en una sola card con marcador global (no era el bu
 `rgba(148,176,205,0.45)`. EconomyChart: barras alineadas a la paleta HUD (Premios naranja→**oro**,
 Talento azul→**violeta**, verde→esmeralda accent). typecheck+lint ✅.
 
-## P4 — Páginas con mucha data solo con shell
+## P4 — Páginas con mucha data solo con shell ✅ (pase enfocado)
 
-**Fix:** adoptar `Panel`/`StatTile`/`EmptyState` + readouts mono en `EconomyPage.tsx`,
-`HistoryPage.tsx` (las de más densidad).
+Hallazgo: el cascade del tema (rediseño HUD) ya dejó estas páginas coherentes (hero de
+Economía, tablas, badges heredan tokens). El delta real era la consistencia de estados
+vacíos, que se veían "sin terminar".
+**Fix aplicado:** `EmptyState` en EconomyPage (contratos vacíos, sin equipos en competición)
+e HistoryPage (campeones de otras federaciones, cronología vacía). typecheck+lint ✅.
+**Follow-up opcional (para un design-agent si se quiere ir más lejos):** StatTile KPI strips
++ readouts mono en las tablas internas de Economía/Historial (más profundidad visual, no crítico).
 
-## P5 — Consistencia de estados vacíos
+## P5 — Consistencia de estados vacíos 🟡 parcial
 
-**Fix:** adoptar `EmptyState` en los "sin datos" ad-hoc (incluye vacío de trayectoria rival de P1).
+Adoptado `EmptyState` en las páginas de data clave (Economía, Historial) como parte de P4.
+Quedan estados vacíos ad-hoc en otras páginas (Copas, Normas, etc.) — sweep menor pendiente.
 
 ---
 
