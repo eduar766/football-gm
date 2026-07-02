@@ -26,11 +26,12 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   const value = payload[0].value;
   return (
     <Paper p="sm" radius="md" style={{
-      backgroundColor: '#1A2332',
-      border: '1px solid rgba(255,255,255,0.1)',
+      backgroundColor: 'var(--surface-2)',
+      border: '1px solid var(--border-2)',
+      boxShadow: 'var(--panel-shadow)',
     }}>
       <Text size="sm" fw={600} c="dimmed">{label}</Text>
-      <Text size="sm" c={value >= 0 ? 'green' : 'red'} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
+      <Text size="sm" c={value >= 0 ? 'teal' : 'red'} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>
         {value >= 0 ? '+' : '−'}{money(Math.abs(value))}
       </Text>
     </Paper>
@@ -41,8 +42,8 @@ export function EconomyChart({ data }: { data: EconomyChartData }) {
   const chartData = [
     { name: 'Ingresos', value: data.income, color: 'url(#gradGreen)' },
     { name: 'Operativo', value: -data.operatingCost, color: 'url(#gradRed)' },
-    { name: 'Premios', value: -data.prizes, color: 'url(#gradOrange)' },
-    { name: 'Talento', value: -data.talent, color: 'url(#gradBlue)' },
+    { name: 'Premios', value: -data.prizes, color: 'url(#gradGold)' },
+    { name: 'Talento', value: -data.talent, color: 'url(#gradViolet)' },
     { name: 'Neto', value: data.net, color: data.net >= 0 ? 'url(#gradGreen)' : 'url(#gradRed)' },
   ];
 
@@ -55,29 +56,29 @@ export function EconomyChart({ data }: { data: EconomyChartData }) {
         <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
           <defs>
             <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10B981" stopOpacity={1} />
-              <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
+              <stop offset="0%" stopColor="#34d399" stopOpacity={1} />
+              <stop offset="100%" stopColor="#10b981" stopOpacity={0.8} />
             </linearGradient>
             <linearGradient id="gradRed" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#EF4444" stopOpacity={1} />
               <stop offset="100%" stopColor="#DC2626" stopOpacity={0.8} />
             </linearGradient>
-            <linearGradient id="gradOrange" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F97316" stopOpacity={1} />
-              <stop offset="100%" stopColor="#EA580C" stopOpacity={0.8} />
+            <linearGradient id="gradGold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f59e0b" stopOpacity={1} />
+              <stop offset="100%" stopColor="#d97706" stopOpacity={0.8} />
             </linearGradient>
-            <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3B82F6" stopOpacity={1} />
-              <stop offset="100%" stopColor="#2563EB" stopOpacity={0.8} />
+            <linearGradient id="gradViolet" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
+              <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,176,205,0.08)" />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
+            tick={{ fontSize: 11, fill: 'rgba(148,176,205,0.45)', fontFamily: 'var(--mantine-font-family-monospace)' }}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)', fontFamily: 'var(--mantine-font-family-monospace)' }}
+            tick={{ fontSize: 11, fill: 'rgba(148,176,205,0.45)', fontFamily: 'var(--mantine-font-family-monospace)' }}
             tickFormatter={(v) => money(v)}
             width={80}
           />
