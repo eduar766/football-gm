@@ -7,6 +7,7 @@
 import { randInt, type RngState } from './rng';
 import { generateFixtures } from './fixtures';
 import { simulateMatch } from './match';
+import { generatePotencial } from './talent';
 import type { GameState, Player, RivalFixture, RivalMatchResult, RivalSeasonRecord, RivalStandingRow, SeasonRecord, Team } from './types';
 
 // ── Name generation ──────────────────────────────────────────────────────────
@@ -172,6 +173,7 @@ export function processInterLeagueTransfers(s: GameState): void {
     if (s.treasury < fee) continue; // federation can't afford the attraction bonus
 
     // Create a full Player entity for the player's league.
+    const age = 24 + randInt(s.rivalRng, 0, 6); // 24–30
     const newPlayer: Player = {
       id: s.nextPlayerId++,
       teamId: destination.id,
@@ -181,9 +183,10 @@ export function processInterLeagueTransfers(s: GameState): void {
       season: { goals: 0, assists: 0, cleanSheets: 0, yellowCards: 0, redCards: 0 },
       matchesSuspendedLeft: 0,
       injuredMatchesLeft: 0,
-      age: 24 + randInt(s.rivalRng, 0, 6), // 24–30
+      age,
       nationality: 'extranjero',
       cantera: false,
+      potencial: generatePotencial(s.rivalRng, calidad, age),
     };
     s.players.push(newPlayer);
 

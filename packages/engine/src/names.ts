@@ -25,8 +25,27 @@ export const FEDERATION_REGIONS = [
   'Terramar', 'Solania', 'Montania', 'el Norte', 'Pradera', 'Bahía Azul',
 ];
 
+// Youth-intake player names (Fase 15). Generic first-name + surname pools —
+// flavour-consistent with the club/federation names, not meant to be exhaustive.
+const PLAYER_FIRST_NAMES = [
+  'Mateo', 'Bruno', 'Iker', 'Diego', 'Nico', 'Álex', 'Hugo', 'Marc',
+  'Rubén', 'Adrián', 'Pau', 'Leo', 'Dani', 'Gonzalo', 'Toni', 'Enzo',
+  'Martín', 'Samu', 'Izan', 'Aitor',
+];
+const PLAYER_SURNAMES = [
+  'Ferreira', 'Ortiz', 'Cabrera', 'Vidal', 'Rivas', 'Moreno', 'Salcedo',
+  'Peralta', 'Nogueira', 'Aguirre', 'Castillo', 'Barros', 'Lozano', 'Reyes',
+  'Bravo', 'Serrano', 'Montes', 'Iglesias', 'Cordero', 'Espinosa',
+];
+
 function pick<T>(rng: RngState, arr: T[]): T {
   return arr[Math.floor(rngNext(rng) * arr.length)];
+}
+
+// Deterministic youth-player name. No uniqueness guard — squads can share a
+// surname, same as real academies.
+export function randomPlayerName(rng: RngState): string {
+  return `${pick(rng, PLAYER_FIRST_NAMES)} ${pick(rng, PLAYER_SURNAMES)}`;
 }
 
 // Deterministic unique club name. If `used` is passed, avoids collisions and

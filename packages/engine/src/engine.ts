@@ -39,6 +39,7 @@ import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
 import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurringCups, forceCompleteIncompleteCups } from './cups';
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
+import { developPlayers, generatePotencial, intakeYouthPlayers, retirePlayers } from './talent';
 import {
   generateRivalFixtures,
   generateRivalPlayers,
@@ -107,6 +108,9 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
   const playerFederationId = 1;
 
   const rng = makeRng(seed);
+  // Fase 15: talent pipeline stream, independent from `rng` (match engine) so
+  // adding potencial generation never perturbs the golden master.
+  const talentRng = makeRng((seed ^ 0x7a1e2701) >>> 0);
   const federations: Federation[] = [
     {
       id: playerFederationId,
@@ -145,13 +149,14 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
       });
       if (t.squad) {
         for (const p of t.squad) {
+          const age = 20 + Math.floor(randInt(rng, 0, 10));
           players.push({
             id: nextPlayerId++,
             teamId,
             name: p.name,
             posicion: p.posicion,
             calidad: p.calidad,
-            age: 20 + Math.floor(randInt(rng, 0, 10)),
+            age,
             season: {
               goals: 0,
               assists: 0,
@@ -163,6 +168,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
             injuredMatchesLeft: 0,
             nationality: p.nationality ?? 'local',
             cantera: p.cantera ?? false,
+            potencial: generatePotencial(talentRng, p.calidad, age),
           });
         }
       }
@@ -338,6 +344,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     boardConfidence: { value: CONFIDENCE_START, history: [] },
     gameOver: null,
     negativeTreasurySeasons: 0,
+    talentRng,
   };
 }
 
@@ -599,13 +606,14 @@ export function createOwnTeam(
   });
   if (squad) {
     for (const p of squad) {
+      const age = 18 + Math.floor(randInt(s.rng, 0, 5));
       s.players.push({
         id: s.nextPlayerId++,
         teamId: nextId,
         name: p.name,
         posicion: p.posicion,
         calidad: p.calidad,
-        age: 18 + Math.floor(randInt(s.rng, 0, 5)),
+        age,
         season: {
           goals: 0,
           assists: 0,
@@ -617,6 +625,7 @@ export function createOwnTeam(
         injuredMatchesLeft: 0,
         nationality: p.nationality ?? 'local',
         cantera: p.cantera ?? false,
+        potencial: generatePotencial(s.talentRng, p.calidad, age),
       });
     }
   }
@@ -1087,46 +1096,22 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     },
   },
   {
-    // Player career arcs: growth, peak, decline
-    name: 'player-career-arcs',
+    // Fase 15: player career arcs (growth/development/peak/decline), potencial-
+    // capped, role- and governance-aware. Replaces the flat age curve; the
+    // academia bonus that used to be a separate pass is folded in here.
+    name: 'player-development',
     priority: 140,
     run(s) {
-      for (const p of s.players) {
-        p.age += 1;
-        if (p.age < 27) {
-          // Growth phase: young players improve
-          p.calidad = Math.min(95, p.calidad + randInt(s.rng, 0, 2));
-        } else if (p.age < 32) {
-          // Peak phase: stable with small variation
-          p.calidad = Math.min(95, Math.max(20, p.calidad + randInt(s.rng, -1, 1)));
-        } else {
-          // Decline phase: older players decline
-          p.calidad = Math.max(20, p.calidad + randInt(s.rng, -3, -1));
-        }
-      }
+      developPlayers(s);
     },
   },
   {
-    // Retire players who are too old or too weak
+    // Retire players who are too old or too weak (plus a chance of early
+    // retirement between 35-37 — Fase 15).
     name: 'retire-players',
     priority: 150,
     run(s) {
-      s.players = s.players.filter((p) => p.age <= 37 && p.calidad >= 25);
-    },
-  },
-  {
-    // Youth academy investment: improve young players based on team's academia
-    name: 'youth-academy-investment',
-    priority: 160,
-    run(s) {
-      for (const t of s.teams) {
-        if (t.divisionOrden === null || !t.academia) continue;
-        const youngPlayers = s.players.filter((p) => p.teamId === t.id && p.age <= 23);
-        for (const p of youngPlayers) {
-          const bonus = Math.round(t.academia / 20); // academia 20-100 → 1-5 bonus
-          p.calidad = Math.min(95, p.calidad + bonus);
-        }
-      }
+      retirePlayers(s);
     },
   },
   {
@@ -1160,6 +1145,17 @@ const closeSeasonSteps: CloseSeasonStep[] = [
           }
         }
       }
+    },
+  },
+  {
+    // Fase 15: youth intake — 1-2 canteranos per team with a tracked squad.
+    // Placed after the strength recompute so this year's cantera don't
+    // retroactively distort the strength number just computed from the
+    // squad that actually competed this season.
+    name: 'youth-intake',
+    priority: 185,
+    run(s) {
+      intakeYouthPlayers(s);
     },
   },
   {

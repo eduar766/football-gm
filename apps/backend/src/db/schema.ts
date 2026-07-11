@@ -58,6 +58,7 @@ export const awardType = pgEnum('award_type', [
   'max_goleador',
   'max_asistente',
   'mejor_portero',
+  'mejor_joven',
 ]);
 
 export const normType = pgEnum('norm_type', [

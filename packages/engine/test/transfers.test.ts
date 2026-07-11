@@ -55,7 +55,6 @@ describe('runTransferWindow', () => {
 
   it('moves at least one player when there is a quality gap', () => {
     let g = game(5);
-    const totalPlayersBefore = g.players.length;
 
     // Run a full season cycle so closeSeason triggers the transfer window.
     // closeSeason increments the year first, then runs the window — so the
@@ -65,8 +64,8 @@ describe('runTransferWindow', () => {
     expect(g.year).toBe(2);
     const moves = transfersForYear(g, 2);
     expect(moves.length).toBeGreaterThan(0);
-    // No players were created or destroyed.
-    expect(g.players.length).toBe(totalPlayersBefore);
+    // Squad size can change across closeSeason (youth intake / retirement,
+    // Fase 15) — this test only cares that the moved players actually moved.
     // Each move actually changed teamId.
     for (const m of moves) {
       const p = g.players.find((p) => p.id === m.playerId)!;

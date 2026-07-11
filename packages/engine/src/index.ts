@@ -71,6 +71,7 @@ export {
   applyPointPenalties,
   governancePenalty,
   governanceBonus,
+  teamMeetsNorm,
 } from './norms';
 
 // ── Economy ──────────────────────────────────────────────────────────────────
@@ -116,6 +117,9 @@ export type { ChecklistItem } from './preseason';
 
 // ── Transfers ────────────────────────────────────────────────────────────────
 export { teamStrengthFromSquad, transfersForYear } from './transfers';
+
+// ── Talent pipeline (Fase 15) ─────────────────────────────────────────────────
+export { generatePotencial, developPlayers, retirePlayers, intakeYouthPlayers } from './talent';
 
 // ── Seed data (confederations for world-generator) ───────────────────────────
 export { CONFEDERATIONS } from './seed-data';

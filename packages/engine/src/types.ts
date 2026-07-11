@@ -225,6 +225,10 @@ export interface Player {
   age: number;
   nationality: string;  // 'local' | 'extranjero' — used by tope_extrangeros norm
   cantera: boolean;     // homegrown / youth academy — used by minimo_cantera norm
+  // Hidden quality ceiling (Fase 15): calidad grows toward this and never
+  // exceeds it. NEVER exposed in DTOs, logs, or UI — the commissioner only
+  // sees its effects (headlines, awards, performance), never the number.
+  potencial: number;
 }
 
 // Cups / tournaments (§4.4): elimination brackets that run alongside the
@@ -323,7 +327,7 @@ export interface GameEvent {
   chainedFromId: number | null;
 }
 
-export type AwardType = 'max_goleador' | 'max_asistente' | 'mejor_portero';
+export type AwardType = 'max_goleador' | 'max_asistente' | 'mejor_portero' | 'mejor_joven';
 
 export interface Award {
   year: number;
@@ -743,6 +747,10 @@ export interface GameState {
   boardConfidence: BoardConfidence;
   gameOver: GameOver | null;
   negativeTreasurySeasons: number;
+  // Fase 15: talent pipeline (potencial rolls, development, youth intake,
+  // early retirement). Independent stream so it never perturbs the match
+  // engine, awards attribution, or any other existing stream.
+  talentRng: RngState;
 }
 
 export interface RecordBook {

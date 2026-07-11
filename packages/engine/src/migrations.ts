@@ -1,8 +1,9 @@
 import { CONFEDERATIONS } from './seed-data';
 import { divisionName } from './structure';
+import { generatePotencial } from './talent';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -306,6 +307,23 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 12;
+  }
+
+  // v12 → v13 (Fase 15A): hidden potencial + talentRng. Backfill potencial
+  // for every player already in the save, consuming the freshly-seeded
+  // talentRng in stable player-array order (deterministic given this save's
+  // seed; runs once, since schemaVersion is persisted right after).
+  if (v < 13) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.talentRng) gs.talentRng = { s: (state.seed ^ 0x7a1e2701) >>> 0 };
+    for (const p of state.players ?? []) {
+      if (p.potencial === undefined) {
+        p.potencial = generatePotencial(gs.talentRng, p.calidad, p.age);
+      }
+    }
+
+    state.schemaVersion = 13;
   }
 
   return state;

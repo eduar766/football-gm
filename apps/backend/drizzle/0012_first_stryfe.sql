@@ -1,0 +1,1 @@
+ALTER TYPE "public"."award_type" ADD VALUE 'mejor_joven';

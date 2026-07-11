@@ -85,6 +85,13 @@
       "when": 1782789951493,
       "tag": "0011_common_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783797053359,
+      "tag": "0012_first_stryfe",
+      "breakpoints": true
     }
   ]
 }

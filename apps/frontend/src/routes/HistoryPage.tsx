@@ -23,12 +23,14 @@ const AWARD_LABEL: Record<AwardType, string> = {
   max_goleador: 'Máximo goleador',
   max_asistente: 'Máximo asistente',
   mejor_portero: 'Mejor portero',
+  mejor_joven: 'Mejor joven',
 };
 
 const AWARD_ICON: Record<AwardType, string> = {
   max_goleador: '⚽',
   max_asistente: '🅰️',
   mejor_portero: '🧤',
+  mejor_joven: '💎',
 };
 
 const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#D97706'];

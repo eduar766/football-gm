@@ -38,7 +38,7 @@ const _commercialContractTypeValues = [
 ] as const satisfies [EngineCommercialContractType, ...EngineCommercialContractType[]];
 
 const _awardTypeValues = [
-  'max_goleador', 'max_asistente', 'mejor_portero',
+  'max_goleador', 'max_asistente', 'mejor_portero', 'mejor_joven',
 ] as const satisfies [EngineAwardType, ...EngineAwardType[]];
 
 const _playerPositionValues = [

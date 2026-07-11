@@ -271,6 +271,17 @@ export function governanceBonus(state: GameState): number {
   return 0;
 }
 
+// Fase 15: true only if the team is subject to an ACTIVE norm of this type
+// AND currently complies with it. Used by the talent pipeline to reward
+// governance (minimo_cantera / tope_edad_media) with faster youth development
+// — a norm with no active instance is not "met", it's absent.
+export function teamMeetsNorm(state: GameState, team: Team, tipo: NormType): boolean {
+  const norm = state.norms.find((n) => n.tipo === tipo);
+  if (!norm) return false;
+  if (!isSubject(state, team)) return false;
+  return !breaches(team, norm, state.players);
+}
+
 export function decayViolationHistory(s: GameState): void {
   const penalizedThisYear = new Set(
     s.sanctions.filter(san => san.year === s.year).map(san => san.teamId),
