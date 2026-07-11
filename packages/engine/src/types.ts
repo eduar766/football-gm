@@ -557,6 +557,9 @@ export interface SeasonRecord {
   prestigeBefore: number;
   prestigeAfter: number;
   delta: number;
+  // Fase 15B: competitive balance index (0-100) for this division's closed
+  // season. Optional so old saves (migrated, never backfilled) stay valid.
+  balanceIndex?: number;
 }
 
 // Fase 11.2: thin virtual player for rival leagues (no salary/position tracking).

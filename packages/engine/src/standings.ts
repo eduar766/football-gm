@@ -68,3 +68,17 @@ export function computeStandings(teams: Team[], results: MatchResult[]): Standin
       a.name.localeCompare(b.name),
   );
 }
+
+// Fase 15B: 0 = league totally unequal, 100 = maximum parity. Based on the
+// standard deviation of points-per-matchday (comparable across season
+// lengths) across the division. stdDev is bounded [0, 1.5] since points-per-
+// matchday itself is bounded [0, 3] — the 66.7 factor maps that range to
+// [0, 100] exactly, clamped defensively at the edges.
+export function competitiveBalanceIndex(rows: StandingRow[], matchdaysPlayed: number): number {
+  if (rows.length < 2 || matchdaysPlayed <= 0) return 50; // not enough signal yet
+  const ppm = rows.map((r) => r.points / matchdaysPlayed);
+  const mean = ppm.reduce((a, b) => a + b, 0) / ppm.length;
+  const variance = ppm.reduce((a, v) => a + (v - mean) ** 2, 0) / ppm.length;
+  const stdDev = Math.sqrt(variance);
+  return Math.round(Math.max(0, Math.min(100, 100 - stdDev * 66.7)));
+}

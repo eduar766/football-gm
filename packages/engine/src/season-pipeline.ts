@@ -13,6 +13,10 @@ export interface SeasonCloseContext {
   // Final table per player-federation division, computed once (step
   // `final-standings`) before promotion/relegation mutates divisionOrden.
   standingsByOrden: Map<number, StandingRow[]>;
+  // Competitive balance index (0-100) per division, computed alongside
+  // standingsByOrden (Fase 15B) — read by the prestige/arraigo hooks and
+  // stored in the season's history entry.
+  balanceIndexByOrden: Map<number, number>;
   // Top-flight (division 1) table — feeds the prestige delta and the chronicle.
   topFlightTable: StandingRow[];
   // Season prestige delta: accumulated by the early steps, applied by
@@ -41,6 +45,7 @@ export interface CloseSeasonStep {
 export function createCloseSeasonContext(): SeasonCloseContext {
   return {
     standingsByOrden: new Map(),
+    balanceIndexByOrden: new Map(),
     topFlightTable: [],
     prestigeDelta: 0,
     prestigeBefore: 0,

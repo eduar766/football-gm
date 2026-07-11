@@ -96,7 +96,7 @@ export { setLeaguePrize, setCupPrize, removePrize } from './prizes';
 export { createCup, createInterLeagueCup, deleteCup, editCupParticipants, roundsForCup, scheduleCups } from './cups';
 
 // ── Standings ────────────────────────────────────────────────────────────────
-export { computeStandings } from './standings';
+export { computeStandings, competitiveBalanceIndex } from './standings';
 export type { StandingRow } from './standings';
 
 // ── Narrative / headlines ────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export { preseasonChecklist, preseasonBlockers } from './preseason';
 export type { ChecklistItem } from './preseason';
 
 // ── Transfers ────────────────────────────────────────────────────────────────
-export { teamStrengthFromSquad, transfersForYear } from './transfers';
+export { teamStrengthFromSquad, transfersForYear, runTransferWindow } from './transfers';
 
 // ── Talent pipeline (Fase 15) ─────────────────────────────────────────────────
 export { generatePotencial, developPlayers, retirePlayers, intakeYouthPlayers } from './talent';

@@ -6,7 +6,7 @@ import { makeRng, randInt, rngNext } from './rng';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 import { buildDivisionFixtures } from './fixtures';
 import { simulateMatch } from './match';
-import { computeStandings, type StandingRow } from './standings';
+import { computeStandings, competitiveBalanceIndex, type StandingRow } from './standings';
 import { progressNegotiations, rivalPoachAttempt } from './negotiation';
 import { divisionName, PROMOTION_RELEGATION } from './structure';
 import {
@@ -913,16 +913,18 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     run(s, ctx) {
       const penalties = pointPenaltiesForYear(s, s.year);
       for (const d of s.divisions.filter((d) => d.federationId === s.playerFederationId)) {
-        ctx.standingsByOrden.set(
-          d.orden,
-          applyPointPenalties(
-            computeStandings(
-              teamsInDivision(s.teams, d.orden, s.playerFederationId),
-              s.results.filter((r) => r.divisionOrden === d.orden),
-            ),
-            penalties,
+        const rows = applyPointPenalties(
+          computeStandings(
+            teamsInDivision(s.teams, d.orden, s.playerFederationId),
+            s.results.filter((r) => r.divisionOrden === d.orden),
           ),
+          penalties,
         );
+        ctx.standingsByOrden.set(d.orden, rows);
+        // Fase 15B: competitive balance index, computed alongside standings
+        // (before promotion/relegation) so every division's history entry
+        // gets its own reading.
+        ctx.balanceIndexByOrden.set(d.orden, competitiveBalanceIndex(rows, s.totalMatchdays));
       }
       // Player prestige is driven by the top flight (division 1).
       ctx.topFlightTable = ctx.standingsByOrden.get(1) ?? [];
@@ -947,6 +949,13 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       if (titleRaceGap <= 3) delta += 3;
       else if (titleRaceGap <= 6) delta += 2;
       else if (titleRaceGap <= 10) delta += 1;
+
+      // Fase 15B: a tightly-contested top flight is worth a little extra
+      // credibility; a runaway league costs a little.
+      const balanceIndex = ctx.balanceIndexByOrden.get(1) ?? 50;
+      if (balanceIndex >= 70) delta += 1;
+      else if (balanceIndex <= 35) delta -= 1;
+
       ctx.prestigeDelta = delta;
     },
   },
@@ -1008,6 +1017,7 @@ const closeSeasonSteps: CloseSeasonStep[] = [
           prestigeBefore: ctx.prestigeBefore,
           prestigeAfter: s.prestige,
           delta: ctx.prestigeDelta,
+          balanceIndex: ctx.balanceIndexByOrden.get(d.orden),
         });
         // 14.6: title entry for the top flight (orden 1) champion.
         if (d.orden === 1) {
@@ -1021,6 +1031,26 @@ const closeSeasonSteps: CloseSeasonStep[] = [
             teamId: champion.teamId,
           });
         }
+      }
+    },
+  },
+  {
+    // Fase 15B: a strongly meritocratic league prize split (champion's share
+    // >= 3x the last paid position's) rewards the top clubs with loyalty —
+    // the flip side of the balance-index prestige hook above: paritarian
+    // splits favour the league's credibility, meritocratic splits favour the
+    // big clubs' relationship with the federation.
+    name: 'meritocratic-arraigo-bonus',
+    priority: 75,
+    run(s, ctx) {
+      const prize = s.competitionPrizes.find((cp) => cp.kind === 'liga');
+      if (!prize || prize.shares.length < 2) return;
+      const champion = prize.shares[0];
+      const last = prize.shares[prize.shares.length - 1];
+      if (last <= 0 || champion < last * 3) return;
+      for (const row of ctx.topFlightTable.slice(0, 3)) {
+        const team = s.teams.find((t) => t.id === row.teamId);
+        if (team) team.arraigo = Math.min(100, team.arraigo + 2);
       }
     },
   },

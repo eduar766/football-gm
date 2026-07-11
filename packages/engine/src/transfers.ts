@@ -5,6 +5,8 @@
 // master is preserved.
 
 import { rngNext, type RngState } from './rng';
+import { teamFinancialHealth } from './economy';
+import { wageBill } from './salaries';
 import type { GameState, Player, Team, TransferEntry } from './types';
 
 // Probability that an offer succeeds. Tuned so each club lands roughly one
@@ -15,6 +17,18 @@ const ATTEMPTS_PER_CLUB = 2;
 // Squad-quality basis for team.strength after a transfer window: average the
 // top N quality values. Clubs with deeper benches are not over-rewarded.
 const SQUAD_TOP_N = 11;
+
+// Fase 15B: treasury shapes the market. A club at/above this treasury buys at
+// full appetite (weight multiplier caps at 1.5x strength); a broke club's
+// weight bottoms out at 0.5x strength — present in the market but marginal.
+const TREASURY_WEIGHT_REFERENCE = 20_000_000;
+const TREASURY_WEIGHT_MIN = 0.5;
+const TREASURY_WEIGHT_MAX = 1.5;
+// A club in financial distress (en_riesgo/quiebra) dumps its best player at a
+// discount to survive — enters the pool even if out of the buyer's league,
+// weighted up so it's likely to actually move.
+const DISTRESS_FEE_DISCOUNT = 0.7;
+const DISTRESS_WEIGHT_MULTIPLIER = 3;
 
 function isSubject(state: GameState, t: Team): boolean {
   return t.divisionOrden !== null && t.federationId === state.playerFederationId;
@@ -66,24 +80,49 @@ export function runTransferWindow(s: GameState): void {
   const teamName = new Map(s.teams.map((t) => [t.id, t.name]));
   const transferredPlayerIds = new Set<number>();
 
+  // Fase 15B: snapshot financial distress once at window-open (not
+  // recomputed per attempt) — a club dumping its star is a decision made
+  // going into the window, not re-evaluated mid-window.
+  const distressedStarId = new Map<number, number>(); // teamId -> playerId
+  for (const t of buyers) {
+    const health = teamFinancialHealth(t.treasury, wageBill(t.id, s.players));
+    if (health !== 'en_riesgo' && health !== 'quiebra') continue;
+    const squad = s.players.filter((p) => p.teamId === t.id);
+    if (squad.length === 0) continue;
+    const best = squad.reduce((a, b) => (b.calidad > a.calidad ? b : a));
+    distressedStarId.set(t.id, best.id);
+  }
+
+  const buyerWeight = (b: Team) =>
+    b.strength *
+    (TREASURY_WEIGHT_MIN +
+      Math.min(
+        TREASURY_WEIGHT_MAX - TREASURY_WEIGHT_MIN,
+        Math.max(0, b.treasury) / TREASURY_WEIGHT_REFERENCE,
+      ));
+
   for (let i = 0; i < totalAttempts; i++) {
-    // Pick a buyer weighted by current strength (stronger clubs offer more).
-    const buyer = weightedPick(buyers, buyers.map((b) => b.strength), s.transfersRng);
+    // Pick a buyer weighted by strength AND treasury — a rich club shops
+    // more; a broke one barely shows up (Fase 15B).
+    const buyer = weightedPick(buyers, buyers.map(buyerWeight), s.transfersRng);
     if (!buyer) break;
 
     // Candidates: players on OTHER subject clubs, not yet transferred this
     // window, and at or below the buyer's level (a club doesn't chase players
-    // it can't realistically lure).
+    // it can't realistically lure) — UNLESS a desperate seller is dumping
+    // their best player regardless of the buyer's level.
     const candidates: Player[] = [];
     const weights: number[] = [];
     for (const p of s.players) {
       if (transferredPlayerIds.has(p.id)) continue;
       if (p.teamId === buyer.id) continue;
       if (!subjectIds.has(p.teamId)) continue;
-      if (p.calidad > buyer.strength + 5) continue; // out of league
+      const isDistressStar = distressedStarId.get(p.teamId) === p.id;
+      if (p.calidad > buyer.strength + 5 && !isDistressStar) continue; // out of league
       candidates.push(p);
       // Prefer higher-quality targets so transfers actually shift balance.
-      weights.push(Math.max(1, p.calidad));
+      const base = Math.max(1, p.calidad);
+      weights.push(isDistressStar ? base * DISTRESS_WEIGHT_MULTIPLIER : base);
     }
     if (candidates.length === 0) {
       // Burn one rng value so the loop is still deterministic and uniform.
@@ -94,12 +133,20 @@ export function runTransferWindow(s: GameState): void {
     const target = weightedPick(candidates, weights, s.transfersRng);
     if (!target) continue;
 
+    const isDistressStar = distressedStarId.get(target.teamId) === target.id;
+    let fee = Math.round(buyer.strength * 50_000 + target.calidad * 100_000);
+    if (isDistressStar) fee = Math.round(fee * DISTRESS_FEE_DISCOUNT);
+
+    // Solvency gate: a buyer who can't afford the fee doesn't make the offer.
+    // Still burns the acceptance-roll rng value so the stream stays
+    // deterministic regardless of which branch is taken.
+    if (buyer.treasury < fee) {
+      rngNext(s.transfersRng);
+      continue;
+    }
+
     // Acceptance roll. Failed attempts still consume an rng value above.
     if (rngNext(s.transfersRng) >= OFFER_SUCCESS_P) continue;
-
-    // Fee is recorded for display but NOT deducted from federation treasury.
-    // Clubs manage their own finances; the commissioner is not the buyer (§2).
-    const fee = Math.round(buyer.strength * 50_000 + target.calidad * 100_000);
 
     const fromTeamId = target.teamId;
     target.teamId = buyer.id;

@@ -4,6 +4,7 @@ import {
   advanceSeason,
   closeSeason,
   createGame,
+  runTransferWindow,
   startSeason,
   teamStrengthFromSquad,
   transfersForYear,
@@ -105,6 +106,64 @@ describe('runTransferWindow', () => {
       expect(subjectIds.has(m.fromTeamId)).toBe(true);
       expect(subjectIds.has(m.toTeamId)).toBe(true);
     }
+  });
+});
+
+describe('runTransferWindow: treasury-gated market (Fase 15B)', () => {
+  it('a broke buyer never completes a purchase (solvency gate)', () => {
+    const g = game(50);
+    const buyer = g.teams.find((t) => t.name === 'Strong FC')!;
+    buyer.treasury = 0;
+    runTransferWindow(g);
+    expect(g.transfers.every((t) => t.toTeamId !== buyer.id)).toBe(true);
+  });
+
+  it('a rich club is weighted more heavily as a buyer than a poor one', () => {
+    // Two equally-strong clubs, one flush, one broke — over many independent
+    // windows the rich club should buy more often.
+    let richWins = 0;
+    let poorWins = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const g = createGame(seed, {
+        teams: [
+          { name: 'Rich FC', strength: 60, squad: squad(16, 55, 'R') },
+          { name: 'Poor FC', strength: 60, squad: squad(16, 55, 'P') },
+          { name: 'Filler FC', strength: 60, squad: squad(16, 55, 'F') },
+        ],
+      });
+      const rich = g.teams.find((t) => t.name === 'Rich FC')!;
+      const poor = g.teams.find((t) => t.name === 'Poor FC')!;
+      rich.treasury = 100_000_000;
+      poor.treasury = 500_000;
+      runTransferWindow(g);
+      richWins += g.transfers.filter((t) => t.toTeamId === rich.id).length;
+      poorWins += g.transfers.filter((t) => t.toTeamId === poor.id).length;
+    }
+    expect(richWins).toBeGreaterThan(poorWins);
+  });
+
+  it('a distressed seller (quiebra) can offload its best player above the buyer level, at a 30% discount', () => {
+    const buyerStrength = 45;
+    let found = false;
+    for (let seed = 1; seed <= 50 && !found; seed++) {
+      const g = createGame(seed, {
+        teams: [
+          { name: 'Buyer FC', strength: buyerStrength, squad: squad(1, 40, 'B') },
+          { name: 'Distressed FC', strength: 78, squad: squad(1, 78, 'D') },
+        ],
+      });
+      const distressed = g.teams.find((t) => t.name === 'Distressed FC')!;
+      distressed.treasury = -10_000_000; // guarantees 'quiebra'
+      const star = g.players.find((p) => p.teamId === distressed.id)!;
+      runTransferWindow(g);
+      const sale = g.transfers.find((t) => t.playerId === star.id);
+      if (!sale) continue;
+      found = true;
+      expect(sale.toTeamId).not.toBe(distressed.id);
+      const undiscounted = Math.round(buyerStrength * 50_000 + star.calidad * 100_000);
+      expect(sale.transferFee).toBe(Math.round(undiscounted * 0.7));
+    }
+    expect(found).toBe(true);
   });
 });
 
