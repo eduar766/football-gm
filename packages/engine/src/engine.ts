@@ -40,6 +40,7 @@ import { playCupRound, scheduleCups, saveRecurringCupTemplates, recreateRecurrin
 import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import { developPlayers, generatePotencial, intakeYouthPlayers, retirePlayers } from './talent';
+import { prestigeBase, regressPrestige } from './prestige';
 import {
   generateRivalFixtures,
   generateRivalPlayers,
@@ -345,6 +346,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     gameOver: null,
     negativeTreasurySeasons: 0,
     talentRng,
+    governanceStreak: 0,
   };
 }
 
@@ -436,7 +438,10 @@ function playerLeagueTeamCount(s: GameState): number {
 function generateMandate(s: GameState): BoardMandate {
   const roll = randInt(s.mandatesRng, 0, 2);
   if (roll === 0) {
-    const target = Math.max(1, s.prestige - 5);
+    // Fase 15C: never ask for more than what the structural base would
+    // still allow after regression — a board that's currently above its
+    // base is expected to drift down a little each season regardless.
+    const target = Math.max(1, Math.min(s.prestige - 5, Math.round(prestigeBase(s)) - 3));
     return {
       id: s.nextMandateId,
       type: 'prestige_min',
@@ -991,11 +996,28 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     },
   },
   {
+    // Fase 15C: tracks consecutive well-governed seasons for prestigeBase's
+    // governance component. Must run before apply-prestige (60) reads it.
+    name: 'governance-streak',
+    priority: 55,
+    run(s) {
+      s.governanceStreak = governanceBonus(s) > 0 ? s.governanceStreak + 1 : 0;
+    },
+  },
+  {
     name: 'apply-prestige',
     priority: 60,
     run(s, ctx) {
       ctx.prestigeBefore = s.prestige;
-      s.prestige = Math.max(0, s.prestige + ctx.prestigeDelta);
+      const afterDelta = Math.max(0, s.prestige + ctx.prestigeDelta);
+      // Fase 15C: regress toward the structural base every season. A
+      // brilliant one-off season decays back down; a bad one recovers on
+      // its own if the underlying project is sound.
+      s.prestige = regressPrestige(afterDelta, prestigeBase(s));
+      // Recompute delta as the TOTAL observed change (seasonal delta +
+      // regression pull) so prestigeBefore + delta === prestigeAfter holds
+      // for the history entry and board-confidence evaluation below.
+      ctx.prestigeDelta = s.prestige - ctx.prestigeBefore;
       const playerFed = s.federations.find((f) => f.id === s.playerFederationId);
       if (playerFed) playerFed.prestige = s.prestige;
     },

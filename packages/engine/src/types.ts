@@ -754,6 +754,10 @@ export interface GameState {
   // early retirement). Independent stream so it never perturbs the match
   // engine, awards attribution, or any other existing stream.
   talentRng: RngState;
+  // Fase 15C: consecutive seasons with governanceBonus() > 0. Feeds
+  // prestigeBase()'s governance component; resets to 0 the moment a season
+  // closes without a governance bonus.
+  governanceStreak: number;
 }
 
 export interface RecordBook {

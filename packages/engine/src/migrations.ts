@@ -3,7 +3,7 @@ import { divisionName } from './structure';
 import { generatePotencial } from './talent';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -324,6 +324,18 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 13;
+  }
+
+  // v13 → v14 (Fase 15C): structural prestige base + regression.
+  // governanceStreak starts at 0 — old saves simply have no streak credit
+  // yet, which is the correct conservative default (nothing was tracked
+  // before this version, so we can't retroactively know the streak).
+  if (v < 14) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (gs.governanceStreak === undefined) gs.governanceStreak = 0;
+
+    state.schemaVersion = 14;
   }
 
   return state;

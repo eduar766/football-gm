@@ -43,3 +43,17 @@ describe('migrateState v12 -> v13 (Fase 15A: potencial + talentRng)', () => {
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v13 -> v14 (Fase 15C: governanceStreak)', () => {
+  it('backfills governanceStreak at 0 on an old save', () => {
+    const g = createGame(101, { teams: [{ name: 'X FC', strength: 50 }] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.governanceStreak;
+    legacy.schemaVersion = 13;
+
+    const migrated = migrateState(legacy as GameState);
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(14);
+    expect(migrated.governanceStreak).toBe(0);
+  });
+});

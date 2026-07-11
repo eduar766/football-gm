@@ -121,6 +121,9 @@ export { teamStrengthFromSquad, transfersForYear, runTransferWindow } from './tr
 // ── Talent pipeline (Fase 15) ─────────────────────────────────────────────────
 export { generatePotencial, developPlayers, retirePlayers, intakeYouthPlayers } from './talent';
 
+// ── Structural prestige base (Fase 15C) ───────────────────────────────────────
+export { prestigeBase, regressPrestige, PRESTIGE_REGRESSION_K } from './prestige';
+
 // ── Seed data (confederations for world-generator) ───────────────────────────
 export { CONFEDERATIONS } from './seed-data';
 export type { ConfederationData, LeagueData, TeamData, DivisionData } from './seed-data';
