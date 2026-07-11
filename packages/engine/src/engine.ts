@@ -47,6 +47,11 @@ import {
   stepRivalMatchdays,
   finalizeRivalSeason,
 } from './rival-sim';
+import {
+  createCloseSeasonContext,
+  runCloseSeasonPipeline,
+  type CloseSeasonStep,
+} from './season-pipeline';
 import type {
   BoardMandate,
   CreateGameOptions,
@@ -885,314 +890,479 @@ export function computeGlobalRanking(s: GameState): void {
 // player prestige from top-flight performance, advances negotiations, applies
 // promotion/relegation, then lands in pretemporada of the next year (the
 // commissioner sets up competitions/contracts/prizes before the next startSeason).
+// Ordered by `priority` (ascending, spaced by 10 to leave room for future
+// insertions). Each step's body is a literal extraction of the code block it
+// replaced — same order, same logic — so the golden master is unaffected by
+// this refactor. Adding a new season-close system means pushing one step
+// here with a free priority slot; no existing step needs to change.
+const closeSeasonSteps: CloseSeasonStep[] = [
+  {
+    // Final table per player-federation division (computed before any
+    // promotion changes so later steps see the season as it was played).
+    name: 'final-standings',
+    priority: 10,
+    run(s, ctx) {
+      const penalties = pointPenaltiesForYear(s, s.year);
+      for (const d of s.divisions.filter((d) => d.federationId === s.playerFederationId)) {
+        ctx.standingsByOrden.set(
+          d.orden,
+          applyPointPenalties(
+            computeStandings(
+              teamsInDivision(s.teams, d.orden, s.playerFederationId),
+              s.results.filter((r) => r.divisionOrden === d.orden),
+            ),
+            penalties,
+          ),
+        );
+      }
+      // Player prestige is driven by the top flight (division 1).
+      ctx.topFlightTable = ctx.standingsByOrden.get(1) ?? [];
+    },
+  },
+  {
+    name: 'prestige-delta-base',
+    priority: 20,
+    run(s, ctx) {
+      const topTeams = teamsInDivision(s.teams, 1, s.playerFederationId);
+      const titleRaceGap =
+        ctx.topFlightTable.length > 0
+          ? ctx.topFlightTable[0].points -
+            ctx.topFlightTable[Math.min(2, ctx.topFlightTable.length - 1)].points
+          : 0;
+      const meanStrength =
+        topTeams.length > 0
+          ? topTeams.reduce((acc, t) => acc + t.strength, 0) / topTeams.length
+          : 55;
+
+      let delta = Math.round((meanStrength - 55) / 4) - 2; // -2 base decay
+      if (titleRaceGap <= 3) delta += 3;
+      else if (titleRaceGap <= 6) delta += 2;
+      else if (titleRaceGap <= 10) delta += 1;
+      ctx.prestigeDelta = delta;
+    },
+  },
+  {
+    // Fase 6.5: pay the league prize from the final top-flight standings
+    // before processEconomy so it sees the payment in s.prizePayments.
+    name: 'pay-league-prize',
+    priority: 30,
+    run(s) {
+      payLeaguePrize(s);
+    },
+  },
+  {
+    // Team-level economy: gate receipts, sponsors, prizes, wages → team.treasury.
+    // Must run AFTER payLeaguePrize (prizePayments are ready) and BEFORE year increment.
+    name: 'team-economies',
+    priority: 40,
+    run(s) {
+      processTeamEconomies(s);
+    },
+  },
+  {
+    // Federation finances for the just-closed season (§4.5 + §5 tension). Pure,
+    // no state.rng — keeps the match engine deterministic and golden-stable.
+    name: 'federation-economy',
+    priority: 50,
+    run(s, ctx) {
+      const { econDelta, talentBump } = processEconomy(s);
+      ctx.prestigeDelta += econDelta;
+      ctx.prestigeDelta += governancePenalty(s); // §4.7: unchecked breaches erode credibility
+      ctx.prestigeDelta += governanceBonus(s);   // §4.7: well-enforced norms boost credibility
+      ctx.talentBump = talentBump;
+    },
+  },
+  {
+    name: 'apply-prestige',
+    priority: 60,
+    run(s, ctx) {
+      ctx.prestigeBefore = s.prestige;
+      s.prestige = Math.max(0, s.prestige + ctx.prestigeDelta);
+      const playerFed = s.federations.find((f) => f.id === s.playerFederationId);
+      if (playerFed) playerFed.prestige = s.prestige;
+    },
+  },
+  {
+    name: 'history-entries',
+    priority: 70,
+    run(s, ctx) {
+      for (const d of s.divisions.filter((d) => d.federationId === s.playerFederationId)) {
+        const st = ctx.standingsByOrden.get(d.orden) ?? [];
+        if (st.length === 0) continue;
+        const champion = st[0];
+        s.history.push({
+          year: s.year,
+          divisionOrden: d.orden,
+          championId: champion.teamId,
+          championName: champion.name,
+          points: champion.points,
+          prestigeBefore: ctx.prestigeBefore,
+          prestigeAfter: s.prestige,
+          delta: ctx.prestigeDelta,
+        });
+        // 14.6: title entry for the top flight (orden 1) champion.
+        if (d.orden === 1) {
+          logFederation(s, {
+            year: s.year,
+            matchday: 0,
+            type: 'title',
+            title: 'Campeón de liga',
+            detail: `${champion.name} campeón con ${champion.points} pts`,
+            value: null,
+            teamId: champion.teamId,
+          });
+        }
+      }
+    },
+  },
+  {
+    // 14.6: prestige snapshot for the just-closed season (one per year).
+    name: 'prestige-snapshot-log',
+    priority: 80,
+    run(s, ctx) {
+      logFederation(s, {
+        year: s.year,
+        matchday: 0,
+        type: 'prestige_snapshot',
+        title: 'Cierre de temporada',
+        detail: `Prestigio ${ctx.prestigeBefore} → ${s.prestige} (${ctx.prestigeDelta >= 0 ? '+' : ''}${ctx.prestigeDelta})`,
+        value: s.prestige,
+        teamId: null,
+      });
+    },
+  },
+  {
+    // §6 awards from the just-closed year (no-op if no players are loaded).
+    name: 'settle-awards',
+    priority: 90,
+    run(s) {
+      settleSeasonAwards(s);
+    },
+  },
+  {
+    // 5.2 — Season chronicle for the top flight (written after awards settle).
+    name: 'season-chronicle',
+    priority: 100,
+    run(s, ctx) {
+      const chronicle = buildChronicle(s, ctx.topFlightTable);
+      if (chronicle) s.seasonChronicles.push(chronicle);
+    },
+  },
+  {
+    // 5.3 — Team position snapshots for rivalry detection (all player divisions).
+    name: 'team-season-history',
+    priority: 110,
+    run(s, ctx) {
+      for (const d of s.divisions.filter((div) => div.federationId === s.playerFederationId)) {
+        const table = ctx.standingsByOrden.get(d.orden) ?? [];
+        for (let pos = 0; pos < table.length; pos++) {
+          const row = table[pos];
+          s.teamSeasonHistory.push({
+            teamId: row.teamId,
+            year: s.year,
+            divisionOrden: d.orden,
+            position: pos + 1,
+            points: row.points,
+            won: row.won,
+            lost: row.lost,
+          });
+        }
+      }
+    },
+  },
+  {
+    // Unresolved polémicas from the closed year expire and cost prestige (§1).
+    name: 'expire-stale-events',
+    priority: 120,
+    run(s) {
+      expireStaleEvents(s, s.year);
+    },
+  },
+  {
+    // Decay violation history for teams not penalized this year.
+    name: 'decay-violations',
+    priority: 130,
+    run(s) {
+      decayViolationHistory(s);
+    },
+  },
+  {
+    // Player career arcs: growth, peak, decline
+    name: 'player-career-arcs',
+    priority: 140,
+    run(s) {
+      for (const p of s.players) {
+        p.age += 1;
+        if (p.age < 27) {
+          // Growth phase: young players improve
+          p.calidad = Math.min(95, p.calidad + randInt(s.rng, 0, 2));
+        } else if (p.age < 32) {
+          // Peak phase: stable with small variation
+          p.calidad = Math.min(95, Math.max(20, p.calidad + randInt(s.rng, -1, 1)));
+        } else {
+          // Decline phase: older players decline
+          p.calidad = Math.max(20, p.calidad + randInt(s.rng, -3, -1));
+        }
+      }
+    },
+  },
+  {
+    // Retire players who are too old or too weak
+    name: 'retire-players',
+    priority: 150,
+    run(s) {
+      s.players = s.players.filter((p) => p.age <= 37 && p.calidad >= 25);
+    },
+  },
+  {
+    // Youth academy investment: improve young players based on team's academia
+    name: 'youth-academy-investment',
+    priority: 160,
+    run(s) {
+      for (const t of s.teams) {
+        if (t.divisionOrden === null || !t.academia) continue;
+        const youngPlayers = s.players.filter((p) => p.teamId === t.id && p.age <= 23);
+        for (const p of youngPlayers) {
+          const bonus = Math.round(t.academia / 20); // academia 20-100 → 1-5 bonus
+          p.calidad = Math.min(95, p.calidad + bonus);
+        }
+      }
+    },
+  },
+  {
+    // Team strength from squad (for teams with players)
+    name: 'team-strength-from-squad',
+    priority: 170,
+    run(s) {
+      for (const t of s.teams) {
+        if (t.divisionOrden === null) continue;
+        const squadPlayers = s.players.filter((p) => p.teamId === t.id);
+        if (squadPlayers.length > 0) {
+          const sorted = [...squadPlayers].sort((a, b) => b.calidad - a.calidad);
+          const top = sorted.slice(0, Math.min(11, sorted.length));
+          t.strength = Math.round(Math.max(35, Math.min(85, top.reduce((a, p) => a + p.calidad, 0) / top.length)));
+        } else {
+          // Teams without tracked players still get flat drift
+          t.strength = Math.min(85, Math.max(35, t.strength + randInt(s.rng, -3, 3)));
+        }
+      }
+    },
+  },
+  {
+    // Talent formation lifts the league's quality (deterministic, post-drift).
+    name: 'talent-bump',
+    priority: 180,
+    run(s, ctx) {
+      if (ctx.talentBump > 0) {
+        for (const t of s.teams) {
+          if (t.divisionOrden !== null) {
+            t.strength = Math.min(85, t.strength + ctx.talentBump);
+          }
+        }
+      }
+    },
+  },
+  {
+    // 14.5 — Any club request still open when the season closes counts as ignored.
+    name: 'expire-demands',
+    priority: 190,
+    run(s) {
+      expireDemands(s, s.totalMatchdays + 1, true);
+    },
+  },
+  {
+    // Arraigo decay: teams slowly lose loyalty if not maintained (-2/season).
+    name: 'arraigo-decay',
+    priority: 200,
+    run(s) {
+      for (const t of s.teams) {
+        if (t.federationId === s.playerFederationId) {
+          t.arraigo = Math.max(0, t.arraigo - 2);
+        }
+      }
+    },
+  },
+  {
+    // 14.5 — Exodus: clubs stuck at chronically low arraigo leave the federation.
+    name: 'exodus',
+    priority: 210,
+    run(s) {
+      processExodus(s);
+    },
+  },
+  {
+    // 11.1: finalize rival leagues from accumulated standings (independent RNG).
+    name: 'finalize-rival-season',
+    priority: 220,
+    run(s) {
+      if (s.confederations.length > 0) {
+        finalizeRivalSeason(s); // determines champions, drifts strengths, runs negotiations
+      }
+    },
+  },
+  {
+    // Evaluate board mandate for the just-closed season (after prestige + economy settled).
+    name: 'evaluate-mandate',
+    priority: 230,
+    run(s) {
+      const currentMandate = s.mandates.find((m) => m.year === s.year && m.met === null);
+      if (currentMandate) {
+        currentMandate.met = checkMandate(currentMandate, s);
+        if (!currentMandate.met) {
+          s.consecutiveMandateFails++;
+          if (s.consecutiveMandateFails >= 2) {
+            s.impulsesPerSeason = Math.max(1, s.impulsesPerSeason - 1);
+            s.consecutiveMandateFails = 0;
+          }
+        } else {
+          s.consecutiveMandateFails = 0;
+        }
+        logFederation(s, {
+          year: s.year,
+          matchday: 0,
+          type: 'mandate_result',
+          title: currentMandate.met ? 'Mandato cumplido' : 'Mandato fallido',
+          detail: currentMandate.description,
+          value: null,
+          teamId: null,
+        });
+        pushMail(s, {
+          year: s.year,
+          matchday: 0,
+          category: 'hito',
+          title: currentMandate.met ? 'Mandato cumplido' : 'Mandato incumplido',
+          body: currentMandate.met
+            ? `Cumpliste el mandato de la junta: ${currentMandate.description}.`
+            : `No cumpliste el mandato de la junta: ${currentMandate.description}. La junta toma nota.`,
+          actionKind: null,
+          refId: currentMandate.id,
+          teamId: null,
+          deadlineMatchday: null,
+          createdAtMatchday: 0,
+        });
+      }
+    },
+  },
+  {
+    // 14.8: board confidence + defeat check (uses the season prestige delta,
+    // the mandate result and the exodus/demands just processed above). Gated on
+    // players.length > 0 inside → golden-safe. Evaluated before the year bump.
+    name: 'board-confidence',
+    priority: 240,
+    run(s, ctx) {
+      evaluateBoardConfidence(s, ctx.prestigeDelta);
+    },
+  },
+  {
+    // 7.2: Record book — scan results before they are cleared at season end.
+    name: 'record-book',
+    priority: 250,
+    run(s) {
+      updateRecordBook(s);
+    },
+  },
+  {
+    name: 'year-bump-and-negotiations',
+    priority: 260,
+    run(s) {
+      s.year += 1;
+      progressNegotiations(s); // §4.2 timers compare against the new year
+      processRivalActions(s);
+      computeGlobalRanking(s);
+      // 7.3: Accumulate federation coefficients from the freshly-computed ranking.
+      accumulateFederationCoefficients(s);
+    },
+  },
+  {
+    // Fase 6.4: transfer window between seasons. Mutates s.players (teamId) and
+    // recomputes team.strength from the squad when players are tracked. Uses an
+    // independent rng, so player-less default games are byte-identical.
+    name: 'transfer-window',
+    priority: 270,
+    run(s) {
+      runTransferWindow(s);
+    },
+  },
+  {
+    // Promotion / relegation between adjacent player-federation divisions (§1).
+    name: 'promotion-relegation',
+    priority: 280,
+    run(s, ctx) {
+      const playerDivs = s.divisions
+        .filter((d) => d.federationId === s.playerFederationId)
+        .sort((a, b) => a.orden - b.orden);
+      if (playerDivs.length >= 2) {
+        const byId = new Map(s.teams.map((t) => [t.id, t]));
+        for (let i = 0; i < playerDivs.length - 1; i++) {
+          const upperOrden = playerDivs[i].orden;
+          const lowerOrden = playerDivs[i + 1].orden;
+          const upper = ctx.standingsByOrden.get(upperOrden) ?? [];
+          const lower = ctx.standingsByOrden.get(lowerOrden) ?? [];
+          const pr = Math.min(
+            PROMOTION_RELEGATION,
+            Math.floor(Math.min(upper.length, lower.length) / 2),
+          );
+          for (const r of upper.slice(upper.length - pr)) {
+            const t = byId.get(r.teamId);
+            if (t) t.divisionOrden = lowerOrden;
+          }
+          for (const r of lower.slice(0, pr)) {
+            const t = byId.get(r.teamId);
+            if (t) t.divisionOrden = upperOrden;
+          }
+        }
+      }
+    },
+  },
+  {
+    // Land in pretemporada with no calendar — startSeason builds it once the
+    // commissioner has staged the new year's competitions/contracts/prizes (§4.8).
+    name: 'reset-for-pretemporada',
+    priority: 290,
+    run(s) {
+      s.fixtures = [];
+      s.totalMatchdays = 0;
+      s.results = [];
+      s.matchReports = [];
+      s.currentMatchday = 0;
+      s.cupSchedule = [];
+      s.impulsesRemaining = s.impulsesPerSeason;
+      s.pendingImpulses = [];
+      s.seasonOver = false;
+      // Reset event-driven temporary effects.
+      s.eventStrengthPenalty = 0;
+      s.eventCapacityPenaltyPct = 0;
+      s.eventImpulseLoss = 0;
+      s.eventTreasuryInjection = 0;
+      // Reset per-season team flags.
+      for (const t of s.teams) {
+        t.prizesWithheld = false;
+        t.matchesPlayedThisSeason = 0;
+      }
+    },
+  },
+  {
+    // Force-complete any cups that were not finished during the season
+    // (e.g. scheduling edge cases). Must run BEFORE saving templates so
+    // recurring cups are always captured regardless of scheduling issues.
+    // Save recurring cup templates, then recreate them for the new season.
+    name: 'cups-finalize-and-phase',
+    priority: 300,
+    run(s) {
+      forceCompleteIncompleteCups(s);
+      saveRecurringCupTemplates(s);
+      recreateRecurringCups(s);
+      s.phase = 'pretemporada';
+    },
+  },
+];
+
 export function closeSeason(prev: GameState): GameState {
   if (prev.phase !== 'temporada') return prev;
   if (!prev.seasonOver) return prev;
   const s = structuredClone(prev);
-
-  // Final table per player-federation division (computed before any promotion changes).
-  const penalties = pointPenaltiesForYear(s, s.year);
-  const standingsByOrden = new Map<number, StandingRow[]>();
-  for (const d of s.divisions.filter(d => d.federationId === s.playerFederationId)) {
-    standingsByOrden.set(
-      d.orden,
-      applyPointPenalties(
-        computeStandings(
-          teamsInDivision(s.teams, d.orden, s.playerFederationId),
-          s.results.filter((r) => r.divisionOrden === d.orden),
-        ),
-        penalties,
-      ),
-    );
-  }
-
-  // Player prestige is driven by the top flight (division 1).
-  const top = standingsByOrden.get(1) ?? [];
-  const topTeams = teamsInDivision(s.teams, 1, s.playerFederationId);
-  const titleRaceGap =
-    top.length > 0 ? top[0].points - top[Math.min(2, top.length - 1)].points : 0;
-  const meanStrength =
-    topTeams.length > 0
-      ? topTeams.reduce((acc, t) => acc + t.strength, 0) / topTeams.length
-      : 55;
-
-  let delta = Math.round((meanStrength - 55) / 4) - 2; // -2 base decay
-  if (titleRaceGap <= 3) delta += 3;
-  else if (titleRaceGap <= 6) delta += 2;
-  else if (titleRaceGap <= 10) delta += 1;
-
-  // Fase 6.5: pay the league prize from the final top-flight standings before
-  // processEconomy so it sees the payment in s.prizePayments.
-  payLeaguePrize(s);
-
-  // Team-level economy: gate receipts, sponsors, prizes, wages → team.treasury.
-  // Must run AFTER payLeaguePrize (prizePayments are ready) and BEFORE year increment.
-  processTeamEconomies(s);
-
-  // Federation finances for the just-closed season (§4.5 + §5 tension). Pure,
-  // no state.rng — keeps the match engine deterministic and golden-stable.
-  const { econDelta, talentBump } = processEconomy(s);
-  delta += econDelta;
-  delta += governancePenalty(s); // §4.7: unchecked breaches erode credibility
-  delta += governanceBonus(s);   // §4.7: well-enforced norms boost credibility
-
-  const prestigeBefore = s.prestige;
-  s.prestige = Math.max(0, s.prestige + delta);
-  const playerFed = s.federations.find((f) => f.id === s.playerFederationId);
-  if (playerFed) playerFed.prestige = s.prestige;
-
-  for (const d of s.divisions.filter(d => d.federationId === s.playerFederationId)) {
-    const st = standingsByOrden.get(d.orden) ?? [];
-    if (st.length === 0) continue;
-    const champion = st[0];
-    s.history.push({
-      year: s.year,
-      divisionOrden: d.orden,
-      championId: champion.teamId,
-      championName: champion.name,
-      points: champion.points,
-      prestigeBefore,
-      prestigeAfter: s.prestige,
-      delta,
-    });
-    // 14.6: title entry for the top flight (orden 1) champion.
-    if (d.orden === 1) {
-      logFederation(s, {
-        year: s.year,
-        matchday: 0,
-        type: 'title',
-        title: 'Campeón de liga',
-        detail: `${champion.name} campeón con ${champion.points} pts`,
-        value: null,
-        teamId: champion.teamId,
-      });
-    }
-  }
-
-  // 14.6: prestige snapshot for the just-closed season (one per year).
-  logFederation(s, {
-    year: s.year,
-    matchday: 0,
-    type: 'prestige_snapshot',
-    title: 'Cierre de temporada',
-    detail: `Prestigio ${prestigeBefore} → ${s.prestige} (${delta >= 0 ? '+' : ''}${delta})`,
-    value: s.prestige,
-    teamId: null,
-  });
-
-  // §6 awards from the just-closed year (no-op if no players are loaded).
-  settleSeasonAwards(s);
-
-  // 5.2 — Season chronicle for the top flight (written after awards settle).
-  const chronicle = buildChronicle(s, top);
-  if (chronicle) s.seasonChronicles.push(chronicle);
-
-  // 5.3 — Team position snapshots for rivalry detection (all player divisions).
-  for (const d of s.divisions.filter((div) => div.federationId === s.playerFederationId)) {
-    const table = standingsByOrden.get(d.orden) ?? [];
-    for (let pos = 0; pos < table.length; pos++) {
-      const row = table[pos];
-      s.teamSeasonHistory.push({
-        teamId: row.teamId,
-        year: s.year,
-        divisionOrden: d.orden,
-        position: pos + 1,
-        points: row.points,
-        won: row.won,
-        lost: row.lost,
-      });
-    }
-  }
-
-  // Unresolved polémicas from the closed year expire and cost prestige (§1).
-  expireStaleEvents(s, s.year);
-
-  // Decay violation history for teams not penalized this year.
-  decayViolationHistory(s);
-
-  // Player career arcs: growth, peak, decline
-  for (const p of s.players) {
-    p.age += 1;
-    if (p.age < 27) {
-      // Growth phase: young players improve
-      p.calidad = Math.min(95, p.calidad + randInt(s.rng, 0, 2));
-    } else if (p.age < 32) {
-      // Peak phase: stable with small variation
-      p.calidad = Math.min(95, Math.max(20, p.calidad + randInt(s.rng, -1, 1)));
-    } else {
-      // Decline phase: older players decline
-      p.calidad = Math.max(20, p.calidad + randInt(s.rng, -3, -1));
-    }
-  }
-
-  // Retire players who are too old or too weak
-  s.players = s.players.filter(p => p.age <= 37 && p.calidad >= 25);
-
-  // Youth academy investment: improve young players based on team's academia
-  for (const t of s.teams) {
-    if (t.divisionOrden === null || !t.academia) continue;
-    const youngPlayers = s.players.filter(p => p.teamId === t.id && p.age <= 23);
-    for (const p of youngPlayers) {
-      const bonus = Math.round(t.academia / 20); // academia 20-100 → 1-5 bonus
-      p.calidad = Math.min(95, p.calidad + bonus);
-    }
-  }
-
-  // Team strength from squad (for teams with players)
-  for (const t of s.teams) {
-    if (t.divisionOrden === null) continue;
-    const squadPlayers = s.players.filter(p => p.teamId === t.id);
-    if (squadPlayers.length > 0) {
-      const sorted = [...squadPlayers].sort((a, b) => b.calidad - a.calidad);
-      const top = sorted.slice(0, Math.min(11, sorted.length));
-      t.strength = Math.round(Math.max(35, Math.min(85, top.reduce((a, p) => a + p.calidad, 0) / top.length)));
-    } else {
-      // Teams without tracked players still get flat drift
-      t.strength = Math.min(85, Math.max(35, t.strength + randInt(s.rng, -3, 3)));
-    }
-  }
-  // Talent formation lifts the league's quality (deterministic, post-drift).
-  if (talentBump > 0) {
-    for (const t of s.teams) {
-      if (t.divisionOrden !== null) {
-        t.strength = Math.min(85, t.strength + talentBump);
-      }
-    }
-  }
-
-  // 14.5 — Any club request still open when the season closes counts as ignored.
-  expireDemands(s, s.totalMatchdays + 1, true);
-
-  // Arraigo decay: teams slowly lose loyalty if not maintained (-2/season).
-  for (const t of s.teams) {
-    if (t.federationId === s.playerFederationId) {
-      t.arraigo = Math.max(0, t.arraigo - 2);
-    }
-  }
-
-  // 14.5 — Exodus: clubs stuck at chronically low arraigo leave the federation.
-  processExodus(s);
-
-  // 11.1: finalize rival leagues from accumulated standings (independent RNG).
-  if (s.confederations.length > 0) {
-    finalizeRivalSeason(s); // determines champions, drifts strengths, runs negotiations
-  }
-
-  // Evaluate board mandate for the just-closed season (after prestige + economy settled).
-  const currentMandate = s.mandates.find((m) => m.year === s.year && m.met === null);
-  if (currentMandate) {
-    currentMandate.met = checkMandate(currentMandate, s);
-    if (!currentMandate.met) {
-      s.consecutiveMandateFails++;
-      if (s.consecutiveMandateFails >= 2) {
-        s.impulsesPerSeason = Math.max(1, s.impulsesPerSeason - 1);
-        s.consecutiveMandateFails = 0;
-      }
-    } else {
-      s.consecutiveMandateFails = 0;
-    }
-    logFederation(s, {
-      year: s.year,
-      matchday: 0,
-      type: 'mandate_result',
-      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato fallido',
-      detail: currentMandate.description,
-      value: null,
-      teamId: null,
-    });
-    pushMail(s, {
-      year: s.year,
-      matchday: 0,
-      category: 'hito',
-      title: currentMandate.met ? 'Mandato cumplido' : 'Mandato incumplido',
-      body: currentMandate.met
-        ? `Cumpliste el mandato de la junta: ${currentMandate.description}.`
-        : `No cumpliste el mandato de la junta: ${currentMandate.description}. La junta toma nota.`,
-      actionKind: null,
-      refId: currentMandate.id,
-      teamId: null,
-      deadlineMatchday: null,
-      createdAtMatchday: 0,
-    });
-  }
-
-  // 14.8: board confidence + defeat check (uses the season prestige delta,
-  // the mandate result and the exodus/demands just processed above). Gated on
-  // players.length > 0 inside → golden-safe. Evaluated before the year bump.
-  evaluateBoardConfidence(s, delta);
-
-  // 7.2: Record book — scan results before they are cleared at season end.
-  updateRecordBook(s);
-
-  s.year += 1;
-  progressNegotiations(s); // §4.2 timers compare against the new year
-  processRivalActions(s);
-  computeGlobalRanking(s);
-  // 7.3: Accumulate federation coefficients from the freshly-computed ranking.
-  accumulateFederationCoefficients(s);
-
-  // Fase 6.4: transfer window between seasons. Mutates s.players (teamId) and
-  // recomputes team.strength from the squad when players are tracked. Uses an
-  // independent rng, so player-less default games are byte-identical.
-  runTransferWindow(s);
-
-  // Promotion / relegation between adjacent player-federation divisions (§1).
-  const playerDivs = s.divisions
-    .filter(d => d.federationId === s.playerFederationId)
-    .sort((a, b) => a.orden - b.orden);
-  if (playerDivs.length >= 2) {
-    const byId = new Map(s.teams.map((t) => [t.id, t]));
-    for (let i = 0; i < playerDivs.length - 1; i++) {
-      const upperOrden = playerDivs[i].orden;
-      const lowerOrden = playerDivs[i + 1].orden;
-      const upper = standingsByOrden.get(upperOrden) ?? [];
-      const lower = standingsByOrden.get(lowerOrden) ?? [];
-      const pr = Math.min(
-        PROMOTION_RELEGATION,
-        Math.floor(Math.min(upper.length, lower.length) / 2),
-      );
-      for (const r of upper.slice(upper.length - pr)) {
-        const t = byId.get(r.teamId);
-        if (t) t.divisionOrden = lowerOrden;
-      }
-      for (const r of lower.slice(0, pr)) {
-        const t = byId.get(r.teamId);
-        if (t) t.divisionOrden = upperOrden;
-      }
-    }
-  }
-
-  // Land in pretemporada with no calendar — startSeason builds it once the
-  // commissioner has staged the new year's competitions/contracts/prizes (§4.8).
-  s.fixtures = [];
-  s.totalMatchdays = 0;
-  s.results = [];
-  s.matchReports = [];
-  s.currentMatchday = 0;
-  s.cupSchedule = [];
-  s.impulsesRemaining = s.impulsesPerSeason;
-  s.pendingImpulses = [];
-  s.seasonOver = false;
-  // Reset event-driven temporary effects.
-  s.eventStrengthPenalty = 0;
-  s.eventCapacityPenaltyPct = 0;
-  s.eventImpulseLoss = 0;
-  s.eventTreasuryInjection = 0;
-  // Reset per-season team flags.
-  for (const t of s.teams) {
-    t.prizesWithheld = false;
-    t.matchesPlayedThisSeason = 0;
-  }
-
-  // Force-complete any cups that were not finished during the season
-  // (e.g. scheduling edge cases). Must run BEFORE saving templates so
-  // recurring cups are always captured regardless of scheduling issues.
-  forceCompleteIncompleteCups(s);
-  // Save recurring cup templates for next season.
-  saveRecurringCupTemplates(s);
-  // Recreate recurring cups from templates for the new season.
-  recreateRecurringCups(s);
-  s.phase = 'pretemporada';
+  const ctx = createCloseSeasonContext();
+  runCloseSeasonPipeline(closeSeasonSteps, s, ctx);
   return s;
 }
 
