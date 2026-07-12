@@ -124,6 +124,10 @@ export { generatePotencial, developPlayers, retirePlayers, intakeYouthPlayers } 
 // ── Structural prestige base (Fase 15C) ───────────────────────────────────────
 export { prestigeBase, regressPrestige, PRESTIGE_REGRESSION_K } from './prestige';
 
+// ── Featured matches (Fase 15D) ───────────────────────────────────────────────
+export { buildFeaturedReport, isFeaturedMatch } from './featured';
+export type { FeaturedReport, FeaturedTag, FeaturedMoment } from './featured';
+
 // ── Seed data (confederations for world-generator) ───────────────────────────
 export { CONFEDERATIONS } from './seed-data';
 export type { ConfederationData, LeagueData, TeamData, DivisionData } from './seed-data';

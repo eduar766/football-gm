@@ -140,7 +140,7 @@ Key modeling invariants:
 - `GameState` — the full serializable simulation state. Has `schemaVersion: number` used by the migration system.
 - `SeasonPhase` — `'pretemporada'` (setup window) | `'temporada'` (playable).
 - `CupFormat` — `'eliminatoria'` | `'eliminatoria_ida_vuelta'` | `'liga'`.
-- `NormType` — `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media'`.
+- `NormType` — `'tope_plantilla' | 'minimo_competitivo' | 'tope_salarial' | 'tope_extrangeros' | 'minimo_cantera' | 'tope_edad_media' | 'tope_deficit'`.
 - `NegotiationState` — `'gathering_requirements' | 'offer' | 'accepted' | 'effective' | 'rejected'`.
 - `NegotiationRequirement` — `{ tipo: 'prestigio'|'estadio'|'reparto', objetivo, cumplido, revealed }`. Requirements are revealed one per season during `gathering_requirements`; acceptance requires ≥75% of revealed reqs met.
 - `BoardMandate` — `{ id, objetivo, target, deadline, met, year }`. One mandate per season; 2 consecutive failures reduce impulses.
@@ -151,7 +151,12 @@ Key modeling invariants:
 - `Headline` — short narrative fact derived from match results/history (rachas, goleadas, sorpresas).
 - `Rivalry` — pair of teams detected as rivals from trajectory history (contiguous positions over N seasons).
 - `CupTemplate` — blueprint for recurring cups; saved at `closeSeason`, recreated in `pretemporada`.
-- `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks.
+- `Player` — has `nationality: string` (`'local'`/`'extranjero'`) and `cantera: boolean` used by norm breach checks, plus a hidden `potencial` consumed by the talent pipeline.
+- `BoardConfidence` — `{ value (0-100), history }`. Evaluated at `closeSeason`; when a losing condition is met, `state.gameOver` (`{ reason: GameOverReason, year, message }`) is set. The engine only sets the flag — it does not early-return the season loop, so tests and the golden master keep running; the backend refuses to advance once `gameOver` is set.
+- `ClubDemand` — `{ id, teamId, type: 'rescate'|'inversion_estadio', deadlineMatchday, amount, resolved, satisfied }`. A club in crisis *asks* the commissioner for help instead of the commissioner acting unprompted; ignoring a demand erodes `arraigo` and chronic low arraigo triggers exodus.
+- `MailboxMessage` — `{ id, category, title, body, status, actionKind, refId, deadlineMatchday }`. Unified commissioner inbox over events, mandates, and club demands (`state.mailbox`).
+- `FederationLogEntry` — append-only narrative timeline of the player's federation (sponsorships, negotiations, rescues, sanctions, mandate results, titles), stored in `state.federationLog`. Domain ledgers (`rescueLog`, `history`, `transfers`) remain the source of truth per-domain; this is the human-readable stream across all of them.
+- `FeaturedReport` / `FeaturedMoment` — pure derivation (no new state) that builds a rich goal-by-goal chronology for the handful of matches worth reading about (derbi, title race, goleada, remontada, hat-trick). Scoped to league `MatchReport`s only, since cup matches don't store per-goal detail.
 
 ### Backend architecture
 
@@ -167,6 +172,7 @@ The `game/` module controllers are split by domain to keep files manageable:
 | `negotiation.controller.ts` | Negotiation lifecycle | Adhesion negotiations |
 | `history.controller.ts` | Records, trajectories, chronicles | Read-only history |
 | `io.controller.ts` | `GET /games/:id/export`, `POST /games/import` | Save file export/import |
+| `mailbox.controller.ts` | `GET /games/:id/mailbox`, mark read/read-all, `POST /games/:id/demands/:demandId/resolve` | Commissioner inbox & club demands |
 
 All game routes are guarded by `JwtAuthGuard` + `GameOwnerGuard`. Admins bypass ownership checks.
 
@@ -198,7 +204,7 @@ Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`
 
 Auth pages (`LoginPage`, `RequestAccessPage`, `ResetPasswordPage`, `ChangePasswordPage`) sit outside `GameLayout` and don't require authentication. `AdminPage` is behind `JwtAuthGuard` + `AdminGuard`.
 
-In-game pages: `DashboardPage`, `TeamsPage`, `TeamDetailPage`, `FederationsPage`, `FederationPage`, `NegotiationsPage`, `CupsPage`, `NormsPage`, `EventsPage`, `EconomyPage`, `PrizesPage`, `HistoryPage`, `StructurePage`, `MarketPage`, `TransfersPage`, `WorldPage`.
+In-game pages: `DashboardPage`, `TeamsPage`, `TeamDetailPage`, `FederationsPage`, `FederationPage`, `NegotiationsPage`, `CupsPage`, `NormsPage`, `EventsPage`, `EconomyPage`, `PrizesPage`, `HistoryPage`, `StructurePage`, `MarketPage`, `TransfersPage`, `WorldPage`, `MailboxPage`.
 
 All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper that automatically attaches the JWT token from `localStorage`.
 
@@ -207,22 +213,32 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | Module | Responsibility |
 |--------|---------------|
 | `engine.ts` | `createGame`, `startSeason`, `advanceMatchday`, `closeSeason` — the main season loop; mandate generation/check; record book; federation coefficients |
+| `season-pipeline.ts` | `closeSeason` internals: an ordered array of `CloseSeasonStep`s (each `{ priority, run }`) executed ascending by priority, sharing a `SeasonCloseContext`. Adding a season-close system means pushing one step with a free priority slot — no edits to existing steps. Replaced a ~300-line monolith; the extraction preserved the golden master exactly. |
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
 | `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
 | `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
-| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION`. Called once per load in `GameStateRepository`. |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 14). Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
 | `events.ts` | Event spawning (including chained arcs via `chainedFromId`), resolution, type-specific consequences |
 | `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic, participant management |
 | `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige`, `runRivalNegotiations` |
-| `headlines.ts` | `generateHeadlines`, `buildChronicle` — narrative layer from match results and history |
+| `headlines.ts` | `generateHeadlines`, `buildChronicle`, `detectRivalries` — narrative layer from match results and history |
+| `featured.ts` | `FeaturedReport`/`FeaturedMoment` — pure, no-new-state derivation of a rich goal-by-goal chronology for the handful of matches worth reading about (derbi, título, goleada, remontada, hat-trick). League matches only (needs per-goal `MatchReport` detail). |
 | `awards.ts` | Individual awards (MVP, top scorer, best young player) at season close |
 | `prizes.ts` | Prize pools, share calculation, `processLeaguePrizes` |
 | `salaries.ts` | Player salary simulation and salary cap logic |
 | `standings.ts` | Table computation, rivalry detection from trajectories |
 | `transfers.ts` | Pre-season transfer window simulation |
+| `talent.ts` | Youth development pipeline: hidden `potencial` generation, role-aware growth, youth intake, retirement. Uses its own `talentRng`-derived stream; gated on `players.length > 0` so player-less golden-master runs are unaffected. |
+| `prestige.ts` | Structural prestige base (never stored, same precedent as `tierOf()`) from team count, infrastructure, governance streak, coefficient rank, and cup tradition. `closeSeason` regresses `state.prestige` toward this base each season (`PRESTIGE_REGRESSION_K`) so one great/bad season can't permanently swing it. |
+| `board.ts` | Board confidence meter (0–100) evaluated at `closeSeason`; sets `state.gameOver` on a losing condition (destitution, quiebra, éxodo, mandatos fallidos, liga vacía). No RNG — golden-stable. |
+| `demands.ts` | Club-initiated requests (rescue, stadium investment) — a club in crisis *asks*, rather than the commissioner acting unprompted. Ignoring a demand erodes `arraigo`; chronic low arraigo triggers exodus. Uses `eventsRng`, not `state.rng`. |
+| `mailbox.ts` | `pushMail`/`markMailRead`/`markAllMailRead` — unified commissioner inbox over events, mandates, and club demands. Pure, no RNG. |
+| `federation-log.ts` | `logFederation()` — append-only narrative timeline of the player's federation, written at the call sites where the underlying facts already happen. |
+| `names.ts` | Shared name pools + deterministic generators for teams, federations, and youth-intake players. Takes an `RngState` so callers control determinism. |
+| `preseason.ts` | `preseasonChecklist()` — derives blocking/non-blocking pretemporada items (prizes configured, distribution set, etc.). The engine itself stays permissive; the backend enforces blockers before advancing the phase. |
 | `seed-data.ts` | UEFA seed data: 7 federations, 132 real teams |
 | `rng.ts` | Mulberry32 PRNG — deterministic, serializable as a single `u32` |
 
@@ -246,6 +262,12 @@ If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, t
 - **Federation coefficients:** `state.federationCoefficients` accumulates each federation's global ranking score over time. Visible in Federations → "Ranking Mundial" tab.
 - **Export/import:** full `GameState` serialized as JSON (download/upload from the Games lobby).
 - **Team autonomy:** teams manage their own squads. The player never signs players for a club.
+- **Commissioner inbox:** `state.mailbox` unifies events, board mandates, and club demands into one triaged list (`unread`/`read`/`resolved`/`expired`). `MailboxPage` + `mailbox.controller.ts`.
+- **Club demands:** clubs in crisis (treasury below threshold, stadium capacity needs) *ask* the commissioner for help rather than the commissioner acting unprompted. Ignoring a demand erodes `arraigo`; deadlines are matchday-based.
+- **Board confidence & game over:** a 0–100 confidence meter moves with mandate outcomes, prestige swings, and treasury health; five losing conditions (`GameOverReason`) can end the game at `closeSeason`. The engine only flags `state.gameOver` — the backend refuses to advance a game that has it set.
+- **Structural prestige base:** a derived (never stored) floor/ceiling computed from team count, infrastructure, governance streak, federation-coefficient rank, and cup tradition. `closeSeason` regresses `state.prestige` toward this base every season so no single season can permanently inflate or collapse it.
+- **Youth development pipeline:** hidden per-player `potencial`, role-aware growth, youth intake, and retirement — all on a dedicated `talentRng` stream, gated so player-less runs (golden master) never touch it.
+- **Featured matches:** a handful of league matches per season (derby, title race, blowout, comeback, hat-trick) get a rich goal-by-goal narrative built on demand from existing `MatchReport` data — no extra state or RNG.
 - **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`. Participant lists are editable via `EditCupParticipantsRequest`. Deduplication runs at `migrateState` v2 for saves affected by the double-template bug.
 - **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
 - **Match reports:** every simulated match appends a `MatchReport` to `state.matchReports` (matchday, goals, goalscorers, cards). Used by history and dashboard views.
