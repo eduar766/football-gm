@@ -66,10 +66,39 @@ type RoundGroup = {
   legs: { numero: number; label: string; matches: CupMatchDto[] }[];
 };
 
+// Liga-format cups store every round-robin fixture in a single CupRound (they
+// all resolve at once — see playCupRound). `matchday` splits that flat list
+// back into real jornadas. Older saves created before that field existed
+// don't have it; the array is still stored in generation order, so chunking
+// it positionally by matches-per-round recovers the same grouping.
+function chunkLigaMatches(matches: CupMatchDto[], participantCount: number): CupMatchDto[][] {
+  if (matches.length === 0) return [];
+  if (matches.every((m) => m.matchday != null)) {
+    const byMatchday = new Map<number, CupMatchDto[]>();
+    for (const m of matches) {
+      const arr = byMatchday.get(m.matchday!) ?? [];
+      arr.push(m);
+      byMatchday.set(m.matchday!, arr);
+    }
+    return [...byMatchday.entries()].sort((a, b) => a[0] - b[0]).map(([, ms]) => ms);
+  }
+  const chunkSize = Math.max(1, Math.floor(participantCount / 2));
+  const chunks: CupMatchDto[][] = [];
+  for (let i = 0; i < matches.length; i += chunkSize) chunks.push(matches.slice(i, i + chunkSize));
+  return chunks;
+}
+
 function groupRounds(cup: CupDto): RoundGroup[] {
   const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
   const groups: RoundGroup[] = [];
-  if (isIdaVuelta) {
+  if (cup.formato === 'liga') {
+    const round = cup.rounds[0];
+    if (!round) return groups;
+    const chunks = chunkLigaMatches(round.matches, cup.participantTeamIds.length);
+    chunks.forEach((matches, i) => {
+      groups.push({ logicalNumero: i + 1, legs: [{ numero: i + 1, label: '', matches }] });
+    });
+  } else if (isIdaVuelta) {
     const processed = new Set<number>();
     for (const r of cup.rounds) {
       if (processed.has(r.numero)) continue;
@@ -248,6 +277,9 @@ function LigaCupCard({ cup, defaultExpanded = true, isPreseason = false, onEdit,
   const [jornada, setJornada] = useState<number | null>(null);
   const selectedJornada = jornada ?? lastPlayed;
   const selectedMatches = jornadas.find((j) => j.numero === selectedJornada)?.matches ?? [];
+  // Standings answer "who's winning" at a glance; results are a drill-down —
+  // keep them collapsed so a 20-team liga cup doesn't dominate the card.
+  const [resultsOpen, setResultsOpen] = useState(false);
 
   return (
     <Paper
@@ -319,39 +351,52 @@ function LigaCupCard({ cup, defaultExpanded = true, isPreseason = false, onEdit,
                 </Table.Tbody>
               </Table>
 
-              {/* Results by matchday (one at a time — no more endless dump) */}
+              {/* Results drill-down: collapsed by default, one jornada at a time */}
               {jornadas.length > 0 && (
                 <Box mt="sm">
-                  <Group justify="space-between" mb={6}>
-                    <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
-                      Resultados
-                    </Text>
-                    <Select
-                      size="xs"
-                      w={130}
-                      value={String(selectedJornada)}
-                      onChange={(v) => setJornada(v ? Number(v) : null)}
-                      data={jornadas.map((j) => ({ value: String(j.numero), label: `Jornada ${j.numero}` }))}
-                      comboboxProps={{ withinPortal: true }}
-                    />
+                  <Group
+                    justify="space-between"
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => setResultsOpen((o) => !o)}
+                  >
+                    <Group gap={6}>
+                      {resultsOpen ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+                      <Text size="xs" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.05em' }}>
+                        Resultados
+                      </Text>
+                      <Badge size="xs" color="gray" variant="light">{jornadas.length} jornada{jornadas.length !== 1 ? 's' : ''}</Badge>
+                    </Group>
+                    {resultsOpen && (
+                      <Select
+                        size="xs"
+                        w={130}
+                        value={String(selectedJornada)}
+                        onChange={(v) => setJornada(v ? Number(v) : null)}
+                        data={jornadas.map((j) => ({ value: String(j.numero), label: `Jornada ${j.numero}` }))}
+                        comboboxProps={{ withinPortal: true }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
                   </Group>
-                  <Table verticalSpacing={4}>
-                    <Table.Tbody>
-                      {selectedMatches.map((m, i) => (
-                        <Table.Tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                          <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} ta="right">{m.homeTeamName}</Table.Td>
-                          <Table.Td ta="center" style={{ minWidth: 56 }}>
-                            {m.played ? (
-                              <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{m.homeGoals} – {m.awayGoals}</Text>
-                            ) : (
-                              <Text c="dimmed" size="sm">vs</Text>
-                            )}
-                          </Table.Td>
-                          <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>{m.awayTeamName}</Table.Td>
-                        </Table.Tr>
-                      ))}
-                    </Table.Tbody>
-                  </Table>
+                  <Collapse in={resultsOpen}>
+                    <Table verticalSpacing={4} mt={6}>
+                      <Table.Tbody>
+                        {selectedMatches.map((m, i) => (
+                          <Table.Tr key={i} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                            <Table.Td fw={m.winnerTeamId === m.homeTeamId ? 700 : 400} ta="right">{m.homeTeamName}</Table.Td>
+                            <Table.Td ta="center" style={{ minWidth: 56 }}>
+                              {m.played ? (
+                                <Text fw={800} style={{ fontFamily: 'var(--mantine-font-family-monospace)' }}>{m.homeGoals} – {m.awayGoals}</Text>
+                              ) : (
+                                <Text c="dimmed" size="sm">vs</Text>
+                              )}
+                            </Table.Td>
+                            <Table.Td fw={m.winnerTeamId === m.awayTeamId ? 700 : 400}>{m.awayTeamName}</Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  </Collapse>
                 </Box>
               )}
             </>

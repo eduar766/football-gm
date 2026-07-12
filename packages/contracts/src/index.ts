@@ -1270,6 +1270,7 @@ export const CupMatchDto = z.object({
   played: z.boolean(),
   winnerTeamId: z.number().int().nullable(),
   leg: z.enum(['ida', 'vuelta']).optional(),
+  matchday: z.number().int().optional(),
 });
 export type CupMatchDto = z.infer<typeof CupMatchDto>;
 

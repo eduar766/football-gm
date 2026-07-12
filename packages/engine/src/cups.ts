@@ -56,14 +56,15 @@ function shuffle<T>(arr: T[], rng: RngState): T[] {
   return out;
 }
 
-function buildMatch(homeId: number, awayId: number, leg?: 'ida' | 'vuelta'): CupMatch {
+function buildMatch(homeId: number, awayId: number, leg?: 'ida' | 'vuelta', matchday?: number): CupMatch {
+  const extra = matchday != null ? { matchday } : {};
   if (homeId === BYE && awayId !== BYE) {
-    return { homeTeamId: BYE, awayTeamId: awayId, homeGoals: 0, awayGoals: 1, played: true, winnerTeamId: awayId, leg };
+    return { homeTeamId: BYE, awayTeamId: awayId, homeGoals: 0, awayGoals: 1, played: true, winnerTeamId: awayId, leg, ...extra };
   }
   if (awayId === BYE && homeId !== BYE) {
-    return { homeTeamId: homeId, awayTeamId: BYE, homeGoals: 1, awayGoals: 0, played: true, winnerTeamId: homeId, leg };
+    return { homeTeamId: homeId, awayTeamId: BYE, homeGoals: 1, awayGoals: 0, played: true, winnerTeamId: homeId, leg, ...extra };
   }
-  return { homeTeamId: homeId, awayTeamId: awayId, homeGoals: null, awayGoals: null, played: false, winnerTeamId: null, leg };
+  return { homeTeamId: homeId, awayTeamId: awayId, homeGoals: null, awayGoals: null, played: false, winnerTeamId: null, leg, ...extra };
 }
 
 function isCompetingPlayerTeam(state: GameState, teamId: number): boolean {
@@ -105,8 +106,11 @@ export function createCup(
   let secondRound: CupMatch[] | null = null;
   if (formato === 'liga') {
     // Single round-robin among all participants (everyone plays everyone once).
+    // All these matches live in one CupRound and resolve at once (playCupRound
+    // below) — matchday is kept as display metadata only, so results can be
+    // browsed jornada by jornada instead of as one flat dump.
     firstRound = generateFixtures(unique, s.cupsRng, 0, 1).map((f) =>
-      buildMatch(f.homeId, f.awayId),
+      buildMatch(f.homeId, f.awayId, undefined, f.matchday),
     );
   } else {
     // Shuffle real teams, then pair the first `byes` each with a BYE (auto-advance),
@@ -533,7 +537,7 @@ export function recreateRecurringCups(s: GameState): void {
     let secondRound: CupMatch[] | null = null;
     if (tmpl.formato === 'liga') {
       firstRound = generateFixtures(validIds, s.cupsRng, 0, 1).map((f) =>
-        buildMatch(f.homeId, f.awayId),
+        buildMatch(f.homeId, f.awayId, undefined, f.matchday),
       );
     } else {
       const shuffled = shuffle([...validIds], s.cupsRng);

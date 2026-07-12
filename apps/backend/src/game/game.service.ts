@@ -2647,6 +2647,7 @@ export class GameService {
             winnerTeamId:
               m.winnerTeamId !== null ? (map.get(m.winnerTeamId) ?? null) : null,
             ...(m.leg ? { leg: m.leg } : {}),
+            ...(m.matchday != null ? { matchday: m.matchday } : {}),
           })),
         })),
         recurring: c.recurring,

@@ -251,6 +251,11 @@ export interface CupMatch {
   played: boolean;
   winnerTeamId: number | null;
   leg?: 'ida' | 'vuelta';
+  // Round-robin ('liga' format) jornada this fixture belongs to — all matches
+  // of a liga cup live in one CupRound and resolve at once, so this is display
+  // metadata only, not a scheduling gate. Absent on older saves and on
+  // knockout-format matches (rounds already carry a real numero for those).
+  matchday?: number;
 }
 
 export interface CupRound {
