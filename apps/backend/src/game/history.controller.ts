@@ -32,4 +32,9 @@ export class HistoryController {
   federationLog(@Param('id', ParseIntPipe) id: number) {
     return this.games.getFederationLog(id);
   }
+
+  @Get(':id/season-reports')
+  seasonReports(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getSeasonReports(id);
+  }
 }

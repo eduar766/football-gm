@@ -186,6 +186,178 @@ export const RivalryDto = z.object({
 });
 export type RivalryDto = z.infer<typeof RivalryDto>;
 
+// Fase 16: season report ("periódico de fin de temporada"). Mirrors
+// packages/engine/src/types.ts's SeasonReport 1:1. Placed here — before
+// GameSummary, which embeds it — rather than near CupDto/FederationLogEntryDto
+// further down in this file, so a few enum values (cup tipo/formato, brief
+// type) are duplicated inline below instead of referencing CupType/CupFormat/
+// FederationLogType (defined later): keep them in sync if those unions change.
+// notableTransfers gets its own shape rather than reusing TransferEntryDto —
+// that DTO omits transferFee, which is the whole point of "notable" here.
+export const FeaturedTagDto = z.enum(['derbi', 'titulo', 'goleada', 'remontada', 'hat_trick']);
+export type FeaturedTagDto = z.infer<typeof FeaturedTagDto>;
+
+export const FeaturedMomentDto = z.object({
+  minute: z.number().int(),
+  teamId: Id.nullable(),
+  playerName: z.string().nullable(),
+  runningScore: z.string(),
+});
+export type FeaturedMomentDto = z.infer<typeof FeaturedMomentDto>;
+
+export const FeaturedReportDto = z.object({
+  matchday: z.number().int(),
+  divisionOrden: z.number().int(),
+  homeId: Id,
+  homeName: z.string(),
+  awayId: Id,
+  awayName: z.string(),
+  homeGoals: z.number().int(),
+  awayGoals: z.number().int(),
+  tags: z.array(FeaturedTagDto),
+  moments: z.array(FeaturedMomentDto),
+  narrative: z.string(),
+});
+export type FeaturedReportDto = z.infer<typeof FeaturedReportDto>;
+
+export const SeasonReportAwardDto = z.object({
+  tipo: AwardType,
+  playerName: z.string(),
+  teamName: z.string(),
+  valor: z.number().int(),
+});
+export type SeasonReportAwardDto = z.infer<typeof SeasonReportAwardDto>;
+
+export const SeasonReportCupResultDto = z.object({
+  cupId: Id,
+  name: z.string(),
+  tipo: z.enum(['copa', 'liga_juvenil', 'torneo_verano', 'inter_ligas']), // mirrors CupType
+  formato: z.enum(['eliminatoria', 'eliminatoria_ida_vuelta', 'liga']), // mirrors CupFormat
+  championTeamName: z.string(),
+  runnerUpTeamName: z.string().nullable(),
+});
+export type SeasonReportCupResultDto = z.infer<typeof SeasonReportCupResultDto>;
+
+export const SeasonReportRivalBriefDto = z.object({
+  federationId: z.number().int(),
+  federationName: z.string(),
+  championName: z.string(),
+  runnerUpName: z.string().nullable(),
+  topScorer: z.object({ name: z.string(), teamName: z.string(), goals: z.number().int() }).nullable(),
+  cupWinnerName: z.string().nullable(),
+  promoted: z.array(z.string()),
+  relegated: z.array(z.string()),
+});
+export type SeasonReportRivalBriefDto = z.infer<typeof SeasonReportRivalBriefDto>;
+
+export const SeasonReportEconomyDto = z.object({
+  income: z.number(),
+  operatingCost: z.number(),
+  normCost: z.number(),
+  prizes: z.number(),
+  talent: z.number(),
+  net: z.number(),
+  transferFees: z.number(),
+  transferIncome: z.number(),
+  matchday: z.number(),
+  merchandise: z.number(),
+  treasuryAfter: z.number(),
+});
+export type SeasonReportEconomyDto = z.infer<typeof SeasonReportEconomyDto>;
+
+export const SeasonReportTransferDto = z.object({
+  year: z.number().int(),
+  playerId: z.number().int(),
+  playerName: z.string(),
+  fromTeamId: Id,
+  fromTeamName: z.string(),
+  toTeamId: Id,
+  toTeamName: z.string(),
+  calidad: z.number().int(),
+  transferFee: z.number(),
+  isInternational: z.boolean().optional(),
+  fromFederationName: z.string().optional(),
+  toFederationName: z.string().optional(),
+});
+export type SeasonReportTransferDto = z.infer<typeof SeasonReportTransferDto>;
+
+export const SeasonReportBriefDto = z.object({
+  type: z.enum([
+    'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
+    'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
+  ]), // mirrors FederationLogType
+  title: z.string(),
+  detail: z.string(),
+  teamId: z.number().int().nullable(),
+});
+export type SeasonReportBriefDto = z.infer<typeof SeasonReportBriefDto>;
+
+export const SeasonReportDto = z.object({
+  year: z.number().int(),
+  generatedAtMatchday: z.number().int(),
+
+  headline: z.string(),
+  champion: z.object({ teamId: Id, name: z.string(), points: z.number().int() }),
+  revelation: z.object({ teamId: Id, name: z.string(), reason: z.string() }).nullable(),
+  disappointment: z.object({ teamId: Id, name: z.string(), reason: z.string() }).nullable(),
+  balanceIndex: z.number().nullable(),
+
+  prestige: z.object({ before: z.number().int(), after: z.number().int(), delta: z.number().int() }),
+  boardConfidence: z.object({
+    before: z.number().int(),
+    after: z.number().int(),
+    reasons: z.array(z.string()),
+  }),
+  mandate: z.object({ description: z.string(), met: z.boolean() }).nullable(),
+  structuralNotes: z.array(z.string()),
+
+  awards: z.array(SeasonReportAwardDto),
+  cupResults: z.array(SeasonReportCupResultDto),
+  featuredMatch: FeaturedReportDto.nullable(),
+
+  biggestWinThisSeason: z
+    .object({
+      margin: z.number().int(),
+      homeName: z.string(),
+      awayName: z.string(),
+      homeGoals: z.number().int(),
+      awayGoals: z.number().int(),
+    })
+    .nullable(),
+  allTimeRecordBrokenThisSeason: z.array(
+    z.object({
+      type: z.enum(['biggestWin', 'longestWinStreak']),
+      detail: z.string(),
+    }),
+  ),
+
+  economy: SeasonReportEconomyDto.nullable(),
+  notableTransfers: z.array(SeasonReportTransferDto),
+
+  worldNews: z.array(SeasonReportRivalBriefDto),
+  globalRankingTop5: z.array(
+    z.object({
+      federationId: z.number().int(),
+      federationName: z.string(),
+      rank: z.number().int(),
+      avgStrength: z.number(),
+      prestige: z.number().int(),
+      teamCount: z.number().int(),
+      score: z.number(),
+    }),
+  ),
+  playerFederationGlobalRank: z.number().int().nullable(),
+
+  briefs: z.array(SeasonReportBriefDto),
+});
+export type SeasonReportDto = z.infer<typeof SeasonReportDto>;
+
+// Every closed-season edition, newest first — the "hemeroteca" (History → Ediciones anteriores).
+export const SeasonReportsResponse = z.object({
+  reports: z.array(SeasonReportDto),
+});
+export type SeasonReportsResponse = z.infer<typeof SeasonReportsResponse>;
+
 // Fase 11.1: rival match result for Dashboard display.
 export const RivalMatchResultDto = z.object({
   matchday: z.number().int(),
@@ -248,6 +420,9 @@ export const GameSummary = z.object({
   consecutiveMandateFails: z.number().int().default(0),
   headlines: z.array(HeadlineDto).default([]),
   lastChronicle: SeasonChronicleDto.nullable().default(null),
+  // Fase 16: the just-closed season's full report — populated on every
+  // mutating response, but only actually new right after close-season.
+  lastSeasonReport: SeasonReportDto.nullable().default(null),
   rivalLastMatchday: z.array(RivalMatchResultDto).default([]),
   matchReports: z.array(MatchReportDto).default([]),
   transferVetoes: z.array(z.number().int()).default([]),

@@ -33,6 +33,7 @@ import type {
   TeamEconomiesResponse,
   WorldRankingResponse,
   WorldStandingsResponse,
+  SeasonReportsResponse,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -128,6 +129,8 @@ export const api = {
   history: (id: number) => req<HistoryResponse>(`/games/${id}/history`),
   federationLog: (id: number) =>
     req<FederationLogResponse>(`/games/${id}/federation-log`),
+  seasonReports: (id: number) =>
+    req<SeasonReportsResponse>(`/games/${id}/season-reports`),
   mailbox: (id: number) => req<MailboxResponse>(`/games/${id}/mailbox`),
   markMailRead: (id: number, msgId: number) =>
     req<MailboxResponse>(`/games/${id}/mailbox/${msgId}/read`, { method: 'POST' }),

@@ -100,6 +100,7 @@ import type {
   TeamEconomiesResponse,
   CommissionerReportsResponse,
   CreateInterLeagueCupRequest,
+  SeasonReportsResponse,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -214,6 +215,12 @@ export class GameService {
       headlines: generateHeadlines(state),
       lastChronicle: state.seasonChronicles.length > 0
         ? state.seasonChronicles[state.seasonChronicles.length - 1]
+        : null,
+      // Fase 16: same passthrough pattern as lastChronicle above — engine
+      // team ids go straight through unmapped (consistent with lastChronicle,
+      // not with the remapped-id convention some other endpoints use).
+      lastSeasonReport: state.seasonReports.length > 0
+        ? state.seasonReports[state.seasonReports.length - 1]
         : null,
       rivalLastMatchday: state.rivalLastMatchdayResults.map(r => ({
         matchday: r.matchday,
@@ -2871,6 +2878,15 @@ export class GameService {
       (a, b) => b.year - a.year || b.id - a.id,
     );
     return { entries };
+  }
+
+  // Fase 16: the hemeroteca — every season-close newspaper edition ever
+  // produced, newest first. Read-only; reports are immutable snapshots
+  // written once at closeSeason (see season-report.ts in the engine).
+  async getSeasonReports(gameId: number): Promise<SeasonReportsResponse> {
+    const state = await this.repo.loadState(gameId);
+    const reports = [...(state.seasonReports ?? [])].sort((a, b) => b.year - a.year);
+    return { reports };
   }
 
   async getCommissionerReports(gameId: number): Promise<CommissionerReportsResponse> {
