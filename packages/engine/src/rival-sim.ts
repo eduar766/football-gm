@@ -474,6 +474,7 @@ export function finalizeRivalSeason(s: GameState): void {
       year: s.year,
       federationId: div.federationId,
       federationName: fed?.name ?? '',
+      divisionOrden: div.orden,
       championId: champion.teamId,
       championName: champion.name,
       runnerUpName,

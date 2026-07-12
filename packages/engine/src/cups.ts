@@ -679,7 +679,7 @@ export function createInterLeagueCup(
   const rivalChampionIds: number[] = [];
   for (const fedId of rivalFederationIds) {
     const record = [...(prev.rivalSeasonRecords ?? [])]
-      .filter((r) => r.federationId === fedId)
+      .filter((r) => r.federationId === fedId && r.divisionOrden === 1)
       .sort((a, b) => b.year - a.year)[0];
     if (!record) return prev;
     const championTeam = prev.teams.find((t) => t.id === record.championId);

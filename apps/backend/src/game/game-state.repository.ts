@@ -1,6 +1,6 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { CURRENT_SCHEMA_VERSION, migrateState, type GameState } from '@football-gm/engine';
+import { CURRENT_SCHEMA_VERSION, migrateState, type GameState, type Player } from '@football-gm/engine';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
 import * as s from '../db/schema';
@@ -119,6 +119,43 @@ export class GameStateRepository {
     for (const r of rows) if (r.eng != null) map.set(r.eng, r.id);
     if (tx) this.getCache(tx).players = map;
     return map;
+  }
+
+  // Mirrors engine players that don't have a DB row yet (e.g. a youth-intake
+  // player created earlier in the same closeSeason call) into the `players`
+  // projection, so a subsequent engineToDbPlayer() lookup — awards, in
+  // particular — can resolve them instead of crashing on a NOT NULL insert.
+  // Updates the tx-scoped cache in place so callers don't need to know this
+  // ran.
+  async syncNewPlayers(
+    gameId: number,
+    tx: Tx,
+    players: Player[],
+    teamMap: Map<number, number>,
+  ): Promise<Map<number, number>> {
+    const known = await this.engineToDbPlayer(gameId, tx);
+    const missing = players.filter((p) => !known.has(p.id) && teamMap.has(p.teamId));
+    if (missing.length === 0) return known;
+
+    const rows = await tx
+      .insert(s.players)
+      .values(
+        missing.map((p) => ({
+          gameId,
+          teamId: teamMap.get(p.teamId)!,
+          enginePlayerId: p.id,
+          name: p.name,
+          posicion: p.posicion,
+          calidad: p.calidad,
+          nationality: p.nationality,
+          cantera: p.cantera,
+        })),
+      )
+      .returning({ id: s.players.id, eng: s.players.enginePlayerId });
+
+    for (const r of rows) if (r.eng != null) known.set(r.eng, r.id);
+    this.getCache(tx).players = known;
+    return known;
   }
 
   private getCache(tx: object): TxCache {

@@ -581,6 +581,12 @@ export interface RivalSeasonRecord {
   year: number;
   federationId: number;
   federationName: string;
+  // finalizeRivalSeason pushes one record per division (1ª and 2ª) per
+  // federation, not one per federation — this distinguishes them so
+  // consumers that want "the federation's headline story" can filter to
+  // divisionOrden === 1 instead of showing both as if they were separate
+  // federations.
+  divisionOrden: number;
   championId: number;
   championName: string;
   runnerUpName: string | null;

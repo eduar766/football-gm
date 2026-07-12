@@ -33,6 +33,7 @@ import {
   IconTrophy,
   IconUsers,
 } from '@tabler/icons-react';
+import type { SeasonReportDto } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
@@ -41,6 +42,7 @@ import { MandateCard } from '../components/dashboard/MandateCard';
 import { HeadlinesFeed } from '../components/dashboard/HeadlinesFeed';
 import { MatchReports } from '../components/dashboard/MatchReports';
 import { RivalResults } from '../components/dashboard/RivalResults';
+import { SeasonNewspaper } from '../components/SeasonNewspaper';
 
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -51,6 +53,8 @@ export function DashboardPage() {
   const [division, setDivision] = useState(1);
   const [reviewMatchKey, setReviewMatchKey] = useState<string | null>(null);
   const [emergencyTeamId, setEmergencyTeamId] = useState<string | null>(null);
+  const [newspaperOpen, setNewspaperOpen] = useState(false);
+  const [newspaperReport, setNewspaperReport] = useState<SeasonReportDto | null>(null);
   const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
   const phase = summary.data?.phase;
   const isPreseason = phase === 'pretemporada';
@@ -114,6 +118,12 @@ export function DashboardPage() {
     mutationFn: () => api.closeSeason(id),
     queryKeyToInvalidate: REFRESH_KEYS,
     successMessage: 'Temporada cerrada',
+    onSuccess: (data) => {
+      if (data.lastSeasonReport) {
+        setNewspaperReport(data.lastSeasonReport);
+        setNewspaperOpen(true);
+      }
+    },
   });
 
   const mCallReview = useMutationWithFeedback({
@@ -817,6 +827,13 @@ export function DashboardPage() {
           </Text>
         </Paper>
       )}
+
+      <SeasonNewspaper
+        report={newspaperReport}
+        federationName={summary.data?.federation.name ?? ''}
+        opened={newspaperOpen}
+        onClose={() => setNewspaperOpen(false)}
+      />
     </div>
   );
 }

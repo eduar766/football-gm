@@ -908,7 +908,11 @@ export class GameService {
       // append-only history; the historical scorer ranking is a SQL view.
       const yearAwards = next.awards.filter((a) => a.year === closedYear);
       if (yearAwards.length > 0) {
-        const playerMap = await this.repo.engineToDbPlayer(gameId, tx);
+        // Youth intake (talent.ts) can create a player earlier in this same
+        // closeSeason call who then wins an award (mejor_joven, typically) —
+        // sync any engine players missing a DB row first, or the lookup below
+        // returns undefined and the insert crashes on the NOT NULL player_id.
+        const playerMap = await this.repo.syncNewPlayers(gameId, tx, next.players, map);
         await tx.insert(s.awards).values(
           yearAwards.map((a) => ({
             gameId,
@@ -1607,7 +1611,7 @@ export class GameService {
 
     const seasonHistory = !isPlayer
       ? state.rivalSeasonRecords
-          .filter(r => r.federationId === federationId)
+          .filter(r => r.federationId === federationId && r.divisionOrden === 1)
           .sort((a, b) => b.year - a.year)
           .map(r => ({
             year: r.year,
@@ -1695,8 +1699,13 @@ export class GameService {
 
     // Rival champions from engine state — use rivalSeasonRecords (Fase 11.2+) which
     // store federationName directly, avoiding the broken divisionOrden→federationId lookup.
+    // finalizeRivalSeason pushes one record per division (1ª and 2ª); only the
+    // top flight is "the federation's champion" — filter out 2ª or every
+    // federation shows up twice with two different "champions".
     const state = await this.repo.loadState(gameId);
-    const rivalChampions = (state.rivalSeasonRecords ?? []).map(r => ({
+    const rivalChampions = (state.rivalSeasonRecords ?? [])
+      .filter(r => r.divisionOrden === 1)
+      .map(r => ({
       year: r.year,
       federationName: r.federationName,
       championName: r.championName,
@@ -2677,7 +2686,7 @@ export class GameService {
         .filter((f) => !f.isPlayer)
         .map((f) => {
           const latestRecord = (state.rivalSeasonRecords ?? [])
-            .filter((r) => r.federationId === f.id)
+            .filter((r) => r.federationId === f.id && r.divisionOrden === 1)
             .sort((a, b) => b.year - a.year)[0];
           return {
             federationId: f.id,
@@ -2895,9 +2904,11 @@ export class GameService {
       (state.federationCoefficients ?? []).map((c) => [c.federationId, c.cumulativeScore]),
     );
 
-    // Most recent season record per federation (top scorer + champion)
+    // Most recent season record per federation (top scorer + champion) — only
+    // the top flight (divisionOrden === 1) counts as "the federation's" record.
     const latestRecord = new Map<number, typeof state.rivalSeasonRecords[number]>();
     for (const r of state.rivalSeasonRecords ?? []) {
+      if (r.divisionOrden !== 1) continue;
       const existing = latestRecord.get(r.federationId);
       if (!existing || r.year > existing.year) latestRecord.set(r.federationId, r);
     }

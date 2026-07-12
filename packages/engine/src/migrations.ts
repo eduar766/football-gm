@@ -3,7 +3,7 @@ import { divisionName } from './structure';
 import { generatePotencial } from './talent';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 15;
+export const CURRENT_SCHEMA_VERSION = 16;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -348,6 +348,24 @@ export function migrateState(state: GameState): GameState {
     if (!gs.seasonReports) gs.seasonReports = [];
 
     state.schemaVersion = 15;
+  }
+
+  // v15 → v16: RivalSeasonRecord gains divisionOrden — finalizeRivalSeason was
+  // pushing one record per division (1ª and 2ª) per federation, and every
+  // consumer (worldNews, "Otras Federaciones", inter-league cup champion
+  // lookup) silently treated both as if they were separate federations. Old
+  // records can't be honestly told apart after the fact (no other field
+  // distinguishes them), so this defaults ALL of them to 1 rather than
+  // guessing — old seasons keep showing the same pre-existing duplicate they
+  // always did (no new regression), while every record written from this
+  // version forward is tagged correctly and dedupes as intended.
+  if (v < 16) {
+    for (const r of state.rivalSeasonRecords ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((r as any).divisionOrden === undefined) (r as any).divisionOrden = 1;
+    }
+
+    state.schemaVersion = 16;
   }
 
   return state;

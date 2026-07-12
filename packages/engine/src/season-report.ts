@@ -192,8 +192,11 @@ export function runSeasonReportAssemble(s: GameState, ctx: SeasonCloseContext): 
     .sort((a, b) => b.transferFee - a.transferFee)
     .slice(0, 3);
 
+  // One brief per federation, not per division — finalizeRivalSeason pushes a
+  // RivalSeasonRecord for every division (1ª and 2ª); only the top flight is
+  // "the federation's" headline story.
   const worldNews: SeasonReport['worldNews'] = s.rivalSeasonRecords
-    .filter((r) => r.year === reportYear)
+    .filter((r) => r.year === reportYear && r.divisionOrden === 1)
     .map((r) => ({
       federationId: r.federationId,
       federationName: r.federationName,
