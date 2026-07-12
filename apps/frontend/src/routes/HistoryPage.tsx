@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge, Box, Grid, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Stack, Table, Tabs, Text } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { IconHistory, IconMedal, IconTable, IconTimeline, IconTrophy, IconWorld } from '@tabler/icons-react';
-import type { AwardType, FederationLogEntryDto, RecordBookDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
+import { IconHistory, IconMedal, IconNews, IconTable, IconTimeline, IconTrophy, IconWorld } from '@tabler/icons-react';
+import type { AwardType, FederationLogEntryDto, RecordBookDto, SeasonReportDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
 import {
   CartesianGrid,
   Legend,
@@ -15,9 +15,11 @@ import {
   YAxis,
 } from 'recharts';
 import { api } from '../api';
+import { QK } from '../query-keys';
 import { PalmaresChart } from '../components/PalmaresChart';
 import { PageHero } from '../components/PageHero';
 import { EmptyState } from '../components/EmptyState';
+import { SeasonNewspaper } from '../components/SeasonNewspaper';
 
 const AWARD_LABEL: Record<AwardType, string> = {
   max_goleador: 'Máximo goleador',
@@ -116,6 +118,12 @@ export function HistoryPage() {
     queryKey: ['federation-log', id],
     queryFn: () => api.federationLog(id),
   });
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
+  const seasonReports = useQuery({
+    queryKey: QK.seasonReports(id),
+    queryFn: () => api.seasonReports(id),
+  });
+  const [openReport, setOpenReport] = useState<SeasonReportDto | null>(null);
 
   const records = hist.data?.records ?? [];
 
@@ -197,6 +205,13 @@ export function HistoryPage() {
             style={{ fontWeight: 600 }}
           >
             Otras Federaciones
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="ediciones"
+            leftSection={<IconNews size={16} />}
+            style={{ fontWeight: 600 }}
+          >
+            Ediciones anteriores
           </Tabs.Tab>
         </Tabs.List>
 
@@ -450,7 +465,22 @@ export function HistoryPage() {
         <Tabs.Panel value="otras-federaciones">
           <RivalChampionsPanel champions={rivalChampions} />
         </Tabs.Panel>
+
+        <Tabs.Panel value="ediciones">
+          <SeasonEditionsPanel
+            reports={seasonReports.data?.reports ?? []}
+            loading={seasonReports.isLoading}
+            onOpen={setOpenReport}
+          />
+        </Tabs.Panel>
       </Tabs>
+
+      <SeasonNewspaper
+        report={openReport}
+        federationName={summary.data?.federation.name ?? ''}
+        opened={openReport !== null}
+        onClose={() => setOpenReport(null)}
+      />
     </div>
   );
 }
@@ -791,5 +821,95 @@ function RivalChampionsPanel({ champions }: { champions: Array<{ year: number; f
         );
       })}
     </SimpleGrid>
+  );
+}
+
+// One "most interesting fact" per edition — same priority as the featured
+// match itself: a decisive/derby/blowout/comeback/hat-trick game beats a
+// plain scoreline, which beats the season headline.
+function editionHighlight(r: SeasonReportDto): string {
+  if (r.featuredMatch) {
+    const m = r.featuredMatch;
+    return `Partido del año: ${m.homeName} ${m.homeGoals}-${m.awayGoals} ${m.awayName}`;
+  }
+  if (r.biggestWinThisSeason) {
+    const b = r.biggestWinThisSeason;
+    return `Mayor goleada: ${b.homeName} ${b.homeGoals}-${b.awayGoals} ${b.awayName}`;
+  }
+  return r.headline;
+}
+
+function SeasonEditionsPanel({
+  reports,
+  loading,
+  onOpen,
+}: {
+  reports: SeasonReportDto[];
+  loading: boolean;
+  onOpen: (report: SeasonReportDto) => void;
+}) {
+  if (loading) return <Skeleton height={300} radius="md" />;
+  if (reports.length === 0) {
+    return (
+      <Paper p="md" radius="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+        <EmptyState
+          icon={IconNews}
+          title="Aún no hay ediciones publicadas"
+          description="Cierra tu primera temporada para generar el periódico de fin de temporada — cada edición queda archivada aquí para siempre."
+          color="#F59E0B"
+        />
+      </Paper>
+    );
+  }
+
+  const sorted = [...reports].sort((a, b) => b.year - a.year);
+
+  return (
+    <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+      <Text fw={700} mb="sm">Ediciones anteriores</Text>
+      <Text size="xs" c="dimmed" mb="sm">Haz clic en una edición para reabrir el periódico completo.</Text>
+      <Table>
+        <Table.Thead>
+          <Table.Tr>
+            {(['Año', 'Campeón', 'Destacado'] as const).map((h) => (
+              <Table.Th
+                key={h}
+                style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+              >
+                {h}
+              </Table.Th>
+            ))}
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {sorted.map((r, i) => (
+            <Table.Tr
+              key={r.year}
+              className="stagger-item"
+              onClick={() => onOpen(r)}
+              style={{
+                cursor: 'pointer',
+                borderLeft: i === 0 ? '3px solid #F59E0B' : '3px solid transparent',
+                background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                animationDelay: `${i * 40}ms`,
+              }}
+            >
+              <Table.Td>
+                <Text fw={700} style={{ fontFamily: 'var(--mantine-font-family-monospace)', color: i === 0 ? '#F59E0B' : undefined }}>
+                  {r.year}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text fw={600}>{r.champion.name}</Text>
+                <Text size="xs" c="dimmed">{r.champion.points} pts</Text>
+              </Table.Td>
+              <Table.Td c="dimmed" style={{ maxWidth: 420 }}>
+                <Text size="sm" lineClamp={1}>{editionHighlight(r)}</Text>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Paper>
   );
 }

@@ -23,5 +23,6 @@ export const QK = {
   worldStandings: (id: number) => ['worldStandings', id],
   commissionerReports: (id: number) => ['commissionerReports', id],
   nextFixtures: (id: number) => ['nextFixtures', id],
+  seasonReports: (id: number) => ['seasonReports', id],
   games: () => ['games'],
 } as const;
