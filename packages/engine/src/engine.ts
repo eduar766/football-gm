@@ -41,6 +41,7 @@ import { payLeaguePrize } from './prizes';
 import { runTransferWindow } from './transfers';
 import { developPlayers, generatePotencial, intakeYouthPlayers, retirePlayers } from './talent';
 import { prestigeBase, regressPrestige } from './prestige';
+import { runSeasonReportAssemble, runSeasonReportPrescan } from './season-report';
 import {
   generateRivalFixtures,
   generateRivalPlayers,
@@ -347,6 +348,7 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     negativeTreasurySeasons: 0,
     talentRng,
     governanceStreak: 0,
+    seasonReports: [],
   };
 }
 
@@ -1322,6 +1324,18 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     },
   },
   {
+    // Fase 16: reads s.results/s.matchReports while they're still alive
+    // (reset-for-pretemporada at 290 wipes them) and stashes match-level
+    // season-report data in ctx.meta for season-report-assemble (305) to
+    // pick up later. Must run after 260 so s.year has already advanced and
+    // reportYear = s.year - 1 is stable for the rest of the pipeline.
+    name: 'season-report-prescan',
+    priority: 265,
+    run(s, ctx) {
+      runSeasonReportPrescan(s, ctx);
+    },
+  },
+  {
     // Fase 6.4: transfer window between seasons. Mutates s.players (teamId) and
     // recomputes team.strength from the squad when players are tracked. Uses an
     // independent rng, so player-less default games are byte-identical.
@@ -1401,6 +1415,17 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       saveRecurringCupTemplates(s);
       recreateRecurringCups(s);
       s.phase = 'pretemporada';
+    },
+  },
+  {
+    // Fase 16: last step. Runs after cups-finalize-and-phase (300) so
+    // force-completed cup champions are already resolved; reads ctx.meta
+    // (from season-report-prescan, 265) plus every already-durable array
+    // and pushes the finished SeasonReport to s.seasonReports.
+    name: 'season-report-assemble',
+    priority: 305,
+    run(s, ctx) {
+      runSeasonReportAssemble(s, ctx);
     },
   },
 ];

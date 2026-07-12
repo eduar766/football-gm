@@ -1,4 +1,5 @@
 import type { RngState } from './rng';
+import type { FeaturedReport } from './featured';
 
 // Board mandate: a seasonal objective issued by the federation's governing board.
 export type MandateType = 'prestige_min' | 'team_count' | 'positive_balance';
@@ -763,6 +764,12 @@ export interface GameState {
   // prestigeBase()'s governance component; resets to 0 the moment a season
   // closes without a governance bonus.
   governanceStreak: number;
+  // Fase 16: hemeroteca — one immutable snapshot per closed season, captured
+  // at the exact moment of closeSeason (see season-report.ts). Several of the
+  // fields it summarizes (lastEconomy, recordBook, globalRankings) are
+  // singular and get overwritten by the next season close, so this is the
+  // only durable record of a past season's report once time has moved on.
+  seasonReports: SeasonReport[];
 }
 
 export interface RecordBook {
@@ -782,6 +789,111 @@ export interface RecordBook {
     count: number;
     year: number;
   } | null;
+}
+
+// ── Fase 16: season report ("periódico de fin de temporada") ────────────────
+// See plan-fase-16-periodico-de-temporada.md for the full design rationale.
+
+export interface SeasonReportAward {
+  tipo: AwardType;
+  playerName: string;
+  teamName: string;
+  valor: number;
+}
+
+export interface SeasonReportCupResult {
+  cupId: number;
+  name: string;
+  tipo: CupType;
+  formato: CupFormat;
+  championTeamName: string;
+  runnerUpTeamName: string | null;
+}
+
+export interface SeasonReportRivalBrief {
+  federationId: number;
+  federationName: string;
+  championName: string;
+  runnerUpName: string | null;
+  topScorer: { name: string; teamName: string; goals: number } | null;
+  cupWinnerName: string | null;
+  promoted: string[];
+  relegated: string[];
+}
+
+export interface SeasonReportMandate {
+  description: string;
+  met: boolean;
+}
+
+export interface SeasonReportBoardConfidence {
+  before: number;
+  after: number;
+  reasons: string[];
+}
+
+// Copy of LastEconomy's numeric fields — LastEconomy itself is singular and
+// gets overwritten by the next season close, so this snapshot is frozen here.
+export interface SeasonReportEconomy {
+  income: number;
+  operatingCost: number;
+  normCost: number;
+  prizes: number;
+  talent: number;
+  net: number;
+  transferFees: number;
+  transferIncome: number;
+  matchday: number;
+  merchandise: number;
+  treasuryAfter: number;
+}
+
+export interface SeasonReport {
+  year: number; // the CLOSED season's year (s.year has already advanced by the time this is built)
+  generatedAtMatchday: number; // always 0 — informational, close-season is always post-season
+
+  // Portada
+  headline: string;
+  champion: { teamId: number; name: string; points: number };
+  revelation: { teamId: number; name: string; reason: string } | null;
+  disappointment: { teamId: number; name: string; reason: string } | null;
+  balanceIndex: number | null;
+
+  // Estado de la federación
+  prestige: { before: number; after: number; delta: number };
+  boardConfidence: SeasonReportBoardConfidence;
+  mandate: SeasonReportMandate | null;
+  structuralNotes: string[];
+
+  // Deportes
+  awards: SeasonReportAward[];
+  cupResults: SeasonReportCupResult[];
+  featuredMatch: FeaturedReport | null;
+
+  // Récords
+  biggestWinThisSeason: {
+    margin: number;
+    homeName: string;
+    awayName: string;
+    homeGoals: number;
+    awayGoals: number;
+  } | null;
+  allTimeRecordBrokenThisSeason: {
+    type: 'biggestWin' | 'longestWinStreak';
+    detail: string;
+  }[];
+
+  // Economía
+  economy: SeasonReportEconomy | null;
+  notableTransfers: TransferEntry[];
+
+  // Mundo
+  worldNews: SeasonReportRivalBrief[];
+  globalRankingTop5: GlobalRanking[];
+  playerFederationGlobalRank: number | null;
+
+  // Breves
+  briefs: { type: FederationLogType; title: string; detail: string; teamId: number | null }[];
 }
 
 // Fase 14.8: board confidence + defeat (destitution).

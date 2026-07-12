@@ -179,6 +179,48 @@ function playPendingInRound(
   }
 }
 
+// Runner-up of a finalizada cup, format-aware (Fase 16). Null when it can't
+// be cleanly determined — e.g. the emergency-crowning path in
+// forceCompleteIncompleteCups, when the bracket never resolved to a clean
+// final match.
+export function deriveCupRunnerUp(s: GameState, cup: Cup): { teamId: number; name: string } | null {
+  if (cup.status !== 'finalizada' || cup.championTeamId == null) return null;
+  const teamById = new Map(s.teams.map((t) => [t.id, t]));
+
+  if (cup.formato === 'liga') {
+    // Same construction crownLeagueCup already uses to pick the champion —
+    // reused here rather than re-deriving a parallel standings function.
+    const round = cup.rounds[0];
+    if (!round) return null;
+    const teams = s.teams.filter((t) => cup.participantTeamIds.includes(t.id));
+    const results: MatchResult[] = round.matches.map((m) => ({
+      matchday: 1,
+      divisionOrden: 0,
+      homeId: m.homeTeamId,
+      awayId: m.awayTeamId,
+      homeGoals: m.homeGoals ?? 0,
+      awayGoals: m.awayGoals ?? 0,
+    }));
+    const table = computeStandings(teams, results);
+    const runnerUp = table.find((r) => r.teamId !== cup.championTeamId);
+    return runnerUp ? { teamId: runnerUp.teamId, name: runnerUp.name } : null;
+  }
+
+  const isIdaVuelta = cup.formato === 'eliminatoria_ida_vuelta';
+  const finalRound = isIdaVuelta
+    ? [...cup.rounds].filter((r) => r.leg === 'vuelta').sort((a, b) => b.numero - a.numero)[0]
+    : [...cup.rounds].sort((a, b) => b.numero - a.numero).find((r) => r.matches.length === 1);
+  if (!finalRound || finalRound.matches.length !== 1) return null;
+
+  const finalMatch = finalRound.matches[0];
+  if (finalMatch.winnerTeamId !== cup.championTeamId) return null; // not a clean final (emergency-crowned)
+  const runnerUpId =
+    finalMatch.homeTeamId === cup.championTeamId ? finalMatch.awayTeamId : finalMatch.homeTeamId;
+  if (runnerUpId === BYE) return null;
+  const runnerUp = teamById.get(runnerUpId);
+  return runnerUp ? { teamId: runnerUp.id, name: runnerUp.name } : null;
+}
+
 function crownLeagueCup(s: GameState, cup: Cup): void {
   const round = cup.rounds[0];
   const teams = s.teams.filter((t) => cup.participantTeamIds.includes(t.id));

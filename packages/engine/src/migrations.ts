@@ -3,7 +3,7 @@ import { divisionName } from './structure';
 import { generatePotencial } from './talent';
 import type { GameState } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 15;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -336,6 +336,18 @@ export function migrateState(state: GameState): GameState {
     if (gs.governanceStreak === undefined) gs.governanceStreak = 0;
 
     state.schemaVersion = 14;
+  }
+
+  // v14 → v15 (Fase 16): hemeroteca de periódicos de fin de temporada. No hay
+  // datos crudos que reconstruir para temporadas ya cerradas (results/
+  // matchReports se vacían en el mismo closeSeason que los produce) — las
+  // partidas viejas simplemente empiezan sin ediciones anteriores.
+  if (v < 15) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.seasonReports) gs.seasonReports = [];
+
+    state.schemaVersion = 15;
   }
 
   return state;

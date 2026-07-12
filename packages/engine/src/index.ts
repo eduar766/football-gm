@@ -93,7 +93,7 @@ export { playerSalary, wageBill } from './salaries';
 export { setLeaguePrize, setCupPrize, removePrize } from './prizes';
 
 // ── Cups ─────────────────────────────────────────────────────────────────────
-export { createCup, createInterLeagueCup, deleteCup, editCupParticipants, roundsForCup, scheduleCups } from './cups';
+export { createCup, createInterLeagueCup, deleteCup, editCupParticipants, roundsForCup, scheduleCups, deriveCupRunnerUp } from './cups';
 
 // ── Standings ────────────────────────────────────────────────────────────────
 export { computeStandings, competitiveBalanceIndex } from './standings';
