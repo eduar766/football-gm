@@ -157,6 +157,8 @@ Key modeling invariants:
 - `MailboxMessage` — `{ id, category, title, body, status, actionKind, refId, deadlineMatchday }`. Unified commissioner inbox over events, mandates, and club demands (`state.mailbox`).
 - `FederationLogEntry` — append-only narrative timeline of the player's federation (sponsorships, negotiations, rescues, sanctions, mandate results, titles), stored in `state.federationLog`. Domain ledgers (`rescueLog`, `history`, `transfers`) remain the source of truth per-domain; this is the human-readable stream across all of them.
 - `FeaturedReport` / `FeaturedMoment` — pure derivation (no new state) that builds a rich goal-by-goal chronology for the handful of matches worth reading about (derbi, title race, goleada, remontada, hat-trick). Scoped to league `MatchReport`s only, since cup matches don't store per-goal detail.
+- `SeasonReport` — unlike `FeaturedReport`, this **is** persisted state (`state.seasonReports[]`), append-only, one per closed season. Materializes the end-of-season "newspaper": champion, awards, cup results, featured match, records, economy, notable transfers, rival-federation briefs, global ranking. Must be captured *inside* `closeSeason` because several of its source fields (`s.results`, `s.matchReports`, `s.lastEconomy`) are wiped or overwritten by later steps in the same pipeline — see `season-report.ts`.
+- `RivalSeasonRecord` — `finalizeRivalSeason` (`rival-sim.ts`) pushes **one record per division** (1ª and 2ª) per rival federation, not one per federation. `divisionOrden` distinguishes them; every consumer that wants "the federation's headline story" (world news, rival champions, inter-league cup champion lookup) must filter to `divisionOrden === 1` or it silently shows every rival federation twice.
 
 ### Backend architecture
 
@@ -173,6 +175,8 @@ The `game/` module controllers are split by domain to keep files manageable:
 | `history.controller.ts` | Records, trajectories, chronicles | Read-only history |
 | `io.controller.ts` | `GET /games/:id/export`, `POST /games/import` | Save file export/import |
 | `mailbox.controller.ts` | `GET /games/:id/mailbox`, mark read/read-all, `POST /games/:id/demands/:demandId/resolve` | Commissioner inbox & club demands |
+
+`history.controller.ts` additionally serves `GET /games/:id/federation-log` (narrative timeline) and `GET /games/:id/season-reports` (every closed-season newspaper edition, newest first).
 
 All game routes are guarded by `JwtAuthGuard` + `GameOwnerGuard`. Admins bypass ownership checks.
 
@@ -217,15 +221,16 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
 | `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
 | `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
-| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 14). Called once per load in `GameStateRepository`. |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 16). Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
 | `events.ts` | Event spawning (including chained arcs via `chainedFromId`), resolution, type-specific consequences |
 | `cups.ts` | Cup creation, scheduling, `playCupRound`, two-leg aggregate logic, participant management |
-| `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige`, `runRivalNegotiations` |
+| `rival-sim.ts` | `simulateRivalLeagues`, `driftRivalStrengths`, `updateRivalPrestige`, `runRivalNegotiations`, `finalizeRivalSeason` (pushes one `RivalSeasonRecord` per division per federation — see Key types) |
 | `headlines.ts` | `generateHeadlines`, `buildChronicle`, `detectRivalries` — narrative layer from match results and history |
 | `featured.ts` | `FeaturedReport`/`FeaturedMoment` — pure, no-new-state derivation of a rich goal-by-goal chronology for the handful of matches worth reading about (derbi, título, goleada, remontada, hat-trick). League matches only (needs per-goal `MatchReport` detail). |
+| `season-report.ts` | `runSeasonReportPrescan`/`runSeasonReportAssemble` — two `closeSeasonSteps` that capture the end-of-season `SeasonReport` ("newspaper") at the exact right points in the pipeline: prescan (before `s.results`/`s.matchReports` are wiped) and assemble (after cups are force-finalized). Reuses `featured.ts` for the season's standout match; zero new RNG. |
 | `awards.ts` | Individual awards (MVP, top scorer, best young player) at season close |
 | `prizes.ts` | Prize pools, share calculation, `processLeaguePrizes` |
 | `salaries.ts` | Player salary simulation and salary cap logic |
@@ -271,6 +276,7 @@ If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, t
 - **Recurring cups:** `Cup.recurring: boolean`; templates saved in `closeSeason()`, recreated in `pretemporada`. Participant lists are editable via `EditCupParticipantsRequest`. Deduplication runs at `migrateState` v2 for saves affected by the double-template bug.
 - **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
 - **Match reports:** every simulated match appends a `MatchReport` to `state.matchReports` (matchday, goals, goalscorers, cards). Used by history and dashboard views.
+- **Season newspaper:** closing a season materializes a `SeasonReport` — a permanent, illustrated summary (champion, awards, cup results, featured match, records, economy, rival-federation briefs, global ranking) opened automatically-but-dismissibly in the frontend (`SeasonNewspaper.tsx`) right after `close-season` succeeds, and browsable forever after from History → "Ediciones anteriores". Backed by `state.seasonReports[]`, append-only.
 
 ## CI/CD
 
