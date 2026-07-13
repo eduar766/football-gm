@@ -30,8 +30,8 @@ import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { money } from '../utils/format';
 import { PageHero } from '../components/PageHero';
+import { MEDAL_COLORS } from '../domain-labels';
 
-const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#D97706'];
 const POS_LABELS = ['1º', '2º', '3º', '4º', '5º', '6º', '7º', '8º', '9º', '10º', '11º', '12º', '13º', '14º', '15º', '16º'];
 
 /* ── Preset generator ─────────────────────────────────────────────────── */

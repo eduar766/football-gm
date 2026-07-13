@@ -24,27 +24,8 @@ import {
   IconX,
   type TablerIcon,
 } from '@tabler/icons-react';
-import type { AwardType, CupType, FeaturedTagDto, SeasonReportDto } from '@football-gm/contracts';
-
-const AWARD_LABEL: Record<AwardType, string> = {
-  max_goleador: 'Máximo goleador',
-  max_asistente: 'Máximo asistente',
-  mejor_portero: 'Mejor portero',
-  mejor_joven: 'Mejor joven',
-};
-const AWARD_ICON: Record<AwardType, string> = {
-  max_goleador: '⚽',
-  max_asistente: '🅰️',
-  mejor_portero: '🧤',
-  mejor_joven: '💎',
-};
-
-const CUP_TIPO_LABEL: Record<CupType, string> = {
-  copa: 'Copa',
-  liga_juvenil: 'Liga juvenil',
-  torneo_verano: 'Torneo de verano',
-  inter_ligas: 'Copa Inter-Ligas',
-};
+import type { FeaturedTagDto, SeasonReportDto } from '@football-gm/contracts';
+import { AWARD_LABEL, AWARD_ICON, CUP_TIPO_LABEL, FED_LOG_STYLE } from '../domain-labels';
 
 const FEATURED_TAG_LABEL: Record<FeaturedTagDto, string> = {
   derbi: 'Derbi',
@@ -52,20 +33,6 @@ const FEATURED_TAG_LABEL: Record<FeaturedTagDto, string> = {
   goleada: 'Goleada',
   remontada: 'Remontada',
   hat_trick: 'Hat-trick',
-};
-
-const FED_LOG_STYLE: Record<SeasonReportDto['briefs'][number]['type'], { emoji: string; color: string }> = {
-  prestige_snapshot: { emoji: '📊', color: '#14B8A6' },
-  sponsor_signed: { emoji: '🤝', color: '#10B981' },
-  negotiation_started: { emoji: '💬', color: '#3B82F6' },
-  negotiation_effective: { emoji: '✅', color: '#3B82F6' },
-  team_created: { emoji: '🏗️', color: '#8B5CF6' },
-  team_left: { emoji: '🚪', color: '#EF4444' },
-  rescue: { emoji: '💸', color: '#F97316' },
-  norm_created: { emoji: '📐', color: '#06B6D4' },
-  sanction: { emoji: '⚖️', color: '#EF4444' },
-  mandate_result: { emoji: '🎯', color: '#F59E0B' },
-  title: { emoji: '🏆', color: '#F59E0B' },
 };
 
 interface Props {

@@ -48,13 +48,7 @@ import { QK } from '../query-keys';
 import { BracketView } from '../components/BracketView';
 import { EmptyState } from '../components/EmptyState';
 import { PageHero } from '../components/PageHero';
-
-const TIPO_LABEL: Record<CupType, string> = {
-  copa: 'Copa',
-  liga_juvenil: 'Liga juvenil',
-  torneo_verano: 'Torneo de verano',
-  inter_ligas: 'Copa Inter-Ligas',
-};
+import { CUP_TIPO_LABEL as TIPO_LABEL } from '../domain-labels';
 
 const STATUS_CONFIG: Record<CupStatus, { label: string; color: string; gradient: string }> = {
   en_curso: { label: 'En curso', color: '#3B82F6', gradient: 'linear-gradient(135deg, #2563EB, #3B82F6)' },

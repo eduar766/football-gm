@@ -3,7 +3,7 @@ import { Badge, Box, Grid, Group, Paper, ScrollArea, SimpleGrid, Skeleton, Stack
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { IconHistory, IconMedal, IconNews, IconTable, IconTimeline, IconTrophy, IconWorld } from '@tabler/icons-react';
-import type { AwardType, FederationLogEntryDto, RecordBookDto, SeasonReportDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
+import type { FederationLogEntryDto, RecordBookDto, SeasonReportDto, SeasonRecordDto, TeamTrajectoryData } from '@football-gm/contracts';
 import {
   CartesianGrid,
   Legend,
@@ -20,22 +20,7 @@ import { PalmaresChart } from '../components/PalmaresChart';
 import { PageHero } from '../components/PageHero';
 import { EmptyState } from '../components/EmptyState';
 import { SeasonNewspaper } from '../components/SeasonNewspaper';
-
-const AWARD_LABEL: Record<AwardType, string> = {
-  max_goleador: 'Máximo goleador',
-  max_asistente: 'Máximo asistente',
-  mejor_portero: 'Mejor portero',
-  mejor_joven: 'Mejor joven',
-};
-
-const AWARD_ICON: Record<AwardType, string> = {
-  max_goleador: '⚽',
-  max_asistente: '🅰️',
-  mejor_portero: '🧤',
-  mejor_joven: '💎',
-};
-
-const MEDAL_COLORS = ['#F59E0B', '#9CA3AF', '#D97706'];
+import { AWARD_LABEL, AWARD_ICON, FED_LOG_STYLE, MEDAL_COLORS } from '../domain-labels';
 
 function CompetitionRecordsTable({
   records,
@@ -488,23 +473,6 @@ export function HistoryPage() {
 const LINE_COLORS = [
   '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EF4444', '#F97316', '#06B6D4', '#EC4899',
 ];
-
-const FED_LOG_STYLE: Record<
-  FederationLogEntryDto['type'],
-  { emoji: string; color: string }
-> = {
-  prestige_snapshot: { emoji: '📊', color: 'teal' },
-  sponsor_signed: { emoji: '🤝', color: 'green' },
-  negotiation_started: { emoji: '💬', color: 'blue' },
-  negotiation_effective: { emoji: '✅', color: 'blue' },
-  team_created: { emoji: '🏗️', color: 'grape' },
-  team_left: { emoji: '🚪', color: 'red' },
-  rescue: { emoji: '💸', color: 'orange' },
-  norm_created: { emoji: '📐', color: 'cyan' },
-  sanction: { emoji: '⚖️', color: 'red' },
-  mandate_result: { emoji: '🎯', color: 'yellow' },
-  title: { emoji: '🏆', color: 'yellow' },
-};
 
 function FederationTimelinePanel({
   entries,

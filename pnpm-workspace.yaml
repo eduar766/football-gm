@@ -2,5 +2,3 @@ packages:
   - "apps/backend"
   - "apps/frontend"
   - "packages/*"
-  # apps/prototype is the disposable Phase 0 artifact; intentionally not a
-  # workspace member. It still runs standalone from its own directory.
