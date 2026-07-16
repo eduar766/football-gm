@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import {
   IconArrowsExchange,
+  IconBolt,
   IconCheck,
   IconAddressBook,
   IconCircleCheck,
@@ -91,6 +92,8 @@ function RequirementRow({ req }: { req: NegotiationRequirementDto }) {
   );
 }
 
+const ACCELERATE_COST = 3;
+
 function NegotiationCard({
   n,
   index,
@@ -98,6 +101,9 @@ function NegotiationCard({
   retrying,
   onSetOffer,
   settingOffer,
+  onAccelerate,
+  accelerating,
+  politicalCapital,
 }: {
   n: NegotiationDto;
   index: number;
@@ -105,6 +111,9 @@ function NegotiationCard({
   retrying?: boolean;
   onSetOffer?: (negId: number, value: number) => void;
   settingOffer?: boolean;
+  onAccelerate?: (negId: number) => void;
+  accelerating?: boolean;
+  politicalCapital?: number;
 }) {
   const [localOffer, setLocalOffer] = useState(n.offerValue);
   const cfg = STAGE_CONFIG[n.state];
@@ -279,6 +288,31 @@ function NegotiationCard({
             ))}
           </Stack>
 
+          {/* Fase 17B: spend political capital to reveal the next requirement now */}
+          {onAccelerate && n.state === 'gathering_requirements' && n.revealedCount < n.requirements.length && (
+            <Group mt="sm">
+              <Tooltip
+                label={
+                  (politicalCapital ?? 0) < ACCELERATE_COST
+                    ? `Necesitas ${ACCELERATE_COST} de capital político`
+                    : `Revela el siguiente requisito ahora (cuesta ${ACCELERATE_COST} de capital político)`
+                }
+              >
+                <Button
+                  size="xs"
+                  variant="outline"
+                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                  leftSection={<IconBolt size={13} />}
+                  onClick={() => onAccelerate(n.id)}
+                  loading={accelerating}
+                  disabled={(politicalCapital ?? 0) < ACCELERATE_COST}
+                >
+                  Acelerar (−{ACCELERATE_COST} PC)
+                </Button>
+              </Tooltip>
+            </Group>
+          )}
+
           {/* Revenue share input — shown when reparto requirement is revealed */}
           {hasReparto && canEditOffer && (
             <Group gap="xs" mt="sm" align="flex-end">
@@ -362,6 +396,7 @@ export function NegotiationsPage() {
     queryKey: QK.negotiations(id),
     queryFn: () => api.negotiations(id),
   });
+  const summary = useQuery({ queryKey: QK.summary(id), queryFn: () => api.summary(id) });
 
   const retry = useMutationWithFeedback({
     mutationFn: (targetTeamId: number) => api.startNegotiation(id, targetTeamId),
@@ -374,6 +409,12 @@ export function NegotiationsPage() {
       api.setOfferValue(id, negId, offerValue),
     queryKeyToInvalidate: ['negotiations', 'market', 'summary'],
     successMessage: 'Oferta de reparto guardada',
+  });
+
+  const accelerate = useMutationWithFeedback({
+    mutationFn: (negId: number) => api.accelerateNegotiation(id, negId),
+    queryKeyToInvalidate: ['negotiations', 'summary'],
+    successMessage: 'Requisito revelado',
   });
 
   if (negs.isLoading) {
@@ -453,6 +494,9 @@ export function NegotiationsPage() {
                     index={i}
                     onSetOffer={(negId, value) => setOffer.mutate({ negId, offerValue: value })}
                     settingOffer={setOffer.isPending}
+                    onAccelerate={(negId) => accelerate.mutate(negId)}
+                    accelerating={accelerate.isPending}
+                    politicalCapital={summary.data?.politicalCapital}
                   />
                 ))}
               </Stack>

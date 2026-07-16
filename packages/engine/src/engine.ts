@@ -34,6 +34,7 @@ import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } f
 import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
 import { addPresidentForTeam, generatePresident, generateRivalCommissioner, removePresidentForTeam, rotatePresidents } from './characters';
+import { closeSeasonOpinion, earnPC } from './politics';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -371,6 +372,9 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     politicsRng: makeRng((seed ^ 0x9e3779b9) >>> 0),
     scandalRng: makeRng((seed ^ 0x7f4a7c15) >>> 0),
     deskRng: makeRng((seed ^ 0x85ebca6b) >>> 0),
+    publicOpinion: 50,
+    opinionHistory: [],
+    politicalCapital: 3,
   };
 }
 
@@ -1212,6 +1216,18 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     },
   },
   {
+    // Fase 17B: public opinion — deterministic season-close deltas (title
+    // race, goals, cup final, new champion, ignored demands) + regression to
+    // the mean. Gated on players.length > 0 inside → golden-safe. Must run
+    // before economy multipliers are read NEXT season and before the
+    // narrative/characters layer (195+) so this year's value is settled.
+    name: 'close-season-opinion',
+    priority: 175,
+    run(s) {
+      closeSeasonOpinion(s);
+    },
+  },
+  {
     // Talent formation lifts the league's quality (deterministic, post-drift).
     name: 'talent-bump',
     priority: 180,
@@ -1298,6 +1314,9 @@ const closeSeasonSteps: CloseSeasonStep[] = [
           }
         } else {
           s.consecutiveMandateFails = 0;
+          // Fase 17B: mandates are the one PC-earning hook already wired end
+          // to end (pledges/assembly/eras arrive in later sub-phases).
+          earnPC(s, 1, 'mandato cumplido');
         }
         logFederation(s, {
           year: s.year,

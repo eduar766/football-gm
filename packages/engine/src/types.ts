@@ -810,6 +810,19 @@ export interface GameState {
   politicsRng: RngState;
   scandalRng: RngState;
   deskRng: RngState;
+  // Fase 17B: public opinion (third constituency alongside board confidence
+  // and arraigo) + political capital (spendable currency earned by keeping
+  // promises/mandates). Gated on players.length > 0 wherever it could touch
+  // economy output, so player-less golden runs stay byte-identical.
+  publicOpinion: number; // 0-100, starts 50
+  opinionHistory: OpinionEntry[];
+  politicalCapital: number; // 0-12, starts 3
+}
+
+export interface OpinionEntry {
+  year: number;
+  value: number;
+  reasons: string[];
 }
 
 export interface RecordBook {
@@ -1011,7 +1024,8 @@ export type FederationLogType =
   | 'sanction'             // a club was sanctioned
   | 'mandate_result'       // board mandate met / failed
   | 'title'                // player-league champion crowned
-  | 'president_change';    // club president rotated (Fase 17A)
+  | 'president_change'     // club president rotated (Fase 17A)
+  | 'political_capital';   // political capital earned/spent (Fase 17B) — value carries the signed delta
 
 export interface FederationLogEntry {
   id: number;

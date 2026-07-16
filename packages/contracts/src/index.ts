@@ -287,7 +287,7 @@ export const SeasonReportBriefDto = z.object({
   type: z.enum([
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
-    'president_change',
+    'president_change', 'political_capital',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -400,6 +400,14 @@ export const GameOverDto = z.object({
 });
 export type GameOverDto = z.infer<typeof GameOverDto>;
 
+// Fase 17B: public opinion + political capital.
+export const OpinionEntryDto = z.object({
+  year: z.number().int(),
+  value: z.number().int(),
+  reasons: z.array(z.string()),
+});
+export type OpinionEntryDto = z.infer<typeof OpinionEntryDto>;
+
 export const GameSummary = z.object({
   id: Id,
   name: z.string(),
@@ -415,6 +423,9 @@ export const GameSummary = z.object({
   normBreachCount: z.number().int().default(0),
   unreadMailCount: z.number().int().default(0),
   boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
+  publicOpinion: z.number().int().default(50),
+  opinionHistory: z.array(OpinionEntryDto).default([]),
+  politicalCapital: z.number().int().default(3),
   gameOver: GameOverDto.nullable().default(null),
   reviewsUsedThisSeason: z.number().int().default(0),
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
@@ -864,6 +875,7 @@ export const FederationLogType = z.enum([
   'mandate_result',
   'title',
   'president_change',
+  'political_capital',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 
@@ -1055,6 +1067,12 @@ export const SetOfferValueRequest = z.object({
   offerValue: z.number().int().min(0).max(30),
 });
 export type SetOfferValueRequest = z.infer<typeof SetOfferValueRequest>;
+
+// Fase 17B: spend political capital to reveal the next requirement early.
+export const AccelerateNegotiationRequest = z.object({
+  negId: Id,
+});
+export type AccelerateNegotiationRequest = z.infer<typeof AccelerateNegotiationRequest>;
 
 /* --------------------------------- commissioner: league structure (§4.4) */
 

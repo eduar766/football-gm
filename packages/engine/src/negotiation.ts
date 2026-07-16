@@ -5,6 +5,7 @@
 import { rngNext } from './rng';
 import { logFederation } from './federation-log';
 import { addPresidentForTeam, removePresidentForTeam } from './characters';
+import { spendPC } from './politics';
 import type { Federation, GameState, Negotiation, NegotiationRequirement, Team } from './types';
 
 // Prestige groups into 5 tiers; the tier is prelatory — it gates which teams a
@@ -129,6 +130,34 @@ export function setNegotiationOfferValue(prev: GameState, negId: number, offerVa
   neg.offerValue = Math.min(30, Math.max(0, Math.round(offerValue)));
   checkRequirements(s, neg);
   return s;
+}
+
+const ACCELERATE_COST = 3;
+
+// Fase 17B: spend political capital to reveal the next requirement
+// immediately instead of waiting for the next season's progressNegotiations
+// pass. Only during gathering_requirements, only the player's own
+// negotiations, only while there's a requirement left to reveal.
+export function accelerateNegotiation(prev: GameState, negId: number): GameState {
+  const n = prev.negotiations.find((n) => n.id === negId);
+  if (!n) return prev;
+  if (n.byFederationId !== prev.playerFederationId) return prev;
+  if (n.state !== 'gathering_requirements') return prev;
+  if (n.revealedCount >= n.requirements.length) return prev;
+  if (prev.politicalCapital < ACCELERATE_COST) return prev;
+
+  const s = structuredClone(prev);
+  const neg = s.negotiations.find((n) => n.id === negId)!;
+  if (!spendPC(s, ACCELERATE_COST, `aceleró la negociación con ${teamNameOf(s, neg.targetTeamId)}`)) return prev;
+
+  neg.requirements[neg.revealedCount].revealed = true;
+  neg.revealedCount += 1;
+  checkRequirements(s, neg);
+  return s;
+}
+
+function teamNameOf(s: GameState, teamId: number): string {
+  return s.teams.find((t) => t.id === teamId)?.name ?? 'un equipo';
 }
 
 // Teams the player may currently open a negotiation for. Pure selector for the

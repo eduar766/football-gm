@@ -156,6 +156,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ negId, offerValue }),
     }),
+  accelerateNegotiation: (id: number, negId: number) =>
+    req<NegotiationDto[]>(`/games/${id}/negotiations/accelerate`, {
+      method: 'POST',
+      body: JSON.stringify({ negId }),
+    }),
   economy: (id: number) => req<EconomyResponse>(`/games/${id}/economy`),
   setEconomyPolicy: (id: number, policy: { talentInvestment: number }) =>
     req<EconomyResponse>(`/games/${id}/economy/policy`, {

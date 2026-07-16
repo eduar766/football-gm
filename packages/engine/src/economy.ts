@@ -165,7 +165,22 @@ export function processEconomy(s: GameState): {
 
   // Merchandise/brand revenue: scales with prestige × player teams only.
   // Factor reduced from 50K to 15K to match calibrated budget expectations.
-  const merchandiseRevenue = s.prestige * competing * 15_000;
+  let merchandiseRevenue = s.prestige * competing * 15_000;
+
+  // Fase 17B: public opinion scales gate/merchandise income 0.85x-1.15x
+  // (never sponsorships/contractIncome — those are already-signed rights).
+  // Scaled in place so the lastEconomy breakdown (matchday/merchandise) stays
+  // consistent with the treasury movement it caused. Strictly gated on
+  // players.length: player-less runs (golden master) never touch
+  // publicOpinion, so this must not even evaluate the multiplier there —
+  // reassociating the sum can shift the last ULP even when the factor is
+  // mathematically ~1.0, which would move econDelta's threshold and diverge
+  // the golden snapshot.
+  if (s.players.length > 0) {
+    const opinionMultiplier = 0.85 + (s.publicOpinion / 100) * 0.30;
+    matchdayRevenue *= opinionMultiplier;
+    merchandiseRevenue *= opinionMultiplier;
+  }
 
   const income = contractIncome + matchdayRevenue + merchandiseRevenue;
 

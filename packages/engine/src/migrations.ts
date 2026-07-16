@@ -4,7 +4,7 @@ import { generatePotencial } from './talent';
 import { generatePresident, generateRivalCommissioner } from './characters';
 import type { ClubPresident, GameState, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 17;
+export const CURRENT_SCHEMA_VERSION = 18;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -397,6 +397,19 @@ export function migrateState(state: GameState): GameState {
     if (!gs.deskRng) gs.deskRng = { s: (state.seed ^ 0x85ebca6b) >>> 0 };
 
     state.schemaVersion = 17;
+  }
+
+  // v17 → v18 (Fase 17B): public opinion + political capital. Old saves start
+  // at the same defaults as a fresh game (neutral opinion, starting PC) —
+  // there is no historical data to backfill opinionHistory from.
+  if (v < 18) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (gs.publicOpinion === undefined) gs.publicOpinion = 50;
+    if (!gs.opinionHistory) gs.opinionHistory = [];
+    if (gs.politicalCapital === undefined) gs.politicalCapital = 3;
+
+    state.schemaVersion = 18;
   }
 
   return state;

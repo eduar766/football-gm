@@ -17,6 +17,8 @@ const D_PRESTIGE_DOWN = -6;
 const D_TREASURY_NEG = -10;
 const D_TEAM_LEFT = -12;
 const D_DEMAND_EXPIRED = -4;
+const D_OPINION_LOW = -5; // Fase 17B: public opinion drags board confidence
+const D_OPINION_HIGH = 3;
 
 const GAME_OVER_MESSAGES: Record<GameOverReason, string> = {
   destitucion_confianza: 'La junta ha perdido toda la confianza en tu gestión y te ha destituido.',
@@ -67,6 +69,16 @@ export function evaluateBoardConfidence(s: GameState, prestigeDelta: number): vo
   if (demandsExpired > 0) {
     d += D_DEMAND_EXPIRED * demandsExpired;
     reasons.push(`${demandsExpired} petición(es) ignoradas`);
+  }
+
+  // Fase 17B: public opinion (already updated for this close by the
+  // close-season-opinion step, priority 175, which runs before this one, 240).
+  if (s.publicOpinion < 30) {
+    d += D_OPINION_LOW;
+    reasons.push('opinión pública baja');
+  } else if (s.publicOpinion >= 75) {
+    d += D_OPINION_HIGH;
+    reasons.push('opinión pública alta');
   }
 
   const before = s.boardConfidence.value;

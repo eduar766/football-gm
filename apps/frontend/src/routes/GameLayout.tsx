@@ -152,6 +152,7 @@ export function GameLayout() {
   const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
   const unreadMail = summary.data?.unreadMailCount ?? 0;
   const confidence = summary.data?.boardConfidence?.value ?? null;
+  const opinion = summary.data?.publicOpinion ?? null;
   const gameOver = summary.data?.gameOver ?? null;
 
   const isPre = summary.data?.phase === 'pretemporada';
@@ -296,6 +297,24 @@ export function GameLayout() {
                 ? theme.colors.gold[5]
                 : theme.colors.accent[4]
         }
+      />
+      <Stat
+        label="Opinión pública"
+        value={`${summary.data?.publicOpinion ?? '—'}/100`}
+        color={
+          opinion == null
+            ? 'white'
+            : opinion < 30
+              ? theme.colors.red[5]
+              : opinion >= 75
+                ? theme.colors.accent[4]
+                : theme.colors.gold[5]
+        }
+      />
+      <Stat
+        label="Capital político"
+        value={String(summary.data?.politicalCapital ?? '—')}
+        color={theme.colors.violet[5]}
       />
       </Stack>
     </Box>

@@ -135,6 +135,24 @@ describe('presidents (Fase 17A)', () => {
   });
 });
 
+describe('public opinion + political capital (Fase 17B)', () => {
+  it('stay within their bounds and history stays append-only, across seasons', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 4);
+        expect(g.publicOpinion).toBeGreaterThanOrEqual(0);
+        expect(g.publicOpinion).toBeLessThanOrEqual(100);
+        expect(g.politicalCapital).toBeGreaterThanOrEqual(0);
+        expect(g.politicalCapital).toBeLessThanOrEqual(12);
+        // playSeasons runs with the default player-less game, so no signal
+        // ever fires — opinion never leaves its starting neutral value.
+        expect(g.opinionHistory).toEqual([]);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

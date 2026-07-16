@@ -101,3 +101,30 @@ describe('migrateState v16 -> v17 (Fase 17A: presidents + rival commissioners)',
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v17 -> v18 (Fase 17B: public opinion + political capital)', () => {
+  it('backfills neutral opinion, empty history, and starting PC on an old save', () => {
+    const g = createGame(204, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.publicOpinion;
+    delete legacy.opinionHistory;
+    delete legacy.politicalCapital;
+    legacy.schemaVersion = 17;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(18);
+    expect(migrated.publicOpinion).toBe(50);
+    expect(migrated.opinionHistory).toEqual([]);
+    expect(migrated.politicalCapital).toBe(3);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(205, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

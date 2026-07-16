@@ -59,6 +59,7 @@ export {
   negotiableTeams,
   startNegotiation,
   setNegotiationOfferValue,
+  accelerateNegotiation,
 } from './negotiation';
 
 // ── Norms & sanctions ────────────────────────────────────────────────────────
@@ -134,3 +135,6 @@ export type { ConfederationData, LeagueData, TeamData, DivisionData } from './se
 
 // ── Characters (Fase 17A) ─────────────────────────────────────────────────────
 export { presidentOf } from './characters';
+
+// ── Politics (Fase 17B) ───────────────────────────────────────────────────────
+export { earnPC, spendPC, PC_MIN, PC_MAX } from './politics';

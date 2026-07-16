@@ -8,7 +8,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { SetOfferValueRequest, StartNegotiationRequest } from '@football-gm/contracts';
+import { AccelerateNegotiationRequest, SetOfferValueRequest, StartNegotiationRequest } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GameOwnerGuard } from './game-owner.guard';
@@ -43,5 +43,13 @@ export class NegotiationController {
     @Body(new ZodValidationPipe(SetOfferValueRequest)) body: SetOfferValueRequest,
   ) {
     return this.games.setOfferValue(id, body.negId, body.offerValue);
+  }
+
+  @Post(':id/negotiations/accelerate')
+  accelerateNegotiation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(AccelerateNegotiationRequest)) body: AccelerateNegotiationRequest,
+  ) {
+    return this.games.accelerateNegotiation(id, body.negId);
   }
 }

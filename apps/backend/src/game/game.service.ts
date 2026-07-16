@@ -44,6 +44,7 @@ import {
   signContract as engineSignContract,
   startNegotiation as engineStartNegotiation,
   setNegotiationOfferValue as engineSetNegotiationOfferValue,
+  accelerateNegotiation as engineAccelerateNegotiation,
   removePrize as engineRemovePrize,
   setCupPrize as engineSetCupPrize,
   setLeaguePrize as engineSetLeaguePrize,
@@ -199,6 +200,9 @@ export class GameService {
       normBreachCount: normBreaches(state).length,
       unreadMailCount: unreadMailCount(state),
       boardConfidence: state.boardConfidence ?? { value: 60, history: [] },
+      publicOpinion: state.publicOpinion ?? 50,
+      opinionHistory: state.opinionHistory ?? [],
+      politicalCapital: state.politicalCapital ?? 3,
       gameOver: state.gameOver ?? null,
       reviewsUsedThisSeason: state.actionHistory.filter(
         (a) => a.year === state.year && a.type === 'call_review',
@@ -2027,6 +2031,36 @@ export class GameService {
       const state = await this.repo.loadState(gameId, tx);
       const next = engineSetNegotiationOfferValue(state, negId, offerValue);
       if (next === state) throw new BadRequestException('Negociación no encontrada o no modificable');
+      await this.repo.saveState(tx, gameId, next);
+      const map = await this.repo.engineToDbTeam(gameId, tx);
+      const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
+      const fedName = new Map(next.federations.map((f) => [f.id, f.name]));
+      return next.negotiations.map((n) => ({
+        id: n.id,
+        targetTeamId: map.get(n.targetTeamId) ?? n.targetTeamId,
+        targetTeamName: teamName.get(n.targetTeamId) ?? '—',
+        state: n.state,
+        startedYear: n.startedYear,
+        requirementsSeasonsLeft: n.requirementsSeasonsLeft,
+        acceptedYear: n.acceptedYear,
+        effectiveYear: n.effectiveYear,
+        fromFederationName: fedName.get(n.fromFederationId) ?? '—',
+        byFederationName: fedName.get(n.byFederationId) ?? '—',
+        requirements: n.requirements ?? [],
+        offerValue: n.offerValue ?? 0,
+        revealedCount: n.revealedCount ?? 0,
+      }));
+    });
+  }
+
+  // Fase 17B: spend 3 political capital to reveal the next requirement early.
+  async accelerateNegotiation(gameId: number, negId: number): Promise<NegotiationDto[]> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineAccelerateNegotiation(state, negId);
+      if (next === state) {
+        throw new BadRequestException('No se pudo acelerar la negociación (capital insuficiente o negociación no elegible)');
+      }
       await this.repo.saveState(tx, gameId, next);
       const map = await this.repo.engineToDbTeam(gameId, tx);
       const teamName = new Map(next.teams.map((t) => [t.id, t.name]));
