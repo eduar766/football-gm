@@ -128,3 +128,32 @@ describe('migrateState v17 -> v18 (Fase 17B: public opinion + political capital)
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v18 -> v19 (Fase 17C: assembly + pledges)', () => {
+  it('backfills empty proposals/pledges arrays and id counters on an old save', () => {
+    const g = createGame(206, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.proposals;
+    delete legacy.nextProposalId;
+    delete legacy.pledges;
+    delete legacy.nextPledgeId;
+    legacy.schemaVersion = 18;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(19);
+    expect(migrated.proposals).toEqual([]);
+    expect(migrated.nextProposalId).toBe(1);
+    expect(migrated.pledges).toEqual([]);
+    expect(migrated.nextPledgeId).toBe(1);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(207, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

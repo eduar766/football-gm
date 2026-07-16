@@ -31,7 +31,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     response.status(status).json({
       statusCode: status,
-      message: typeof message === 'string' ? message : (message as Record<string, unknown>).message ?? message,
+      // Spread custom object payloads (e.g. Fase 17C's { requiresAssembly,
+      // kind, message }) so callers get the full shape, not just `.message`.
+      ...(typeof message === 'object' && message !== null ? message : { message }),
       ...(process.env.NODE_ENV !== 'production' && exception instanceof Error
         ? { stack: exception.stack }
         : {}),

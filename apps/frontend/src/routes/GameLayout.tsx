@@ -29,6 +29,7 @@ import {
   IconClipboardList,
   IconCoin,
   IconExchange,
+  IconGavel,
   IconGlobe,
   IconHome,
   IconInbox,
@@ -60,6 +61,7 @@ const TAB_ICONS = {
   prizes: IconAward,
   transfers: IconExchange,
   history: IconHistory,
+  assembly: IconGavel,
 } as const;
 
 const NAV_SECTIONS = [
@@ -86,6 +88,7 @@ const NAV_SECTIONS = [
       { value: 'structure', label: 'Estructura' },
       { value: 'economy', label: 'Economía' },
       { value: 'norms', label: 'Normas' },
+      { value: 'assembly', label: 'Asamblea' },
       { value: 'events', label: 'Eventos' },
     ],
   },
@@ -112,6 +115,7 @@ const ROUTES: Record<string, string> = {
   structure: '/games/$gameId/structure',
   economy: '/games/$gameId/economy',
   norms: '/games/$gameId/norms',
+  assembly: '/games/$gameId/assembly',
   events: '/games/$gameId/events',
   cups: '/games/$gameId/cups',
   transfers: '/games/$gameId/transfers',
@@ -150,6 +154,7 @@ export function GameLayout() {
 
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
   const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
+  const hasPendingProposals = summary.data && summary.data.pendingProposalsCount > 0;
   const unreadMail = summary.data?.unreadMailCount ?? 0;
   const confidence = summary.data?.boardConfidence?.value ?? null;
   const opinion = summary.data?.publicOpinion ?? null;
@@ -388,6 +393,7 @@ export function GameLayout() {
                 const isActive = active === item.value;
                 const isEvents = item.value === 'events';
                 const isMailbox = item.value === 'mailbox';
+                const isAssembly = item.value === 'assembly';
                 return (
                   <Tooltip
                     key={item.value}
@@ -450,6 +456,17 @@ export function GameLayout() {
                           style={{ position: 'absolute', top: 2, right: 4 }}
                         >
                           {unreadMail}
+                        </Badge>
+                      )}
+                      {isAssembly && hasPendingProposals && (
+                        <Badge
+                          size="xs"
+                          color="violet"
+                          variant="filled"
+                          circle
+                          style={{ position: 'absolute', top: 2, right: 4 }}
+                        >
+                          {summary.data!.pendingProposalsCount}
                         </Badge>
                       )}
                     </Box>
@@ -524,6 +541,7 @@ export function GameLayout() {
                 const isEvents = item.value === 'events';
                 const isNorms = item.value === 'norms';
                 const isMailbox = item.value === 'mailbox';
+                const isAssembly = item.value === 'assembly';
                 return (
                   <Box
                     key={item.value}
@@ -614,6 +632,17 @@ export function GameLayout() {
                         ml="auto"
                       >
                         {unreadMail}
+                      </Badge>
+                    )}
+                    {isAssembly && hasPendingProposals && (
+                      <Badge
+                        size="xs"
+                        color="violet"
+                        variant="filled"
+                        circle
+                        ml="auto"
+                      >
+                        {summary.data!.pendingProposalsCount}
                       </Badge>
                     )}
                   </Box>

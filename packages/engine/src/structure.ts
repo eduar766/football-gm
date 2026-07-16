@@ -10,6 +10,26 @@ export const MAX_DIVISION_SIZE = 12;
 export const PROMOTION_RELEGATION = 2;
 export const MAX_LEVELING_DIVISIONS = 3;
 
+// Change how the league is contested (§4.4). Structural decision — only valid
+// in pretemporada; startSeason will use this flag when building the calendar.
+// Lives here (not engine.ts) so assembly.ts can dispatch 'cambio_formato'
+// proposals to it without a circular import (engine.ts calls into assembly.ts
+// to resolve pending proposals).
+export function setLeagueFormat(
+  prev: GameState,
+  format: GameState['leagueFormat'],
+): GameState {
+  if (prev.phase !== 'pretemporada') return prev;
+  if (prev.leagueFormat === format) return prev;
+  const s = structuredClone(prev);
+  s.leagueFormat = format;
+  // 14.7: keep the global toggle and per-division formats in sync.
+  for (const d of s.divisions) {
+    if (d.federationId === s.playerFederationId) d.format = format;
+  }
+  return s;
+}
+
 // Validate a player-supplied leveling plan against the pool of player teams.
 // Returns null when valid, or a human-readable reason when not.
 export function validateLevelingPlan(plan: LevelingPlan, poolSize: number): string | null {

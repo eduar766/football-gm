@@ -1,23 +1,20 @@
-import { useState } from 'react';
 import {
   Box,
   Button,
   Card,
   Grid,
   Group,
-  NumberInput,
   Paper,
-  Select,
   Skeleton,
-  Stack,
   Table,
   Text,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconGavel, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconGavel } from '@tabler/icons-react';
 import { EmptyState } from '../components/EmptyState';
+import { AssemblyRedirectBanner } from '../components/AssemblyRedirectBanner';
 import type { NormType } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -35,16 +32,6 @@ const TIPO_LABEL: Record<NormType, string> = {
   tope_deficit: 'Tope de déficit (FFP)',
 };
 
-const DEFAULT_VALOR: Record<NormType, number> = {
-  tope_plantilla: 75,
-  minimo_competitivo: 50,
-  tope_salarial: 1_000_000,
-  tope_extrangeros: 5,
-  minimo_cantera: 5,
-  tope_edad_media: 28,
-  tope_deficit: 5_000_000,
-};
-
 const formatValor = (tipo: NormType, valor: number) =>
   tipo === 'tope_salarial' || tipo === 'tope_deficit' ? money(valor) : String(valor);
 
@@ -54,19 +41,6 @@ export function NormsPage() {
 
   const norms = useQuery({ queryKey: QK.norms(id), queryFn: () => api.norms(id) });
 
-  const [tipo, setTipo] = useState<NormType>('tope_plantilla');
-  const [valor, setValor] = useState(65);
-
-  const add = useMutationWithFeedback({
-    mutationFn: () => api.addNorm(id, tipo, valor),
-    queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
-    successMessage: 'Norma guardada correctamente',
-  });
-  const remove = useMutationWithFeedback({
-    mutationFn: (normId: number) => api.removeNorm(id, normId),
-    queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
-    successMessage: 'Norma eliminada',
-  });
   const sanction = useMutationWithFeedback({
     mutationFn: (v: { teamId: number; normId: number }) => api.sanction(id, v.teamId, v.normId),
     queryKeyToInvalidate: ['norms', 'summary', 'standings', 'compliance'],
@@ -112,79 +86,10 @@ export function NormsPage() {
             }}
           >
             <Text fw={700} mb="sm">Definir norma</Text>
-            <Stack>
-              <Select
-                label="Tipo"
-                data={[
-                  { value: 'tope_plantilla', label: 'Tope de plantilla (máx. fuerza)' },
-                  { value: 'minimo_competitivo', label: 'Mínimo competitivo (mín. fuerza)' },
-                  { value: 'tope_salarial', label: 'Tope salarial (masa salarial máx. €)' },
-                  { value: 'tope_extrangeros', label: 'Tope de extranjeros (máx. jugadores)' },
-                  { value: 'minimo_cantera', label: 'Mínimo cantera (mín. canteranos)' },
-                  { value: 'tope_edad_media', label: 'Tope de edad media (máx. años)' },
-                ]}
-                value={tipo}
-                onChange={(v) => {
-                  if (!v) return;
-                  const next = v as NormType;
-                  setTipo(next);
-                  setValor(DEFAULT_VALOR[next]);
-                }}
-              />
-              {tipo === 'tope_salarial' ? (
-                <NumberInput
-                  label="Tope salarial anual (€)"
-                  description="Masa salarial máxima por equipo (suma de salarios)."
-                  value={valor}
-                  onChange={(v) => setValor(Number(v) || 0)}
-                  min={0}
-                  step={100_000}
-                  thousandSeparator="."
-                  decimalSeparator=","
-                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-                />
-              ) : tipo === 'tope_edad_media' ? (
-                <NumberInput
-                  label="Edad media máxima"
-                  description="Edad media máxima del plantel."
-                  value={valor}
-                  onChange={(v) => setValor(Number(v) || 0)}
-                  min={16}
-                  max={40}
-                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-                />
-              ) : tipo === 'tope_extrangeros' || tipo === 'minimo_cantera' ? (
-                <NumberInput
-                  label={tipo === 'tope_extrangeros' ? 'Máximo de extranjeros' : 'Mínimo de canteranos'}
-                  description={tipo === 'tope_extrangeros'
-                    ? 'Número máximo de jugadores extranjeros en plantilla.'
-                    : 'Número mínimo de jugadores canteranos en plantilla.'}
-                  value={valor}
-                  onChange={(v) => setValor(Number(v) || 0)}
-                  min={1}
-                  max={25}
-                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-                />
-              ) : (
-                <NumberInput
-                  label="Valor (fuerza 1–100)"
-                  value={valor}
-                  onChange={(v) => setValor(Number(v) || 0)}
-                  min={1}
-                  max={100}
-                  styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
-                />
-              )}
-              <Button
-                onClick={() => add.mutate(undefined as void)}
-                loading={add.isPending}
-                leftSection={<IconPlus size={16} />}
-                variant="gradient"
-                gradient={{ from: '#10B981', to: '#059669' }}
-              >
-                Añadir / reemplazar
-              </Button>
-            </Stack>
+            <AssemblyRedirectBanner
+              gameId={gameId}
+              message="Crear o derogar una norma ahora requiere el visto bueno de la asamblea de clubes."
+            />
           </Card>
 
           <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -209,25 +114,7 @@ export function NormsPage() {
                         </Text>
                       </Table.Td>
                       <Table.Td ta="right">
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          color="red"
-                          leftSection={<IconTrash size={14} />}
-                          onClick={() =>
-                            modals.openConfirmModal({
-                              title: 'Quitar norma',
-                              children: (
-                                <Text size="sm">¿Estás seguro de que quieres eliminar la norma "{TIPO_LABEL[n.tipo]}"?</Text>
-                              ),
-                              labels: { confirm: 'Quitar', cancel: 'Cancelar' },
-                              confirmProps: { color: 'red' },
-                              onConfirm: () => remove.mutate(n.id),
-                            })
-                          }
-                        >
-                          Quitar
-                        </Button>
+                        <Text size="xs" c="dimmed">Derogar vía asamblea</Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}

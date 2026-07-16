@@ -4,7 +4,7 @@ import { generatePotencial } from './talent';
 import { generatePresident, generateRivalCommissioner } from './characters';
 import type { ClubPresident, GameState, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 18;
+export const CURRENT_SCHEMA_VERSION = 19;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -410,6 +410,19 @@ export function migrateState(state: GameState): GameState {
     if (gs.politicalCapital === undefined) gs.politicalCapital = 3;
 
     state.schemaVersion = 18;
+  }
+
+  // v18 → v19 (Fase 17C): the Assembly + libro de promesas. Old saves simply
+  // start with no proposals/pledges in flight — nothing to backfill.
+  if (v < 19) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.proposals) gs.proposals = [];
+    if (gs.nextProposalId === undefined) gs.nextProposalId = 1;
+    if (!gs.pledges) gs.pledges = [];
+    if (gs.nextPledgeId === undefined) gs.nextPledgeId = 1;
+
+    state.schemaVersion = 19;
   }
 
   return state;

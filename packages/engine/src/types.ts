@@ -647,6 +647,85 @@ export interface RivalMatchResult {
   isShock: boolean; // weaker team won — used for headlines
 }
 
+// Fase 17C: the Assembly. Structural/governance decisions that used to be
+// unilateral now require a club vote. Four of the seven kinds wrap functions
+// that already guard `phase !== 'pretemporada'` (setLeaguePrize, createCup,
+// runLevelingLeague, setLeagueFormat) — proposeMeasure enforces the same gate
+// up front so a passed vote is never applied mid-season against a no-op.
+export type ProposalKind =
+  | 'norma_nueva' | 'derogar_norma' | 'cambio_reparto' | 'copa_recurrente'
+  | 'expansion_division' | 'cambio_formato' | 'admision_acelerada';
+
+// Only these two require a 2/3 majority; the doc's rationale is that they
+// reshape the whole league rather than one club's situation.
+export type ProposalMajority = 'simple' | 'dos_tercios';
+export type ProposalStatus = 'en_tramite' | 'aprobada' | 'rechazada';
+
+export interface NormaNuevaPayload { tipo: NormType; valor: number }
+export interface DerogarNormaPayload { normId: number }
+export interface CambioRepartoPayload { pool: number; shares: number[] }
+export interface CopaRecurrentePayload {
+  name: string;
+  tipo: CupType;
+  formato: CupFormat;
+  categoria: CupCategory;
+  participantTeamIds: number[];
+}
+export interface ExpansionDivisionPayload { plan?: LevelingPlan }
+export interface CambioFormatoPayload { format: LeagueFormat }
+// Only "cutting the delay" is proposable — never lets adhesion skip stages.
+export interface AdmisionAceleradaPayload { negotiationId: number }
+
+export type ProposalPayload =
+  | NormaNuevaPayload
+  | DerogarNormaPayload
+  | CambioRepartoPayload
+  | CopaRecurrentePayload
+  | ExpansionDivisionPayload
+  | CambioFormatoPayload
+  | AdmisionAceleradaPayload;
+
+export interface AssemblyVote {
+  teamId: number;
+  // Raw score from the vote-intention formula (§17C.3). Drives `intention`
+  // and gates eligibility for buyVote/pledgeForVote (score > -20).
+  score: number;
+  intention: 'favor' | 'contra' | 'indeciso';
+  revealed: boolean;
+  bought: boolean;
+  pledgeId: number | null;
+  // Set only at resolution. bought/pledged votes always resolve 'favor';
+  // 'indeciso' votes resolve via politicsRng biased by score.
+  final: 'favor' | 'contra' | null;
+}
+
+export interface AssemblyProposal {
+  id: number;
+  kind: ProposalKind;
+  payload: ProposalPayload;
+  majority: ProposalMajority;
+  year: number;
+  proposedAtMatchday: number;
+  votes: AssemblyVote[];
+  status: ProposalStatus;
+  resolvedAtMatchday: number | null;
+}
+
+// Fase 17C: the commissioner's book of promises made to buy/earn a vote.
+export type PledgeKind = 'plaza_copa' | 'mejora_reparto' | 'exencion_norma' | 'rescate_futuro';
+export type PledgeStatus = 'pendiente' | 'cumplida' | 'rota';
+
+export interface Pledge {
+  id: number;
+  teamId: number;
+  kind: PledgeKind;
+  refId: number | null;   // normId / cupId, depending on kind
+  amount: number | null;  // for rescate_futuro
+  madeYear: number;
+  deadlineYear: number;   // madeYear + 2
+  status: PledgeStatus;
+}
+
 // Standings row for rival leagues (simulated off-screen).
 export interface RivalStandingRow {
   teamId: number;
@@ -817,6 +896,11 @@ export interface GameState {
   publicOpinion: number; // 0-100, starts 50
   opinionHistory: OpinionEntry[];
   politicalCapital: number; // 0-12, starts 3
+  // Fase 17C: the Assembly + libro de promesas.
+  proposals: AssemblyProposal[];
+  nextProposalId: number;
+  pledges: Pledge[];
+  nextPledgeId: number;
 }
 
 export interface OpinionEntry {
@@ -1025,7 +1109,9 @@ export type FederationLogType =
   | 'mandate_result'       // board mandate met / failed
   | 'title'                // player-league champion crowned
   | 'president_change'     // club president rotated (Fase 17A)
-  | 'political_capital';   // political capital earned/spent (Fase 17B) — value carries the signed delta
+  | 'political_capital'    // political capital earned/spent (Fase 17B) — value carries the signed delta
+  | 'assembly_result'      // a proposal was approved/rejected by the assembly (Fase 17C)
+  | 'pledge_result';       // a pledge was fulfilled/broken (Fase 17C)
 
 export interface FederationLogEntry {
   id: number;

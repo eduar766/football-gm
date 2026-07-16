@@ -153,6 +153,19 @@ describe('public opinion + political capital (Fase 17B)', () => {
   });
 });
 
+describe('assembly + pledges (Fase 17C)', () => {
+  it('a player-less game never generates proposals/pledges across seasons', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 4);
+        expect(g.proposals).toEqual([]);
+        expect(g.pledges).toEqual([]);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

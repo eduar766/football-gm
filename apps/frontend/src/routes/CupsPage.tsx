@@ -47,6 +47,7 @@ import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { BracketView } from '../components/BracketView';
 import { EmptyState } from '../components/EmptyState';
+import { AssemblyRedirectBanner } from '../components/AssemblyRedirectBanner';
 import { PageHero } from '../components/PageHero';
 import { CUP_TIPO_LABEL as TIPO_LABEL } from '../domain-labels';
 
@@ -769,18 +770,27 @@ function CreateCupForm({
               onChange={(e) => setRecurring(e.currentTarget.checked)}
               disabled={!isPreseason}
             />
-            <Group>
-              <Button
-                onClick={() => create.mutate(undefined as void)}
-                disabled={participants.length < 2 || name.trim().length === 0 || !isPreseason}
-                loading={create.isPending}
-                leftSection={<IconTrophy size={16} />}
-                variant="gradient"
-                gradient={{ from: '#F59E0B', to: '#D97706' }}
-              >
-                Crear copa
-              </Button>
-            </Group>
+            {recurring ? (
+              // Fase 17C: a recurring cup is a standing commitment, so it now
+              // goes through the assembly. A one-off cup stays unilateral.
+              <AssemblyRedirectBanner
+                gameId={gameId}
+                message="Una copa recurrente ahora se propone y vota en la asamblea de clubes."
+              />
+            ) : (
+              <Group>
+                <Button
+                  onClick={() => create.mutate(undefined as void)}
+                  disabled={participants.length < 2 || name.trim().length === 0 || !isPreseason}
+                  loading={create.isPending}
+                  leftSection={<IconTrophy size={16} />}
+                  variant="gradient"
+                  gradient={{ from: '#F59E0B', to: '#D97706' }}
+                >
+                  Crear copa
+                </Button>
+              </Group>
+            )}
           </Stack>
         </Box>
       </Collapse>

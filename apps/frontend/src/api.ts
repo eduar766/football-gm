@@ -34,6 +34,9 @@ import type {
   WorldRankingResponse,
   WorldStandingsResponse,
   SeasonReportsResponse,
+  AssemblyStateResponse,
+  ProposeMeasureRequest,
+  PledgeKind,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -160,6 +163,32 @@ export const api = {
     req<NegotiationDto[]>(`/games/${id}/negotiations/accelerate`, {
       method: 'POST',
       body: JSON.stringify({ negId }),
+    }),
+  assembly: (id: number) => req<AssemblyStateResponse>(`/games/${id}/assembly`),
+  proposeMeasure: (id: number, body: ProposeMeasureRequest) =>
+    req<AssemblyStateResponse>(`/games/${id}/assembly/proposals`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  withdrawProposal: (id: number, proposalId: number) =>
+    req<AssemblyStateResponse>(`/games/${id}/assembly/proposals/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify({ proposalId }),
+    }),
+  revealIntention: (id: number, proposalId: number, teamId: number) =>
+    req<AssemblyStateResponse>(`/games/${id}/assembly/proposals/reveal`, {
+      method: 'POST',
+      body: JSON.stringify({ proposalId, teamId }),
+    }),
+  buyVote: (id: number, proposalId: number, teamId: number) =>
+    req<AssemblyStateResponse>(`/games/${id}/assembly/proposals/buy-vote`, {
+      method: 'POST',
+      body: JSON.stringify({ proposalId, teamId }),
+    }),
+  pledgeForVote: (id: number, proposalId: number, teamId: number, kind: PledgeKind, refId?: number, amount?: number) =>
+    req<AssemblyStateResponse>(`/games/${id}/assembly/proposals/pledge`, {
+      method: 'POST',
+      body: JSON.stringify({ proposalId, teamId, kind, refId, amount }),
     }),
   economy: (id: number) => req<EconomyResponse>(`/games/${id}/economy`),
   setEconomyPolicy: (id: number, policy: { talentInvestment: number }) =>

@@ -2,27 +2,25 @@ import { useState } from 'react';
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Grid,
   Group,
-  NumberInput,
   Paper,
-  SegmentedControl,
   Skeleton,
-  Stack,
   Table,
   Text,
   TextInput,
 } from '@mantine/core';
-import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { IconLayoutGrid, IconPlus, IconRefresh } from '@tabler/icons-react';
-import type { LevelingPlan, StructureTeam } from '@football-gm/contracts';
+import type { StructureTeam } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { PageHero } from '../components/PageHero';
+import { AssemblyRedirectBanner } from '../components/AssemblyRedirectBanner';
 
 const TIER_COLORS: Record<number, string> = {
   1: '#F59E0B',
@@ -89,20 +87,7 @@ export function StructurePage() {
     queryFn: () => api.summary(id),
   });
 
-  const level = useMutationWithFeedback({
-    mutationFn: (plan?: LevelingPlan) => api.runLevelingLeague(id, plan),
-    queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
-    successMessage: 'Liga de nivelación ejecutada',
-  });
-
-  const setFormat = useMutationWithFeedback({
-    mutationFn: (format: 'ida' | 'ida_vuelta') => api.setLeagueFormat(id, format),
-    queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
-    successMessage: 'Formato de liga actualizado',
-  });
-
   const [teamName, setTeamName] = useState('');
-  const [planDivs, setPlanDivs] = useState<{ size: number; format: 'ida' | 'ida_vuelta' }[]>([]);
   const create = useMutationWithFeedback({
     mutationFn: () => api.createOwnTeam(id, teamName.trim()),
     queryKeyToInvalidate: ['structure', 'standings', 'summary', 'teams', 'federations', 'economy'],
@@ -127,28 +112,6 @@ export function StructurePage() {
   const pending = structure.data?.pending ?? [];
   const isPreseason = summary.data?.phase === 'pretemporada';
 
-  // Fase 14.7: total pool of player teams that the leveling league redistributes.
-  const poolSize =
-    (structure.data?.divisions ?? []).reduce((a, d) => a + d.teams.length, 0) + pending.length;
-
-  const buildDefault = (count: number): { size: number; format: 'ida' | 'ida_vuelta' }[] => {
-    const base = Math.floor(poolSize / count);
-    const rem = poolSize % count;
-    return Array.from({ length: count }, (_, i) => ({
-      size: base + (i < rem ? 1 : 0),
-      format: 'ida_vuelta' as const,
-    }));
-  };
-  const divs = planDivs.length ? planDivs : buildDefault(1);
-  const plannedTotal = divs.reduce((a, d) => a + d.size, 0);
-  const planValid = plannedTotal === poolSize && divs.every((d) => d.size >= 2);
-  const submitPlan = () => {
-    const plan: LevelingPlan = {
-      divisions: divs.map((d, i) => ({ orden: i + 1, size: d.size, format: d.format })),
-    };
-    level.mutate(plan);
-  };
-
   return (
     <div className="page-enter">
       <PageHero
@@ -157,28 +120,12 @@ export function StructurePage() {
         subtitle="Antes de crecer o abrir una división nueva se celebra una liga de nivelación que reparte los equipos por mérito."
       />
 
-      <Group justify="flex-end" mb="md">
-        <Button
-          onClick={() =>
-            modals.openConfirmModal({
-              title: 'Celebrar liga de nivelación',
-              children: (
-                <Text size="sm">Se ejecutará una liga de nivelación que repartirá los equipos por mérito entre las divisiones. ¿Continuar?</Text>
-              ),
-              labels: { confirm: 'Confirmar', cancel: 'Cancelar' },
-              confirmProps: { color: 'yellow' },
-              onConfirm: () => level.mutate(undefined),
-            })
-          }
-          loading={level.isPending}
-          disabled={!isPreseason}
-          variant="gradient"
-          gradient={{ from: '#F59E0B', to: '#D97706' }}
-          leftSection={<IconRefresh size={16} />}
-        >
-          Celebrar liga de nivelación
-        </Button>
-      </Group>
+      <Box mb="md">
+        <AssemblyRedirectBanner
+          gameId={gameId}
+          message="Expandir divisiones (celebrar una liga de nivelación) ahora se propone y vota en la asamblea de clubes."
+        />
+      </Box>
 
       {!isPreseason && summary.data && (
         <Alert color="gray" mb="md" title="Cambios estructurales bloqueados">
@@ -194,82 +141,8 @@ export function StructurePage() {
         </Alert>
       )}
 
-      {isPreseason && poolSize >= 2 && (
-        <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
-          <Group justify="space-between" mb="xs">
-            <div>
-              <Text fw={700}>Planificar nivelación</Text>
-              <Text size="xs" c="dimmed">
-                Decide cuántas divisiones, cuántos equipos en cada una y su formato.
-                Los mejores de la nivelación van a 1ª; los peores caen a 2ª/3ª.
-              </Text>
-            </div>
-            <Badge size="lg" variant="light" color={planValid ? 'teal' : 'red'}>
-              {plannedTotal}/{poolSize} equipos
-            </Badge>
-          </Group>
-
-          <Group mb="sm">
-            <Text size="sm" fw={500}>Nº de divisiones</Text>
-            <SegmentedControl
-              value={String(divs.length)}
-              onChange={(v) => setPlanDivs(buildDefault(Number(v)))}
-              data={['1', '2', '3'].filter((n) => Number(n) * 2 <= poolSize).map((n) => ({ value: n, label: n }))}
-            />
-          </Group>
-
-          <Stack gap="xs">
-            {divs.map((d, i) => (
-              <Group key={i} justify="space-between" wrap="nowrap">
-                <Text size="sm" style={{ width: 90 }}>
-                  {i === 0 ? 'Primera' : i === 1 ? 'Segunda' : 'Tercera'}
-                </Text>
-                <NumberInput
-                  size="xs"
-                  min={2}
-                  max={poolSize}
-                  value={d.size}
-                  onChange={(v) =>
-                    setPlanDivs(divs.map((x, j) => (j === i ? { ...x, size: Number(v) || 0 } : x)))
-                  }
-                  w={100}
-                />
-                <SegmentedControl
-                  size="xs"
-                  value={d.format}
-                  onChange={(v) =>
-                    setPlanDivs(divs.map((x, j) => (j === i ? { ...x, format: v as 'ida' | 'ida_vuelta' } : x)))
-                  }
-                  data={[
-                    { value: 'ida', label: 'Una vuelta' },
-                    { value: 'ida_vuelta', label: 'Ida y vuelta' },
-                  ]}
-                />
-              </Group>
-            ))}
-          </Stack>
-
-          <Group justify="flex-end" mt="sm">
-            <Button
-              size="sm"
-              color="yellow"
-              disabled={!planValid || level.isPending}
-              loading={level.isPending}
-              onClick={submitPlan}
-            >
-              Ejecutar nivelación con este plan
-            </Button>
-          </Group>
-          {!planValid && (
-            <Text size="xs" c="red" mt={4} ta="right">
-              Los tamaños deben sumar {poolSize} y cada división tener ≥2 equipos.
-            </Text>
-          )}
-        </Paper>
-      )}
-
       <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-        <Group justify="space-between">
+        <Group justify="space-between" mb="sm">
           <div>
             <Text fw={700}>Formato de liga</Text>
             <Text size="xs" c="dimmed">
@@ -278,17 +151,15 @@ export function StructurePage() {
             </Text>
           </div>
           {summary.data && (
-            <SegmentedControl
-              value={summary.data.leagueFormat}
-              onChange={(v) => setFormat.mutate(v as 'ida' | 'ida_vuelta')}
-              disabled={setFormat.isPending || !isPreseason}
-              data={[
-                { value: 'ida', label: 'Una vuelta' },
-                { value: 'ida_vuelta', label: 'Ida y vuelta' },
-              ]}
-            />
+            <Badge size="lg" variant="light" color="gray">
+              {summary.data.leagueFormat === 'ida' ? 'Una vuelta' : 'Ida y vuelta'}
+            </Badge>
           )}
         </Group>
+        <AssemblyRedirectBanner
+          gameId={gameId}
+          message="Cambiar el formato de liga ahora se propone y vota en la asamblea de clubes."
+        />
       </Paper>
 
       <Paper p="md" mb="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #10B981' }}>

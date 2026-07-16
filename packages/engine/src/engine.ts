@@ -35,6 +35,8 @@ import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
 import { addPresidentForTeam, generatePresident, generateRivalCommissioner, removePresidentForTeam, rotatePresidents } from './characters';
 import { closeSeasonOpinion, earnPC } from './politics';
+import { resolveAllPendingProposals } from './assembly';
+import { verifyPledges } from './pledges';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -375,6 +377,10 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     publicOpinion: 50,
     opinionHistory: [],
     politicalCapital: 3,
+    proposals: [],
+    nextProposalId: 1,
+    pledges: [],
+    nextPledgeId: 1,
   };
 }
 
@@ -519,7 +525,11 @@ function checkMandate(mandate: BoardMandate, s: GameState): boolean {
 // season so advanceMatchday plays them in stride.
 export function startSeason(prev: GameState): GameState {
   if (prev.phase !== 'pretemporada') return prev;
-  const s = structuredClone(prev);
+  let s = structuredClone(prev);
+  // Fase 17C: resolve any pending assembly proposal BEFORE the calendar is
+  // built — a passed cambio_formato/expansion_division must land while still
+  // in pretemporada, never mid-season.
+  s = resolveAllPendingProposals(s);
   const { fixtures, total } = buildDivisionFixtures(
     s.teams,
     s.divisions,
@@ -679,7 +689,10 @@ export function createOwnTeam(
 export function advanceMatchday(prev: GameState): GameState {
   if (prev.phase !== 'temporada') return prev;
   if (prev.seasonOver) return prev;
-  const s = structuredClone(prev);
+  let s = structuredClone(prev);
+  // Fase 17C: any proposal made since the last advance resolves now — "se
+  // resuelve al avanzar la siguiente jornada". Cheap: capped at 2 pending.
+  s = resolveAllPendingProposals(s);
   const md = s.currentMatchday;
   const byId = new Map(s.teams.map((t) => [t.id, t]));
   const playingTeams = new Set<number>();
@@ -806,23 +819,6 @@ export function advanceSeason(prev: GameState): GameState {
   if (prev.phase !== 'temporada') return prev;
   let s = prev;
   while (!s.seasonOver && pendingEvents(s).length === 0) s = advanceMatchday(s);
-  return s;
-}
-
-// Change how the league is contested (§4.4). Structural decision — only valid
-// in pretemporada; startSeason will use this flag when building the calendar.
-export function setLeagueFormat(
-  prev: GameState,
-  format: GameState['leagueFormat'],
-): GameState {
-  if (prev.phase !== 'pretemporada') return prev;
-  if (prev.leagueFormat === format) return prev;
-  const s = structuredClone(prev);
-  s.leagueFormat = format;
-  // 14.7: keep the global toggle and per-division formats in sync.
-  for (const d of s.divisions) {
-    if (d.federationId === s.playerFederationId) d.format = format;
-  }
   return s;
 }
 
@@ -1194,6 +1190,27 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     priority: 150,
     run(s) {
       retirePlayers(s);
+    },
+  },
+  {
+    // Fase 17C: settle any pledge past its deadline (fulfilled/broken).
+    name: 'verify-pledges',
+    priority: 165,
+    run(s) {
+      verifyPledges(s);
+    },
+  },
+  {
+    // Fase 17C: safety net — a proposal only reaches here if it was never
+    // resolved by startSeason/advanceMatchday (e.g. proposed after the last
+    // matchday, before closeSeason was called). Nothing crosses seasons.
+    // Object.assign because resolveAllPendingProposals is a prev->new
+    // function (it dispatches to addNorm/setLeaguePrize/etc., which all
+    // clone-and-return); this pipeline step must mutate `s` in place.
+    name: 'expire-proposals',
+    priority: 167,
+    run(s) {
+      Object.assign(s, resolveAllPendingProposals(s));
     },
   },
   {

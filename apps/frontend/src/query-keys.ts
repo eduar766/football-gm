@@ -24,5 +24,6 @@ export const QK = {
   commissionerReports: (id: number) => ['commissionerReports', id],
   nextFixtures: (id: number) => ['nextFixtures', id],
   seasonReports: (id: number) => ['seasonReports', id],
+  assembly: (id: number) => ['assembly', id],
   games: () => ['games'],
 } as const;

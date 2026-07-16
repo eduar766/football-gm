@@ -31,7 +31,6 @@ export {
   closeSeason,
   applyImpulse,
   createOwnTeam,
-  setLeagueFormat,
   callReview,
   emergencyMeeting,
   postponeMatchday,
@@ -45,6 +44,7 @@ export {
   pendingIntegrationTeams,
   runLevelingLeague,
   validateLevelingPlan,
+  setLeagueFormat,
   MAX_DIVISION_SIZE,
   MAX_LEVELING_DIVISIONS,
   PROMOTION_RELEGATION,
@@ -138,3 +138,13 @@ export { presidentOf } from './characters';
 
 // ── Politics (Fase 17B) ───────────────────────────────────────────────────────
 export { earnPC, spendPC, PC_MIN, PC_MAX } from './politics';
+
+// ── Assembly (Fase 17C) ───────────────────────────────────────────────────────
+export {
+  proposeMeasure,
+  withdrawProposal,
+  revealIntention,
+  buyVote,
+  pledgeForVote,
+  resolveAllPendingProposals,
+} from './assembly';

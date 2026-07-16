@@ -39,4 +39,6 @@ export const FED_LOG_STYLE: Record<FederationLogType, { emoji: string; color: st
   title: { emoji: '🏆', color: 'yellow' },
   president_change: { emoji: '👔', color: 'grape' },
   political_capital: { emoji: '🗳️', color: 'violet' },
+  assembly_result: { emoji: '⚖️', color: 'violet' },
+  pledge_result: { emoji: '🤝', color: 'orange' },
 };

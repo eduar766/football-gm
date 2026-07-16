@@ -24,6 +24,7 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import { EmptyState } from '../components/EmptyState';
+import { AssemblyRedirectBanner } from '../components/AssemblyRedirectBanner';
 import type { CompetitionPrizeDto } from '@football-gm/contracts';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
@@ -224,6 +225,7 @@ interface CompetitionInfo {
 function CompetitionPrizeCard({
   info,
   isPreseason,
+  gameId,
   onSave,
   onRemove,
   saving,
@@ -231,11 +233,16 @@ function CompetitionPrizeCard({
 }: {
   info: CompetitionInfo;
   isPreseason: boolean;
+  gameId: string;
   onSave: (pool: number, shares: number[]) => void;
   onRemove: () => void;
   saving: boolean;
   removing: boolean;
 }) {
+  // Fase 17C: the league's reparto is governed by the assembly; cup prizes
+  // stay a unilateral commissioner decision.
+  const isGoverned = info.kind === 'liga';
+  const editable = isPreseason && !isGoverned;
   const [pool, setPool] = useState(info.existingPrize?.pool ?? 0);
   const [shares, setShares] = useState<number[]>(info.existingPrize?.shares ?? [50, 30, 20]);
 
@@ -293,12 +300,12 @@ function CompetitionPrizeCard({
           step={500_000}
           thousandSeparator="."
           decimalSeparator=","
-          disabled={!isPreseason}
+          disabled={!editable}
           styles={{ input: { fontFamily: 'var(--mantine-font-family-monospace)' } }}
         />
 
         {/* Presets */}
-        {isPreseason && (
+        {editable && (
           <Group gap="xs">
             <Text size="xs" c="dimmed">Preset:</Text>
             <Button size="compact-xs" variant="light" color="yellow" onClick={() => applyPreset('champion')}>
@@ -322,46 +329,53 @@ function CompetitionPrizeCard({
         <ShareEditor
           shares={shares}
           onChange={setShares}
-          disabled={!isPreseason}
+          disabled={!editable}
           pool={pool}
           maxPositions={maxPositions}
         />
 
         {/* Actions */}
-        <Group gap="xs">
-          <Button
-            size="sm"
-            onClick={() => onSave(pool, shares)}
-            loading={saving}
-            disabled={!isPreseason}
-            leftSection={<IconDeviceFloppy size={15} />}
-            variant="gradient"
-            gradient={{ from: info.accentColor, to: info.accentColor }}
-          >
-            Guardar
-          </Button>
-          {info.existingPrize && (
+        {isGoverned ? (
+          <AssemblyRedirectBanner
+            gameId={gameId}
+            message="El reparto de la liga ahora se propone y vota en la asamblea de clubes."
+          />
+        ) : (
+          <Group gap="xs">
             <Button
               size="sm"
-              variant="subtle"
-              color="red"
-              leftSection={<IconTrash size={13} />}
-              loading={removing}
-              disabled={!isPreseason}
-              onClick={() =>
-                modals.openConfirmModal({
-                  title: `Quitar premio — ${info.name}`,
-                  children: <Text size="sm">¿Eliminar el premio activo? El historial de pagos se conserva.</Text>,
-                  labels: { confirm: 'Quitar', cancel: 'Cancelar' },
-                  confirmProps: { color: 'red' },
-                  onConfirm: onRemove,
-                })
-              }
+              onClick={() => onSave(pool, shares)}
+              loading={saving}
+              disabled={!editable}
+              leftSection={<IconDeviceFloppy size={15} />}
+              variant="gradient"
+              gradient={{ from: info.accentColor, to: info.accentColor }}
             >
-              Quitar
+              Guardar
             </Button>
-          )}
-        </Group>
+            {info.existingPrize && (
+              <Button
+                size="sm"
+                variant="subtle"
+                color="red"
+                leftSection={<IconTrash size={13} />}
+                loading={removing}
+                disabled={!editable}
+                onClick={() =>
+                  modals.openConfirmModal({
+                    title: `Quitar premio — ${info.name}`,
+                    children: <Text size="sm">¿Eliminar el premio activo? El historial de pagos se conserva.</Text>,
+                    labels: { confirm: 'Quitar', cancel: 'Cancelar' },
+                    confirmProps: { color: 'red' },
+                    onConfirm: onRemove,
+                  })
+                }
+              >
+                Quitar
+              </Button>
+            )}
+          </Group>
+        )}
       </Stack>
     </Card>
   );
@@ -464,6 +478,7 @@ export function PrizesPage() {
             key={comp.kind === 'liga' ? 'liga' : `copa-${comp.cupId}`}
             info={comp}
             isPreseason={isPreseason}
+            gameId={gameId}
             saving={saveLeague.isPending || saveCup.isPending}
             removing={remove.isPending}
             onSave={(pool, shares) => {

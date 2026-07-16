@@ -287,7 +287,7 @@ export const SeasonReportBriefDto = z.object({
   type: z.enum([
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
-    'president_change', 'political_capital',
+    'president_change', 'political_capital', 'assembly_result', 'pledge_result',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -421,6 +421,7 @@ export const GameSummary = z.object({
   impulsesPerSeason: z.number().int(),
   pendingEventsCount: z.number().int(),
   normBreachCount: z.number().int().default(0),
+  pendingProposalsCount: z.number().int().default(0),
   unreadMailCount: z.number().int().default(0),
   boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
   publicOpinion: z.number().int().default(50),
@@ -876,6 +877,8 @@ export const FederationLogType = z.enum([
   'title',
   'president_change',
   'political_capital',
+  'assembly_result',
+  'pledge_result',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 
@@ -1489,6 +1492,129 @@ export type CupFormat = z.infer<typeof CupFormat>;
 
 export const CupCategory = z.enum(['primer_equipo', 'juvenil']);
 export type CupCategory = z.infer<typeof CupCategory>;
+
+/* ------------------------------------------------- assembly (Fase 17C) */
+
+export const ProposalKind = z.enum([
+  'norma_nueva', 'derogar_norma', 'cambio_reparto', 'copa_recurrente',
+  'expansion_division', 'cambio_formato', 'admision_acelerada',
+]);
+export type ProposalKind = z.infer<typeof ProposalKind>;
+
+export const ProposalMajority = z.enum(['simple', 'dos_tercios']);
+export type ProposalMajority = z.infer<typeof ProposalMajority>;
+
+export const ProposalStatus = z.enum(['en_tramite', 'aprobada', 'rechazada']);
+export type ProposalStatus = z.infer<typeof ProposalStatus>;
+
+const NormaNuevaPayload = z.object({ tipo: NormType, valor: z.number() });
+const DerogarNormaPayload = z.object({ normId: Id });
+const CambioRepartoPayload = z.object({
+  pool: z.number().int().nonnegative(),
+  shares: z.array(z.number().nonnegative()).min(1),
+});
+const CopaRecurrentePayload = z.object({
+  name: z.string().min(1),
+  tipo: CupType,
+  formato: CupFormat,
+  categoria: CupCategory,
+  participantTeamIds: z.array(Id).min(2),
+});
+const ExpansionDivisionPayload = z.object({ plan: LevelingPlan.optional() });
+const CambioFormatoPayload = z.object({ format: LeagueFormat });
+const AdmisionAceleradaPayload = z.object({ negotiationId: Id });
+
+export const ProposeMeasureRequest = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('norma_nueva'), payload: NormaNuevaPayload }),
+  z.object({ kind: z.literal('derogar_norma'), payload: DerogarNormaPayload }),
+  z.object({ kind: z.literal('cambio_reparto'), payload: CambioRepartoPayload }),
+  z.object({ kind: z.literal('copa_recurrente'), payload: CopaRecurrentePayload }),
+  z.object({ kind: z.literal('expansion_division'), payload: ExpansionDivisionPayload }),
+  z.object({ kind: z.literal('cambio_formato'), payload: CambioFormatoPayload }),
+  z.object({ kind: z.literal('admision_acelerada'), payload: AdmisionAceleradaPayload }),
+  // Fase 17C: pay 4 PC to bypass a same-season rejection cooldown.
+]).and(z.object({ force: z.boolean().optional() }));
+export type ProposeMeasureRequest = z.infer<typeof ProposeMeasureRequest>;
+
+export const ProposalActionRequest = z.object({ proposalId: Id });
+export type ProposalActionRequest = z.infer<typeof ProposalActionRequest>;
+
+export const RevealIntentionRequest = z.object({ proposalId: Id, teamId: Id });
+export type RevealIntentionRequest = z.infer<typeof RevealIntentionRequest>;
+
+export const BuyVoteRequest = z.object({ proposalId: Id, teamId: Id });
+export type BuyVoteRequest = z.infer<typeof BuyVoteRequest>;
+
+export const PledgeKind = z.enum(['plaza_copa', 'mejora_reparto', 'exencion_norma', 'rescate_futuro']);
+export type PledgeKind = z.infer<typeof PledgeKind>;
+
+export const PledgeForVoteRequest = z.object({
+  proposalId: Id,
+  teamId: Id,
+  kind: PledgeKind,
+  refId: Id.optional(),
+  amount: z.number().int().nonnegative().optional(),
+});
+export type PledgeForVoteRequest = z.infer<typeof PledgeForVoteRequest>;
+
+export const AssemblyVoteDto = z.object({
+  teamId: Id,
+  teamName: z.string(),
+  presidentName: z.string().nullable(),
+  presidentTrait: PresidentTrait.nullable(),
+  score: z.number(),
+  intention: z.enum(['favor', 'contra', 'indeciso']),
+  revealed: z.boolean(),
+  bought: z.boolean(),
+  pledgeId: z.number().int().nullable(),
+  final: z.enum(['favor', 'contra']).nullable(),
+});
+export type AssemblyVoteDto = z.infer<typeof AssemblyVoteDto>;
+
+export const AssemblyProposalDto = z.object({
+  id: Id,
+  kind: ProposalKind,
+  payload: z.record(z.string(), z.unknown()),
+  majority: ProposalMajority,
+  year: z.number().int(),
+  proposedAtMatchday: z.number().int(),
+  votes: z.array(AssemblyVoteDto),
+  status: ProposalStatus,
+  resolvedAtMatchday: z.number().int().nullable(),
+});
+export type AssemblyProposalDto = z.infer<typeof AssemblyProposalDto>;
+
+export const PledgeStatus = z.enum(['pendiente', 'cumplida', 'rota']);
+export type PledgeStatus = z.infer<typeof PledgeStatus>;
+
+export const PledgeDto = z.object({
+  id: Id,
+  teamId: Id,
+  teamName: z.string(),
+  kind: PledgeKind,
+  refId: z.number().int().nullable(),
+  amount: z.number().int().nullable(),
+  madeYear: z.number().int(),
+  deadlineYear: z.number().int(),
+  status: PledgeStatus,
+});
+export type PledgeDto = z.infer<typeof PledgeDto>;
+
+export const AssemblyStateResponse = z.object({
+  proposals: z.array(AssemblyProposalDto),
+  pledges: z.array(PledgeDto),
+  politicalCapital: z.number().int(),
+  censusSize: z.number().int(),
+});
+export type AssemblyStateResponse = z.infer<typeof AssemblyStateResponse>;
+
+// Returned by the 7 now-governed endpoints when the assembly path is required.
+export const RequiresAssemblyResponse = z.object({
+  requiresAssembly: z.literal(true),
+  kind: ProposalKind,
+  message: z.string(),
+});
+export type RequiresAssemblyResponse = z.infer<typeof RequiresAssemblyResponse>;
 
 export const CupMatchDto = z.object({
   homeTeamId: z.number().int(),
