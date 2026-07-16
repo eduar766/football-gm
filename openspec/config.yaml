@@ -1,0 +1,85 @@
+strict_tdd: true
+context: |
+  @football-gm/backend is a Node.js/TypeScript, Node.js/TypeScript ESM, React project.
+  Detected markers: package.json, pnpm package manager, apps/backend/package.json, apps/backend/tsconfig.json, apps/backend/npm package manager, apps/frontend/package.json, apps/frontend/tsconfig.json, apps/frontend/npm package manager, packages/config/package.json, packages/config/npm package manager, packages/contracts/package.json, packages/contracts/tsconfig.json, packages/contracts/npm package manager, packages/engine/package.json, packages/engine/tsconfig.json, packages/engine/npm package manager, .agents/skills/nestjs-best-practices/scripts/package.json, .agents/skills/nestjs-best-practices/scripts/npm package manager, GitHub Actions.
+  Package managers: pnpm, npm.
+  Additional evidence: Test-like files detected (35); examples: apps/frontend/src/__tests__/BracketView.test.tsx, apps/frontend/src/__tests__/HeadlinesFeed.test.tsx, apps/frontend/src/__tests__/StatusPill.test.tsx, apps/frontend/src/__tests__/api-error.test.ts, apps/frontend/src/__tests__/api.test.ts.
+  Primary test command: pnpm test.
+  Unit tests: package script (pnpm test); Vitest (cd apps/frontend && npm test); Vitest (cd packages/engine && npm test).
+  Integration tests: Testing Library (cd apps/frontend && npm test).
+  E2E tests: none.
+rules:
+  proposal:
+    require_problem_statement: true
+  spec:
+    require_acceptance_criteria: true
+  design:
+    require_tradeoffs: true
+  tasks:
+    protect_review_workload: true
+  apply:
+    test_command: "pnpm test"
+  verify:
+    test_command: "pnpm test"
+testing:
+  detected: "2026-07-16"
+  runner:
+    command: "pnpm test"
+    framework: "package script"
+  layers:
+    unit: "package script, Vitest, Vitest"
+    integration: "Testing Library"
+    e2e: ""
+  commands:
+    unit:
+      - scope: "."
+        command: "pnpm test"
+        framework: "package script"
+      - scope: "apps/frontend"
+        command: "cd apps/frontend && npm test"
+        framework: "Vitest"
+      - scope: "packages/engine"
+        command: "cd packages/engine && npm test"
+        framework: "Vitest"
+    integration:
+      - scope: "apps/frontend"
+        command: "cd apps/frontend && npm test"
+        framework: "Testing Library"
+    e2e:
+      []
+  coverage:
+    command: ""
+    commands:
+      []
+quality:
+  lint: "pnpm run lint"
+  lint_commands:
+    - scope: "."
+      command: "pnpm run lint"
+      framework: "linter"
+    - scope: "apps/backend"
+      command: "cd apps/backend && npm run lint"
+      framework: "linter"
+    - scope: "apps/frontend"
+      command: "cd apps/frontend && npm run lint"
+      framework: "linter"
+  typecheck: "pnpm run typecheck"
+  typecheck_commands:
+    - scope: "."
+      command: "pnpm run typecheck"
+      framework: "type checker"
+    - scope: "apps/backend"
+      command: "cd apps/backend && npm run typecheck"
+      framework: "type checker"
+    - scope: "apps/frontend"
+      command: "cd apps/frontend && npm run typecheck"
+      framework: "type checker"
+    - scope: "packages/contracts"
+      command: "cd packages/contracts && npm run typecheck"
+      framework: "type checker"
+    - scope: "packages/engine"
+      command: "cd packages/engine && npm run typecheck"
+      framework: "type checker"
+  format: ""
+  format_commands:
+    []
