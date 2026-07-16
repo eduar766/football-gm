@@ -1,9 +1,10 @@
 import { CONFEDERATIONS } from './seed-data';
 import { divisionName } from './structure';
 import { generatePotencial } from './talent';
-import type { GameState } from './types';
+import { generatePresident, generateRivalCommissioner } from './characters';
+import type { ClubPresident, GameState, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 16;
+export const CURRENT_SCHEMA_VERSION = 17;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -366,6 +367,36 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 16;
+  }
+
+  // v16 → v17 (Fase 17A): club presidents (one per player-federation team) +
+  // rival commissioners. Generated from a one-shot seed-derived draw, same
+  // discipline as createGame, so it never perturbs a persistent stream.
+  // politicsRng/scandalRng/deskRng are seeded here too even though only 17A
+  // consumes politicsRng yet — one migration step for all three streams.
+  if (v < 17) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    const charactersRng = { s: (state.seed ^ 0xc2b2ae35) >>> 0 };
+    if (!gs.presidents) {
+      let nextPresidentId = 1;
+      const presidents: ClubPresident[] = state.teams
+        .filter((t) => t.federationId === state.playerFederationId)
+        .map((t) => ({ id: nextPresidentId++, ...generatePresident(charactersRng, t.id, state.year) }));
+      gs.presidents = presidents;
+      gs.nextPresidentId = nextPresidentId;
+    }
+    if (!gs.rivalCommissioners) {
+      const rivalCommissioners: RivalCommissioner[] = state.federations
+        .filter((f) => !f.isPlayer)
+        .map((f) => generateRivalCommissioner(charactersRng, f.id, state.year));
+      gs.rivalCommissioners = rivalCommissioners;
+    }
+    if (!gs.politicsRng) gs.politicsRng = { s: (state.seed ^ 0x9e3779b9) >>> 0 };
+    if (!gs.scandalRng) gs.scandalRng = { s: (state.seed ^ 0x7f4a7c15) >>> 0 };
+    if (!gs.deskRng) gs.deskRng = { s: (state.seed ^ 0x85ebca6b) >>> 0 };
+
+    state.schemaVersion = 17;
   }
 
   return state;

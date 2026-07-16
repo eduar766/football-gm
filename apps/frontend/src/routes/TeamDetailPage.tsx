@@ -20,6 +20,7 @@ import {
   IconBuildingStadium,
   IconChartBar,
   IconCoin,
+  IconCrown,
   IconHeart,
   IconShieldHalf,
   IconStar,
@@ -481,6 +482,36 @@ function FinanzasTab({ finance }: { finance: NonNullable<TeamDetail['finance']> 
   );
 }
 
+/* ── Presidencia (Fase 17A) ──────────────────────────────────────────── */
+
+const PRESIDENT_TRAIT_LABEL: Record<string, string> = {
+  leal: 'Leal',
+  ambicioso: 'Ambicioso',
+  tradicionalista: 'Tradicionalista',
+  mercenario: 'Mercenario',
+  institucional: 'Institucional',
+};
+
+function PresidentBlock({ president }: { president: NonNullable<TeamDetail['president']> }) {
+  return (
+    <Box mt="xl">
+      <Group gap="xs" mb="xs">
+        <IconCrown size={13} color="#F59E0B" />
+        <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.05em' }}>Presidencia</Text>
+      </Group>
+      <Box
+        style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.15)' }}
+      >
+        <Group justify="space-between" wrap="nowrap">
+          <Text size="sm" fw={600}>{president.name}</Text>
+          <Badge size="xs" variant="light" color="yellow">{PRESIDENT_TRAIT_LABEL[president.trait] ?? president.trait}</Badge>
+        </Group>
+        <Text size="xs" c="dimmed" mt={2}>Presidente desde {president.sinceYear}</Text>
+      </Box>
+    </Box>
+  );
+}
+
 /* ── Main page ────────────────────────────────────────────────────────── */
 
 /* ── Rival team view (P1): rivals have no persisted squad/finance, so show
@@ -761,6 +792,9 @@ export function TeamDetailPage() {
               </Stack>
             </Box>
           )}
+
+          {/* Presidency (Fase 17A) — player teams only */}
+          {t.president && <PresidentBlock president={t.president} />}
         </Card>
       </Grid.Col>
 

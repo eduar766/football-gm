@@ -33,6 +33,7 @@ import {
 import { expireStaleEvents, maybeChainEvents, maybeSpawnEvent, pendingEvents } from './events';
 import { buildChronicle } from './headlines';
 import { logFederation } from './federation-log';
+import { addPresidentForTeam, generatePresident, generateRivalCommissioner, removePresidentForTeam, rotatePresidents } from './characters';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -57,6 +58,7 @@ import {
 } from './season-pipeline';
 import type {
   BoardMandate,
+  ClubPresident,
   CreateGameOptions,
   Division,
   Federation,
@@ -65,6 +67,7 @@ import type {
   GlobalRanking,
   Player,
   PlayerSeed,
+  RivalCommissioner,
   Team,
 } from './types';
 
@@ -243,6 +246,19 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     ...rivalDivisions,
   ];
 
+  // Fase 17A: presidents + rival commissioners. One-shot RNG derived from the
+  // seed — consumed once here and never again, so it cannot perturb any
+  // persistent stream (rng, rivalRng, etc). Rotation from here on draws from
+  // the dedicated politicsRng stream instead.
+  const charactersRng = makeRng((seed ^ 0xc2b2ae35) >>> 0);
+  let nextPresidentId = 1;
+  const presidents: ClubPresident[] = teams
+    .filter((t) => t.federationId === playerFederationId)
+    .map((t) => ({ id: nextPresidentId++, ...generatePresident(charactersRng, t.id, 1) }));
+  const rivalCommissioners: RivalCommissioner[] = federations
+    .filter((f) => !f.isPlayer)
+    .map((f) => generateRivalCommissioner(charactersRng, f.id, 1));
+
   // A fresh game lands in pretemporada (§4.8): the commissioner sets up
   // competitions/contracts/prizes BEFORE calling startSeason, which builds the
   // calendar and switches the phase to temporada.
@@ -349,6 +365,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     talentRng,
     governanceStreak: 0,
     seasonReports: [],
+    presidents,
+    nextPresidentId,
+    rivalCommissioners,
+    politicsRng: makeRng((seed ^ 0x9e3779b9) >>> 0),
+    scandalRng: makeRng((seed ^ 0x7f4a7c15) >>> 0),
+    deskRng: makeRng((seed ^ 0x85ebca6b) >>> 0),
   };
 }
 
@@ -637,6 +659,7 @@ export function createOwnTeam(
     }
   }
   s.treasury -= CREATE_TEAM_COST;
+  addPresidentForTeam(s, nextId);
   logFederation(s, {
     year: s.year,
     matchday: 0,
@@ -820,6 +843,7 @@ export function processRivalActions(s: GameState): void {
             const playerFed = s.federations.find(f => f.id === s.playerFederationId);
             if (playerFed) playerFed.prestige = Math.max(0, playerFed.prestige - transfer);
             s.prestige = Math.max(0, s.prestige - transfer);
+            removePresidentForTeam(s, team.id);
             team.federationId = fed.id;
             team.arraigo = 30;
             s.rivalActions.push({
@@ -1218,6 +1242,14 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     priority: 190,
     run(s) {
       expireDemands(s, s.totalMatchdays + 1, true);
+    },
+  },
+  {
+    // Fase 17A: presidential handovers. Independent politicsRng stream.
+    name: 'rotate-presidents',
+    priority: 195,
+    run(s) {
+      rotatePresidents(s);
     },
   },
   {

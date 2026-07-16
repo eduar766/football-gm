@@ -4,6 +4,7 @@
 
 import { rngNext } from './rng';
 import { logFederation } from './federation-log';
+import { addPresidentForTeam, removePresidentForTeam } from './characters';
 import type { Federation, GameState, Negotiation, NegotiationRequirement, Team } from './types';
 
 // Prestige groups into 5 tiers; the tier is prelatory — it gates which teams a
@@ -263,11 +264,13 @@ export function progressNegotiations(s: GameState): void {
         );
         if (by) by.prestige += transfer;
         if (from) from.prestige = Math.max(0, from.prestige - transfer);
+        const wasPlayerTeam = team.federationId === s.playerFederationId;
         team.federationId = n.byFederationId; // adhesion effective
         team.divisionOrden = null; // pending integration: leveling league will place them
         team.arraigo = 30; // fresh start: low loyalty in the new federation
         n.state = 'effective';
         if (n.byFederationId === s.playerFederationId) {
+          addPresidentForTeam(s, team.id);
           logFederation(s, {
             year: s.year,
             matchday: 0,
@@ -277,6 +280,8 @@ export function progressNegotiations(s: GameState): void {
             value: null,
             teamId: team.id,
           });
+        } else if (wasPlayerTeam) {
+          removePresidentForTeam(s, team.id);
         }
       }
       continue;

@@ -6,6 +6,8 @@ import type {
   NegotiationState as EngineNegotiationStateUnion,
   NormType as EngineNormType,
   PlayerPosition as EnginePlayerPosition,
+  PresidentTrait as EnginePresidentTrait,
+  RivalCommissionerTrait as EngineRivalCommissionerTrait,
   SeasonPhase as EngineSeasonPhase,
 } from '@football-gm/engine';
 
@@ -285,6 +287,7 @@ export const SeasonReportBriefDto = z.object({
   type: z.enum([
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
+    'president_change',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -545,6 +548,35 @@ const _normTypeValues = [
 export const NormType = z.enum(_normTypeValues);
 export type NormType = z.infer<typeof NormType>;
 
+/* --------------------------------------------- characters (Fase 17A) */
+
+const _presidentTraitValues = [
+  'leal', 'ambicioso', 'tradicionalista', 'mercenario', 'institucional',
+] as const satisfies [EnginePresidentTrait, ...EnginePresidentTrait[]];
+export const PresidentTrait = z.enum(_presidentTraitValues);
+export type PresidentTrait = z.infer<typeof PresidentTrait>;
+
+const _rivalCommissionerTraitValues = [
+  'agresivo', 'conservador', 'corrupto', 'visionario', 'diplomatico',
+] as const satisfies [EngineRivalCommissionerTrait, ...EngineRivalCommissionerTrait[]];
+export const RivalCommissionerTrait = z.enum(_rivalCommissionerTraitValues);
+export type RivalCommissionerTrait = z.infer<typeof RivalCommissionerTrait>;
+
+export const ClubPresidentDto = z.object({
+  name: z.string(),
+  trait: PresidentTrait,
+  sinceYear: z.number().int(),
+  grudge: z.number().int(),
+});
+export type ClubPresidentDto = z.infer<typeof ClubPresidentDto>;
+
+export const RivalCommissionerDto = z.object({
+  name: z.string(),
+  trait: RivalCommissionerTrait,
+  sinceYear: z.number().int(),
+});
+export type RivalCommissionerDto = z.infer<typeof RivalCommissionerDto>;
+
 export const TeamDetail = z.object({
   id: Id,
   name: z.string(),
@@ -591,6 +623,8 @@ export const TeamDetail = z.object({
   // Fase 14 follow-up (P1): distinguish the player's own teams from rivals so the
   // UI can render a rival-appropriate view instead of an empty player layout.
   isPlayerTeam: z.boolean().default(true),
+  // Fase 17A: null for rival teams (only player-federation teams have one).
+  president: ClubPresidentDto.nullable().default(null),
   rival: z.object({
     divisionName: z.string().nullable(),
     position: z.number().int().nullable(), // current position in their own league
@@ -654,6 +688,8 @@ export const FederationOverview = z.object({
   standings: z.array(StandingRowDto).optional(),
   teams: z.array(FederationTeamItem).optional(),
   seasonHistory: z.array(RivalSeasonRecordDto).optional(),
+  // Fase 17A: null for the player's own federation (no rival commissioner).
+  commissioner: RivalCommissionerDto.nullable().default(null),
 });
 export type FederationOverview = z.infer<typeof FederationOverview>;
 
@@ -827,6 +863,7 @@ export const FederationLogType = z.enum([
   'sanction',
   'mandate_result',
   'title',
+  'president_change',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 

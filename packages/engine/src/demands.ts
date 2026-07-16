@@ -8,6 +8,7 @@
 import { rngNext } from './rng';
 import { pushMail, markMailByRef } from './mailbox';
 import { logFederation } from './federation-log';
+import { removePresidentForTeam } from './characters';
 import type { ClubDemand, GameState, Team } from './types';
 
 // Tunables — kept together so playtesting can adjust them fast.
@@ -230,6 +231,7 @@ export function processExodus(s: GameState): void {
     }
 
     if ((s.lowArraigoSeasons[t.id] ?? 0) >= EXODUS_SEASONS) {
+      removePresidentForTeam(s, t.id);
       t.federationId = poacher.id;
       t.divisionOrden = null;
       t.arraigo = 40; // fresh (low) loyalty in the new home

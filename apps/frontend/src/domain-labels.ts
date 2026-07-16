@@ -37,4 +37,5 @@ export const FED_LOG_STYLE: Record<FederationLogType, { emoji: string; color: st
   sanction: { emoji: '⚖️', color: 'red' },
   mandate_result: { emoji: '🎯', color: 'yellow' },
   title: { emoji: '🏆', color: 'yellow' },
+  president_change: { emoji: '👔', color: 'grape' },
 };

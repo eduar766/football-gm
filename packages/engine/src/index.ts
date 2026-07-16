@@ -131,3 +131,6 @@ export type { FeaturedReport, FeaturedTag, FeaturedMoment } from './featured';
 // ── Seed data (confederations for world-generator) ───────────────────────────
 export { CONFEDERATIONS } from './seed-data';
 export type { ConfederationData, LeagueData, TeamData, DivisionData } from './seed-data';
+
+// ── Characters (Fase 17A) ─────────────────────────────────────────────────────
+export { presidentOf } from './characters';

@@ -118,6 +118,23 @@ describe('history is append-only and structural', () => {
   });
 });
 
+describe('presidents (Fase 17A)', () => {
+  it('every player-federation team has exactly one president after creation', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = createGame(sd);
+        const playerTeamIds = g.teams
+          .filter((t) => t.federationId === g.playerFederationId)
+          .map((t) => t.id)
+          .sort((a, b) => a - b);
+        const presidentTeamIds = g.presidents.map((p) => p.teamId).sort((a, b) => a - b);
+        expect(presidentTeamIds).toEqual(playerTeamIds);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

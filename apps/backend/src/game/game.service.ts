@@ -65,6 +65,7 @@ import {
   preseasonChecklist,
   preseasonBlockers,
   validateLevelingPlan,
+  presidentOf,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -1405,6 +1406,11 @@ export class GameService {
       };
     }
 
+    const enginePresident = engTeamId != null ? presidentOf(state, engTeamId) : undefined;
+    const president = enginePresident
+      ? { name: enginePresident.name, trait: enginePresident.trait, sinceYear: enginePresident.sinceYear, grudge: enginePresident.grudge }
+      : null;
+
     const finance = engTeam && engTeam.federationId === state.playerFederationId
       ? {
           treasury: engTeam.treasury,
@@ -1443,6 +1449,7 @@ export class GameService {
       finance,
       isPlayerTeam,
       rival,
+      president,
     };
   }
 
@@ -1492,6 +1499,7 @@ export class GameService {
         plazas: d.plazas,
         teamCount: countByDiv.get(d.id) ?? 0,
       })),
+      commissioner: null,
     };
   }
 
@@ -1625,6 +1633,13 @@ export class GameService {
           }))
       : undefined;
 
+    const engCommissioner = !isPlayer
+      ? state.rivalCommissioners.find((c) => c.federationId === federationId)
+      : undefined;
+    const commissioner = engCommissioner
+      ? { name: engCommissioner.name, trait: engCommissioner.trait, sinceYear: engCommissioner.sinceYear }
+      : null;
+
     return {
       id: engFed.id,
       name: engFed.name,
@@ -1639,6 +1654,7 @@ export class GameService {
       standings,
       teams: teamsForFed,
       seasonHistory,
+      commissioner,
     };
   }
 

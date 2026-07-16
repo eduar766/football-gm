@@ -38,6 +38,19 @@ const PLAYER_SURNAMES = [
   'Bravo', 'Serrano', 'Montes', 'Iglesias', 'Cordero', 'Espinosa',
 ];
 
+// Club president / rival commissioner names (Fase 17A). Deliberately distinct
+// pool from the youth-player names above — these read as adult directors.
+const DIRECTOR_FIRST_NAMES = [
+  'Ramón', 'Ignacio', 'Eduardo', 'Fernando', 'Alberto', 'Manuel', 'Carlos',
+  'Vicente', 'Joaquín', 'Rafael', 'Elena', 'Isabel', 'Cristina', 'Marta',
+  'Rosa', 'Pilar', 'Teresa', 'Beatriz', 'Sofía', 'Lucía',
+];
+const DIRECTOR_SURNAMES = [
+  'Aranda', 'Bermúdez', 'Cifuentes', 'Delgado', 'Esquivel', 'Fuentes',
+  'Guerrero', 'Herrán', 'Ibáñez', 'Jimeno', 'Lozada', 'Manrique', 'Novoa',
+  'Ochoa', 'Pardo', 'Quiroga', 'Riestra', 'Sotelo', 'Uribe', 'Valcárcel',
+];
+
 function pick<T>(rng: RngState, arr: T[]): T {
   return arr[Math.floor(rngNext(rng) * arr.length)];
 }
@@ -70,4 +83,10 @@ export function randomFederationName(rng: RngState, used?: Set<string>): string 
   } while (used?.has(name) && guard++ < 1000);
   used?.add(name);
   return name;
+}
+
+// Deterministic club-president / rival-commissioner name. No uniqueness
+// guard — same reasoning as randomPlayerName, a shared surname is fine.
+export function randomDirectorName(rng: RngState): string {
+  return `${pick(rng, DIRECTOR_FIRST_NAMES)} ${pick(rng, DIRECTOR_SURNAMES)}`;
 }

@@ -2,10 +2,18 @@ import { useMemo } from 'react';
 import { Badge, Box, Button, Card, Group, Paper, SimpleGrid, Skeleton, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconBuilding, IconTrophy, IconUserPlus } from '@tabler/icons-react';
+import { IconBuilding, IconCrown, IconTrophy, IconUserPlus } from '@tabler/icons-react';
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+
+const COMMISSIONER_TRAIT_LABEL: Record<string, string> = {
+  agresivo: 'Agresivo',
+  conservador: 'Conservador',
+  corrupto: 'Corrupto',
+  visionario: 'Visionario',
+  diplomatico: 'Diplomático',
+};
 
 const TIER_CONFIG: Record<number, { label: string; color: string; gradient: string }> = {
   1: { label: 'Tier 1', color: '#F59E0B', gradient: 'linear-gradient(135deg, #D97706, #F59E0B)' },
@@ -110,6 +118,17 @@ export function FederationPage() {
                 </Badge>
               )}
             </Group>
+            {f.commissioner && (
+              <Group gap={6} mt={6}>
+                <IconCrown size={13} color="#F59E0B" />
+                <Text size="xs" c="dimmed">
+                  Comisionado: <Text span fw={600} c="#F4F7FA">{f.commissioner.name}</Text>
+                </Text>
+                <Badge size="xs" variant="light" color="yellow">
+                  {COMMISSIONER_TRAIT_LABEL[f.commissioner.trait] ?? f.commissioner.trait}
+                </Badge>
+              </Group>
+            )}
           </div>
           <Group gap="md">
             <Box style={{ textAlign: 'right' }}>

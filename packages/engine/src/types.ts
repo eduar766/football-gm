@@ -117,6 +117,32 @@ export interface Team {
   matchesPlayedThisSeason: number;
 }
 
+// Fase 17A: club presidents (player-federation teams only) and rival-federation
+// commissioners. Purely narrative in v1 — traits colour headlines/log entries
+// and (from 17C onward) vote intention; they never bias rival-sim.ts, which
+// would perturb rivalRng.
+export type PresidentTrait = 'leal' | 'ambicioso' | 'tradicionalista' | 'mercenario' | 'institucional';
+export type RivalCommissionerTrait = 'agresivo' | 'conservador' | 'corrupto' | 'visionario' | 'diplomatico';
+
+export interface ClubPresident {
+  id: number;
+  teamId: number;
+  name: string;
+  trait: PresidentTrait;
+  sinceYear: number;
+  // Accumulated grudge from broken pledges / ignored demands (0-100). Feeds
+  // vote intention from 17C onward; inert (stays 0) until then. Resets when
+  // the president rotates.
+  grudge: number;
+}
+
+export interface RivalCommissioner {
+  federationId: number;
+  name: string;
+  trait: RivalCommissionerTrait;
+  sinceYear: number;
+}
+
 // How the player's league is contested (§4.4 "define su liga como quiera").
 export type LeagueFormat = 'ida' | 'ida_vuelta';
 
@@ -776,6 +802,14 @@ export interface GameState {
   // singular and get overwritten by the next season close, so this is the
   // only durable record of a past season's report once time has moved on.
   seasonReports: SeasonReport[];
+  // Fase 17A: club presidents (one per player-federation team) + rival
+  // commissioners. Independent streams for the sub-phases that follow.
+  presidents: ClubPresident[];
+  nextPresidentId: number;
+  rivalCommissioners: RivalCommissioner[];
+  politicsRng: RngState;
+  scandalRng: RngState;
+  deskRng: RngState;
 }
 
 export interface RecordBook {
@@ -976,7 +1010,8 @@ export type FederationLogType =
   | 'norm_created'         // governance rule defined
   | 'sanction'             // a club was sanctioned
   | 'mandate_result'       // board mandate met / failed
-  | 'title';               // player-league champion crowned
+  | 'title'                // player-league champion crowned
+  | 'president_change';    // club president rotated (Fase 17A)
 
 export interface FederationLogEntry {
   id: number;
