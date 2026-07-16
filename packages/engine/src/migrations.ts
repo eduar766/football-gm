@@ -4,7 +4,7 @@ import { generatePotencial } from './talent';
 import { generatePresident, generateRivalCommissioner } from './characters';
 import type { ClubPresident, GameState, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 19;
+export const CURRENT_SCHEMA_VERSION = 20;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -423,6 +423,19 @@ export function migrateState(state: GameState): GameState {
     if (gs.nextPledgeId === undefined) gs.nextPledgeId = 1;
 
     state.schemaVersion = 19;
+  }
+
+  // v19 → v20 (Fase 17D): escándalos e integridad. Old saves start with a
+  // clean slate — no accumulated exposure, no open cases.
+  if (v < 20) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (gs.exposureRisk === undefined) gs.exposureRisk = 0;
+    if (!gs.integrityCases) gs.integrityCases = [];
+    if (gs.nextCaseId === undefined) gs.nextCaseId = 1;
+    if (!gs.impulseFavorCounts) gs.impulseFavorCounts = {};
+
+    state.schemaVersion = 20;
   }
 
   return state;

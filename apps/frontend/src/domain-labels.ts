@@ -1,6 +1,6 @@
 // Shared display lookups for domain enums — labels, icons, colors used by
 // more than one page/component. Single source of truth so they can't drift.
-import type { AwardType, CupType, FederationLogType } from '@football-gm/contracts';
+import type { AwardType, CaseStatus, CupType, ExposureLevel, FederationLogType } from '@football-gm/contracts';
 
 export const AWARD_LABEL: Record<AwardType, string> = {
   max_goleador: 'Máximo goleador',
@@ -41,4 +41,22 @@ export const FED_LOG_STYLE: Record<FederationLogType, { emoji: string; color: st
   political_capital: { emoji: '🗳️', color: 'violet' },
   assembly_result: { emoji: '⚖️', color: 'violet' },
   pledge_result: { emoji: '🤝', color: 'orange' },
+  integrity_case: { emoji: '🕵️', color: 'red' },
+  scandal: { emoji: '🚨', color: 'red' },
+};
+
+export const EXPOSURE_LEVEL_LABEL: Record<ExposureLevel, { label: string; color: string }> = {
+  tranquilo: { label: 'Todo tranquilo', color: 'gray' },
+  murmullos: { label: 'Corren murmullos', color: 'yellow' },
+  prensa_pregunta: { label: 'La prensa hace preguntas', color: 'red' },
+};
+
+export const CASE_STATUS_LABEL: Record<CaseStatus, { label: string; color: string }> = {
+  abierto: { label: 'Sin resolver', color: 'yellow' },
+  investigando: { label: 'Investigando', color: 'blue' },
+  confirmado: { label: 'Amaño confirmado', color: 'red' },
+  archivado: { label: 'Archivado', color: 'gray' },
+  enterrado: { label: 'Enterrado', color: 'grape' },
+  filtrado: { label: 'Filtrado', color: 'red' },
+  sin_pruebas: { label: 'Sin pruebas', color: 'gray' },
 };

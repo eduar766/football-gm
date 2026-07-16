@@ -74,6 +74,11 @@ import {
   revealIntention as engineRevealIntention,
   buyVote as engineBuyVote,
   pledgeForVote as enginePledgeForVote,
+  startInvestigation as engineStartInvestigation,
+  archiveCase as engineArchiveCase,
+  buryCase as engineBuryCase,
+  sanctionFixing as engineSanctionFixing,
+  pardonFixing as enginePardonFixing,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -114,6 +119,10 @@ import type {
   AssemblyStateResponse,
   AssemblyProposalDto,
   PledgeDto,
+  IntegrityResponse,
+  IntegrityCaseDto,
+  ExposureLevel,
+  ResolveCaseRequest,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -210,6 +219,10 @@ export class GameService {
       pendingEventsCount: pendingEvents(state).length,
       normBreachCount: normBreaches(state).length,
       pendingProposalsCount: state.proposals.filter((p) => p.status === 'en_tramite').length,
+      openIntegrityCasesCount: state.integrityCases.filter(
+        (c) => c.status === 'abierto' || c.status === 'investigando' || c.status === 'confirmado',
+      ).length,
+      exposureLevel: this.exposureLevelFor(state),
       unreadMailCount: unreadMailCount(state),
       boardConfidence: state.boardConfidence ?? { value: 60, history: [] },
       publicOpinion: state.publicOpinion ?? 50,
@@ -2262,6 +2275,75 @@ export class GameService {
       await this.repo.saveState(tx, gameId, next);
       const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       return this.assemblyStateResponse(next, engToDb);
+    });
+  }
+
+  /* ------------------------------------- integrity (Fase 17D) */
+
+  // exposureRisk itself never leaves the service — only this qualitative
+  // read (design intent: a hidden meter, only murmurs/press questions surface).
+  private exposureLevelFor(state: GameState): ExposureLevel {
+    if (state.exposureRisk >= 55) return 'prensa_pregunta';
+    if (state.exposureRisk >= 30) return 'murmullos';
+    return 'tranquilo';
+  }
+
+  private integrityResponse(state: GameState, engToDb: Map<number, number>): IntegrityResponse {
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    const cases: IntegrityCaseDto[] = state.integrityCases.map((c) => ({
+      id: c.id,
+      year: c.year,
+      matchday: c.matchday,
+      homeId: engToDb.get(c.homeId) ?? c.homeId,
+      homeName: teamName.get(c.homeId) ?? '—',
+      awayId: engToDb.get(c.awayId) ?? c.awayId,
+      awayName: teamName.get(c.awayId) ?? '—',
+      suspectTeamId: engToDb.get(c.suspectTeamId) ?? c.suspectTeamId,
+      suspectTeamName: teamName.get(c.suspectTeamId) ?? '—',
+      suspicion: c.suspicion,
+      strong: c.strong,
+      status: c.status,
+      investigationEndsMatchday: c.investigationEndsMatchday,
+      resolution: c.resolution,
+    }));
+    return { exposureLevel: this.exposureLevelFor(state), cases };
+  }
+
+  async getIntegrity(gameId: number): Promise<IntegrityResponse> {
+    const state = await this.repo.loadState(gameId);
+    const engToDb = await this.repo.engineToDbTeam(gameId);
+    return this.integrityResponse(state, engToDb);
+  }
+
+  async resolveCase(gameId: number, caseId: number, body: ResolveCaseRequest): Promise<IntegrityResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      let next: GameState;
+      switch (body.action) {
+        case 'investigar':
+          next = engineStartInvestigation(state, caseId);
+          break;
+        case 'archivar':
+          next = engineArchiveCase(state, caseId);
+          break;
+        case 'enterrar':
+          next = engineBuryCase(state, caseId, body.spendPcForDiscount ?? false);
+          break;
+        case 'sancionar':
+          next = engineSanctionFixing(state, caseId);
+          break;
+        case 'perdonar':
+          next = enginePardonFixing(state, caseId);
+          break;
+      }
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo resolver el caso (estado incorrecto, fondos insuficientes o caso inexistente)',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
+      return this.integrityResponse(next, engToDb);
     });
   }
 

@@ -87,7 +87,7 @@ const NAV_SECTIONS = [
     items: [
       { value: 'structure', label: 'Estructura' },
       { value: 'economy', label: 'Economía' },
-      { value: 'norms', label: 'Normas' },
+      { value: 'norms', label: 'Gobernanza' },
       { value: 'assembly', label: 'Asamblea' },
       { value: 'events', label: 'Eventos' },
     ],
@@ -153,7 +153,8 @@ export function GameLayout() {
   };
 
   const hasPending = summary.data && summary.data.pendingEventsCount > 0;
-  const hasNormBreaches = summary.data && summary.data.normBreachCount > 0;
+  const governanceAlertCount = (summary.data?.normBreachCount ?? 0) + (summary.data?.openIntegrityCasesCount ?? 0);
+  const hasNormBreaches = summary.data && governanceAlertCount > 0;
   const hasPendingProposals = summary.data && summary.data.pendingProposalsCount > 0;
   const unreadMail = summary.data?.unreadMailCount ?? 0;
   const confidence = summary.data?.boardConfidence?.value ?? null;
@@ -620,7 +621,7 @@ export function GameLayout() {
                         circle
                         ml="auto"
                       >
-                        {summary.data!.normBreachCount}
+                        {governanceAlertCount}
                       </Badge>
                     )}
                     {isMailbox && unreadMail > 0 && (

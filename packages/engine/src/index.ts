@@ -148,3 +148,14 @@ export {
   pledgeForVote,
   resolveAllPendingProposals,
 } from './assembly';
+
+// ── Integrity (Fase 17D) ──────────────────────────────────────────────────────
+export {
+  INVESTIGATION_COST,
+  EXPOSURE_MAX,
+  startInvestigation,
+  archiveCase,
+  buryCase,
+  sanctionFixing,
+  pardonFixing,
+} from './integrity';

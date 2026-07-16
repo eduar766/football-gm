@@ -288,6 +288,7 @@ export const SeasonReportBriefDto = z.object({
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
     'president_change', 'political_capital', 'assembly_result', 'pledge_result',
+    'integrity_case', 'scandal',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -408,6 +409,13 @@ export const OpinionEntryDto = z.object({
 });
 export type OpinionEntryDto = z.infer<typeof OpinionEntryDto>;
 
+// Fase 17D: exposureRisk itself is never sent to the frontend — only this
+// qualitative read, matching the design's "hidden meter" intent. Declared
+// here (ahead of GameSummary, which embeds it) rather than alongside the
+// rest of the integrity block further down, to avoid a TDZ reference.
+export const ExposureLevel = z.enum(['tranquilo', 'murmullos', 'prensa_pregunta']);
+export type ExposureLevel = z.infer<typeof ExposureLevel>;
+
 export const GameSummary = z.object({
   id: Id,
   name: z.string(),
@@ -422,6 +430,8 @@ export const GameSummary = z.object({
   pendingEventsCount: z.number().int(),
   normBreachCount: z.number().int().default(0),
   pendingProposalsCount: z.number().int().default(0),
+  openIntegrityCasesCount: z.number().int().default(0),
+  exposureLevel: ExposureLevel.default('tranquilo'),
   unreadMailCount: z.number().int().default(0),
   boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
   publicOpinion: z.number().int().default(50),
@@ -879,6 +889,8 @@ export const FederationLogType = z.enum([
   'political_capital',
   'assembly_result',
   'pledge_result',
+  'integrity_case',
+  'scandal',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 
@@ -904,7 +916,7 @@ export const MailboxCategory = z.enum(['peticion', 'evento', 'aviso', 'hito', 'f
 export type MailboxCategory = z.infer<typeof MailboxCategory>;
 export const MailboxStatus = z.enum(['sin_leer', 'leido', 'resuelto', 'caducado']);
 export type MailboxStatus = z.infer<typeof MailboxStatus>;
-export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event']);
+export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event', 'integrity_case']);
 export type MailboxActionKind = z.infer<typeof MailboxActionKind>;
 
 export const MailboxMessageDto = z.object({
@@ -1615,6 +1627,50 @@ export const RequiresAssemblyResponse = z.object({
   message: z.string(),
 });
 export type RequiresAssemblyResponse = z.infer<typeof RequiresAssemblyResponse>;
+
+/* -------------------------------------------------- integrity (Fase 17D) */
+// ExposureLevel is declared earlier, right before GameSummary — see there.
+
+export const CaseStatus = z.enum([
+  'abierto', 'investigando', 'confirmado', 'archivado', 'enterrado', 'filtrado', 'sin_pruebas',
+]);
+export type CaseStatus = z.infer<typeof CaseStatus>;
+
+// leakRisk is intentionally omitted — like exposureRisk, it's an internal
+// hidden meter that stays a surprise for the commissioner.
+export const IntegrityCaseDto = z.object({
+  id: Id,
+  year: z.number().int(),
+  matchday: z.number().int(),
+  homeId: Id,
+  homeName: z.string(),
+  awayId: Id,
+  awayName: z.string(),
+  suspectTeamId: Id,
+  suspectTeamName: z.string(),
+  suspicion: z.string(),
+  strong: z.boolean(),
+  status: CaseStatus,
+  investigationEndsMatchday: z.number().int().nullable(),
+  resolution: z.string().nullable(),
+});
+export type IntegrityCaseDto = z.infer<typeof IntegrityCaseDto>;
+
+export const IntegrityResponse = z.object({
+  exposureLevel: ExposureLevel,
+  cases: z.array(IntegrityCaseDto),
+});
+export type IntegrityResponse = z.infer<typeof IntegrityResponse>;
+
+export const ResolveCaseAction = z.enum(['investigar', 'archivar', 'enterrar', 'sancionar', 'perdonar']);
+export type ResolveCaseAction = z.infer<typeof ResolveCaseAction>;
+
+export const ResolveCaseRequest = z.object({
+  action: ResolveCaseAction,
+  // Only meaningful for 'enterrar' — spend 3 PC to lower the initial leakRisk.
+  spendPcForDiscount: z.boolean().optional(),
+});
+export type ResolveCaseRequest = z.infer<typeof ResolveCaseRequest>;
 
 export const CupMatchDto = z.object({
   homeTeamId: z.number().int(),

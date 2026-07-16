@@ -7,7 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { AddNormRequest, ResolveEventRequest, SanctionRequest } from '@football-gm/contracts';
+import { AddNormRequest, ResolveEventRequest, ResolveCaseRequest, SanctionRequest } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GameOwnerGuard } from './game-owner.guard';
@@ -59,5 +59,19 @@ export class GovernanceController {
     @Body(new ZodValidationPipe(ResolveEventRequest)) body: ResolveEventRequest,
   ) {
     return this.games.resolveEvent(id, eventId, body.action);
+  }
+
+  @Get(':id/integrity')
+  integrity(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getIntegrity(id);
+  }
+
+  @Post(':id/integrity/cases/:caseId/resolve')
+  resolveCase(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('caseId', ParseIntPipe) caseId: number,
+    @Body(new ZodValidationPipe(ResolveCaseRequest)) body: ResolveCaseRequest,
+  ) {
+    return this.games.resolveCase(id, caseId, body);
   }
 }

@@ -31,12 +31,15 @@ const GAME_OVER_MESSAGES: Record<GameOverReason, string> = {
 // Called at closeSeason (before the year increment) with the season's prestige
 // delta. Updates confidence, tracks the negative-treasury streak, and may set
 // s.gameOver. In-place mutation.
-export function evaluateBoardConfidence(s: GameState, prestigeDelta: number): void {
+// integrityDelta: published by the integrity-rolls step (priority 58, via
+// ctx.meta) when a scandal or leaked cover-up fired this close (Fase 17D).
+export function evaluateBoardConfidence(s: GameState, prestigeDelta: number, integrityDelta = 0): void {
   if (s.players.length === 0) return; // real games only → golden untouched
   if (s.gameOver) return;
 
-  let d = 0;
+  let d = integrityDelta;
   const reasons: string[] = [];
+  if (integrityDelta !== 0) reasons.push('escándalo de integridad');
 
   const mandate = s.mandates.find((m) => m.year === s.year);
   if (mandate?.met === true) {

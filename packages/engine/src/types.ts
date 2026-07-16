@@ -901,6 +901,44 @@ export interface GameState {
   nextProposalId: number;
   pledges: Pledge[];
   nextPledgeId: number;
+  // Fase 17D: escándalos e integridad. exposureRisk is hidden from the HUD —
+  // only qualitative mailbox signals surface it. Uses scandalRng exclusively.
+  exposureRisk: number; // 0-95
+  integrityCases: IntegrityCase[];
+  nextCaseId: number;
+  // teamId → times favored by an impulse this season (resets at closeSeason).
+  impulseFavorCounts: Record<number, number>;
+}
+
+// Fase 17D: deterministic match-fixing candidate detector + commissioner
+// investigation flow. abierto (just detected) -> investigando (paying to dig)
+// -> confirmado/sin_pruebas; archivado (free, dismissed) and enterrado
+// (buried, only for `strong` candidates) are commissioner choices; filtrado
+// is a buried case that leaked despite the cover-up.
+export type CaseStatus =
+  | 'abierto'
+  | 'investigando'
+  | 'confirmado'
+  | 'archivado'
+  | 'enterrado'
+  | 'filtrado'
+  | 'sin_pruebas';
+
+export interface IntegrityCase {
+  id: number;
+  year: number;
+  matchday: number;
+  homeId: number;
+  awayId: number;
+  // The side with nothing at stake in the suspicious result — the one a
+  // Sancionar/Perdonar resolution targets.
+  suspectTeamId: number;
+  suspicion: string;
+  strong: boolean; // margin >= 5 or a repeat offender — eligible for "enterrar"
+  status: CaseStatus;
+  investigationEndsMatchday: number | null;
+  leakRisk: number; // 0-100, only grows while status === 'enterrado'
+  resolution: string | null;
 }
 
 export interface OpinionEntry {
@@ -1077,7 +1115,7 @@ export interface ClubDemand {
 // Fase 14.4: Commissioner inbox message.
 export type MailboxCategory = 'peticion' | 'evento' | 'aviso' | 'hito' | 'financiero';
 export type MailboxStatus = 'sin_leer' | 'leido' | 'resuelto' | 'caducado';
-export type MailboxActionKind = 'rescue_request' | 'demand' | 'event';
+export type MailboxActionKind = 'rescue_request' | 'demand' | 'event' | 'integrity_case';
 
 export interface MailboxMessage {
   id: number;
@@ -1111,7 +1149,9 @@ export type FederationLogType =
   | 'president_change'     // club president rotated (Fase 17A)
   | 'political_capital'    // political capital earned/spent (Fase 17B) — value carries the signed delta
   | 'assembly_result'      // a proposal was approved/rejected by the assembly (Fase 17C)
-  | 'pledge_result';       // a pledge was fulfilled/broken (Fase 17C)
+  | 'pledge_result'        // a pledge was fulfilled/broken (Fase 17C)
+  | 'integrity_case'       // a match-fixing case was resolved or leaked (Fase 17D)
+  | 'scandal';             // an institutional scandal fired at season close (Fase 17D)
 
 export interface FederationLogEntry {
   id: number;

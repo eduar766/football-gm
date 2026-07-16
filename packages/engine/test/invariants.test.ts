@@ -166,6 +166,31 @@ describe('assembly + pledges (Fase 17C)', () => {
   });
 });
 
+describe('integrity (Fase 17D)', () => {
+  it('a player-less game never accumulates exposure or generates cases across seasons', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 4);
+        expect(g.exposureRisk).toBe(0);
+        expect(g.integrityCases).toEqual([]);
+        expect(g.impulseFavorCounts).toEqual({});
+      }),
+      { numRuns: 25 },
+    );
+  });
+
+  it('exposureRisk always stays within [0, 95]', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 4);
+        expect(g.exposureRisk).toBeGreaterThanOrEqual(0);
+        expect(g.exposureRisk).toBeLessThanOrEqual(95);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

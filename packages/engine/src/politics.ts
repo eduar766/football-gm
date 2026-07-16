@@ -31,11 +31,14 @@ export const PC_MAX = 12;
 // 195 and the narrative layer). Reads s.results/s.cups/s.history before
 // reset-for-pretemporada (290) wipes/advances them; s.year is still the
 // closing season's year (year-bump runs at 260).
-export function closeSeasonOpinion(s: GameState): void {
+// integrityPenalty: published by the integrity-rolls step (priority 58, via
+// ctx.meta) when a scandal or leaked cover-up fired this close (Fase 17D).
+export function closeSeasonOpinion(s: GameState, integrityPenalty = 0): void {
   if (s.players.length === 0) return;
 
-  let d = 0;
+  let d = integrityPenalty;
   const reasons: string[] = [];
+  if (integrityPenalty !== 0) reasons.push('escándalo de integridad');
 
   if (s.totalMatchdays >= TITLE_RACE_MATCHDAYS_LEFT) {
     const cutoff = s.totalMatchdays - TITLE_RACE_MATCHDAYS_LEFT;

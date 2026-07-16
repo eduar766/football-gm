@@ -37,6 +37,8 @@ import type {
   AssemblyStateResponse,
   ProposeMeasureRequest,
   PledgeKind,
+  IntegrityResponse,
+  ResolveCaseAction,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -236,6 +238,12 @@ export const api = {
     req<NormsResponse>(`/games/${id}/sanctions`, {
       method: 'POST',
       body: JSON.stringify({ teamId, normId }),
+    }),
+  integrity: (id: number) => req<IntegrityResponse>(`/games/${id}/integrity`),
+  resolveCase: (id: number, caseId: number, action: ResolveCaseAction, spendPcForDiscount?: boolean) =>
+    req<IntegrityResponse>(`/games/${id}/integrity/cases/${caseId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action, spendPcForDiscount }),
     }),
   events: (id: number) => req<EventsResponse>(`/games/${id}/events`),
   resolveEvent: (id: number, eventId: number, action: EventAction) =>

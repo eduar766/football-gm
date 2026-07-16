@@ -37,6 +37,7 @@ import { addPresidentForTeam, generatePresident, generateRivalCommissioner, remo
 import { closeSeasonOpinion, earnPC } from './politics';
 import { resolveAllPendingProposals } from './assembly';
 import { verifyPledges } from './pledges';
+import { closeSeasonIntegrity, detectAndSpawnCases, registerImpulseExposure, resolveInvestigation } from './integrity';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -381,6 +382,10 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextProposalId: 1,
     pledges: [],
     nextPledgeId: 1,
+    exposureRisk: 0,
+    integrityCases: [],
+    nextCaseId: 1,
+    impulseFavorCounts: {},
   };
 }
 
@@ -610,6 +615,7 @@ export function applyImpulse(
     favoredTeamId,
   });
   s.impulsesRemaining -= 1;
+  registerImpulseExposure(s, favoredTeamId);
   return s;
 }
 
@@ -781,6 +787,12 @@ export function advanceMatchday(prev: GameState): GameState {
   }
 
   s.pendingImpulses = s.pendingImpulses.filter((p) => p.matchday !== md);
+
+  // Fase 17D: deterministic match-fixing detector (scandalRng only) + timer
+  // check for investigations opened earlier — both read this matchday's
+  // just-pushed results/standings before md advances below.
+  detectAndSpawnCases(s, md);
+  resolveInvestigation(s, md);
 
   // Fase 6.2: play any cup rounds scheduled for this matchday. Uses the
   // independent cupsRng so the match engine stream stays golden-stable.
@@ -1031,6 +1043,14 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     },
   },
   {
+    // Fase 17D: exposure decay/scandal roll + buried-case leak rolls. Must
+    // run before apply-prestige (60) so a scandal's prestige hit folds into
+    // THIS season's ctx.prestigeDelta instead of silently landing next year.
+    name: 'integrity-rolls',
+    priority: 58,
+    run: closeSeasonIntegrity,
+  },
+  {
     name: 'apply-prestige',
     priority: 60,
     run(s, ctx) {
@@ -1240,8 +1260,9 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     // narrative/characters layer (195+) so this year's value is settled.
     name: 'close-season-opinion',
     priority: 175,
-    run(s) {
-      closeSeasonOpinion(s);
+    run(s, ctx) {
+      const integrityPenalty = (ctx.meta.get('integrityOpinionPenalty') as number | undefined) ?? 0;
+      closeSeasonOpinion(s, integrityPenalty);
     },
   },
   {
@@ -1368,7 +1389,8 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     name: 'board-confidence',
     priority: 240,
     run(s, ctx) {
-      evaluateBoardConfidence(s, ctx.prestigeDelta);
+      const integrityDelta = (ctx.meta.get('integrityConfidenceDelta') as number | undefined) ?? 0;
+      evaluateBoardConfidence(s, ctx.prestigeDelta, integrityDelta);
     },
   },
   {
@@ -1458,6 +1480,7 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       s.cupSchedule = [];
       s.impulsesRemaining = s.impulsesPerSeason;
       s.pendingImpulses = [];
+      s.impulseFavorCounts = {}; // Fase 17D: "repeated this season" tracking resets each close
       s.seasonOver = false;
       // Reset event-driven temporary effects.
       s.eventStrengthPenalty = 0;

@@ -157,3 +157,32 @@ describe('migrateState v18 -> v19 (Fase 17C: assembly + pledges)', () => {
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v19 -> v20 (Fase 17D: escándalos e integridad)', () => {
+  it('backfills zero exposure, empty case ledger, and empty favor counts on an old save', () => {
+    const g = createGame(208, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.exposureRisk;
+    delete legacy.integrityCases;
+    delete legacy.nextCaseId;
+    delete legacy.impulseFavorCounts;
+    legacy.schemaVersion = 19;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(20);
+    expect(migrated.exposureRisk).toBe(0);
+    expect(migrated.integrityCases).toEqual([]);
+    expect(migrated.nextCaseId).toBe(1);
+    expect(migrated.impulseFavorCounts).toEqual({});
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(209, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

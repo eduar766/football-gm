@@ -1,4 +1,6 @@
 import {
+  Alert,
+  Badge,
   Box,
   Button,
   Card,
@@ -7,12 +9,13 @@ import {
   Paper,
   Skeleton,
   Table,
+  Tabs,
   Text,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
-import { IconGavel } from '@tabler/icons-react';
+import { IconAlertTriangle, IconGavel } from '@tabler/icons-react';
 import { EmptyState } from '../components/EmptyState';
 import { AssemblyRedirectBanner } from '../components/AssemblyRedirectBanner';
 import type { NormType } from '@football-gm/contracts';
@@ -21,6 +24,7 @@ import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
 import { money } from '../utils/format';
 import { PageHero } from '../components/PageHero';
+import { CASE_STATUS_LABEL, EXPOSURE_LEVEL_LABEL } from '../domain-labels';
 
 const TIPO_LABEL: Record<NormType, string> = {
   tope_plantilla: 'Tope de plantilla',
@@ -34,6 +38,150 @@ const TIPO_LABEL: Record<NormType, string> = {
 
 const formatValor = (tipo: NormType, valor: number) =>
   tipo === 'tope_salarial' || tipo === 'tope_deficit' ? money(valor) : String(valor);
+
+function IntegrityTab({ gameId }: { gameId: string }) {
+  const id = Number(gameId);
+  const integrity = useQuery({ queryKey: QK.integrity(id), queryFn: () => api.integrity(id) });
+
+  const resolve = useMutationWithFeedback({
+    mutationFn: (v: { caseId: number; action: 'investigar' | 'archivar' | 'enterrar' | 'sancionar' | 'perdonar'; spendPcForDiscount?: boolean }) =>
+      api.resolveCase(id, v.caseId, v.action, v.spendPcForDiscount),
+    queryKeyToInvalidate: ['integrity', 'summary', 'norms', 'standings'],
+    successMessage: 'Caso actualizado',
+  });
+
+  if (integrity.isLoading) return <Skeleton height={300} radius="md" />;
+  const d = integrity.data;
+  if (!d) return null;
+
+  const level = EXPOSURE_LEVEL_LABEL[d.exposureLevel];
+
+  return (
+    <>
+      <Alert color={level.color} mb="md" icon={<IconAlertTriangle size={18} />}>
+        <Text fw={700}>{level.label}</Text>
+        <Text size="sm" c="dimmed">
+          El uso reiterado de impulsos a favor de los mismos clubes puede levantar sospechas de amaño.
+        </Text>
+      </Alert>
+
+      {d.cases.length === 0 ? (
+        <EmptyState
+          icon={IconAlertTriangle}
+          title="Sin casos de integridad"
+          description="No hay resultados sospechosos abiertos por el momento."
+        />
+      ) : (
+        <Table>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Jornada</Table.Th>
+              <Table.Th>Partido</Table.Th>
+              <Table.Th>Estado</Table.Th>
+              <Table.Th>Detalle</Table.Th>
+              <Table.Th ta="right">Acciones</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {d.cases.map((c) => {
+              const status = CASE_STATUS_LABEL[c.status];
+              return (
+                <Table.Tr key={c.id}>
+                  <Table.Td>{c.matchday}</Table.Td>
+                  <Table.Td fw={600}>{c.homeName} vs {c.awayName}</Table.Td>
+                  <Table.Td>
+                    <Badge color={status.color} variant="light">{status.label}</Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">{c.resolution ?? c.suspicion}</Text>
+                    {c.status === 'investigando' && c.investigationEndsMatchday !== null && (
+                      <Text size="xs" c="dimmed">Termina en la jornada {c.investigationEndsMatchday}</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td ta="right">
+                    <Group gap="xs" justify="flex-end">
+                      {c.status === 'abierto' && (
+                        <>
+                          <Button
+                            size="xs"
+                            color="blue"
+                            loading={resolve.isPending}
+                            onClick={() => resolve.mutate({ caseId: c.id, action: 'investigar' })}
+                          >
+                            Investigar
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="default"
+                            loading={resolve.isPending}
+                            onClick={() => resolve.mutate({ caseId: c.id, action: 'archivar' })}
+                          >
+                            Archivar
+                          </Button>
+                          {c.strong && (
+                            <Button
+                              size="xs"
+                              color="grape"
+                              loading={resolve.isPending}
+                              onClick={() =>
+                                modals.openConfirmModal({
+                                  title: 'Enterrar caso',
+                                  children: (
+                                    <Text size="sm">
+                                      Enterrar el caso conlleva un riesgo de que se filtre más adelante.
+                                      ¿Gastar 3 de capital político para reducir ese riesgo?
+                                    </Text>
+                                  ),
+                                  labels: { confirm: 'Sí, gastar 3 PC', cancel: 'No, gratis' },
+                                  onConfirm: () => resolve.mutate({ caseId: c.id, action: 'enterrar', spendPcForDiscount: true }),
+                                  onCancel: () => resolve.mutate({ caseId: c.id, action: 'enterrar', spendPcForDiscount: false }),
+                                })
+                              }
+                            >
+                              Enterrar
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      {c.status === 'confirmado' && (
+                        <>
+                          <Button
+                            size="xs"
+                            color="red"
+                            loading={resolve.isPending}
+                            onClick={() =>
+                              modals.openConfirmModal({
+                                title: 'Sancionar',
+                                children: <Text size="sm">¿Sancionar a {c.suspectTeamName} por el amaño confirmado?</Text>,
+                                labels: { confirm: 'Sancionar', cancel: 'Cancelar' },
+                                confirmProps: { color: 'red' },
+                                onConfirm: () => resolve.mutate({ caseId: c.id, action: 'sancionar' }),
+                              })
+                            }
+                          >
+                            Sancionar
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="default"
+                            loading={resolve.isPending}
+                            onClick={() => resolve.mutate({ caseId: c.id, action: 'perdonar' })}
+                          >
+                            Perdonar discretamente
+                          </Button>
+                        </>
+                      )}
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      )}
+    </>
+  );
+}
 
 export function NormsPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -71,10 +219,17 @@ export function NormsPage() {
       <PageHero
         icon={IconGavel}
         iconColor="#EF4444"
-        title="Normas"
+        title="Gobernanza"
         subtitle="Los equipos son autónomos: pueden incumplir. Tú decides si sancionas. Dejar incumplimientos sin sancionar resta prestigio."
       />
 
+      <Tabs defaultValue="normas" mb="md">
+        <Tabs.List>
+          <Tabs.Tab value="normas" leftSection={<IconGavel size={16} />}>Normas</Tabs.Tab>
+          <Tabs.Tab value="integridad" leftSection={<IconAlertTriangle size={16} />}>Integridad</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="normas" pt="md">
       <Grid>
         <Grid.Col span={{ base: 12, md: 5 }}>
           <Card
@@ -257,6 +412,12 @@ export function NormsPage() {
           </Paper>
         </Grid.Col>
       </Grid>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="integridad" pt="md">
+          <IntegrityTab gameId={gameId} />
+        </Tabs.Panel>
+      </Tabs>
     </div>
   );
 }
