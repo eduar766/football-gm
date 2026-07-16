@@ -110,14 +110,23 @@ if (!state.newField) state.newField = defaultValue;
 
 Do **not** add ad-hoc defaults in `loadState()` — all backward-compat patches live in `migrations.ts`.
 
-### RNG determinism — never mix the three RNGs
+### RNG determinism — never mix the streams
 
-`GameState` has **three independent RNG streams**:
-- `state.rng` — drives the match engine, norms, events, cups, negotiations, headlines, etc.
+`GameState` has grown a dedicated RNG stream per subsystem so that adding one never perturbs another's draw sequence (and hence never touches the golden master):
+- `state.rng` — drives the match engine, norms, negotiations. The original, oldest stream.
+- `state.attributionRng` — goalscorer/card attribution within a simulated match.
+- `state.eventsRng` — event spawning/resolution (`events.ts`).
+- `state.cupsRng` — cup scheduling and round simulation.
+- `state.transfersRng` — pre-season transfer window.
+- `state.demandsRng` — club-demand generation/expiry (`demands.ts`).
+- `state.talentRng` — youth pipeline: potencial rolls, development, intake, retirement (Fase 15).
 - `state.rivalRng` — drives rival league simulation only (used exclusively in `rival-sim.ts`).
-- `state.mandatesRng` — independent stream for board mandate generation (seeded from game seed via XOR constant).
+- `state.mandatesRng` — board mandate generation (seeded from game seed via XOR constant).
+- `state.politicsRng` — public opinion / political capital effects (Fase 17B), incl. the indeciso-vote tie-break in `assembly.ts` (Fase 17C).
+- `state.scandalRng` — match-fixing candidate detection, investigation outcomes, and scandal/leak rolls (Fase 17D `integrity.ts`).
+- `state.deskRng` — reserved, seeded since 17A, not yet consumed by any shipped sub-phase.
 
-These must never cross. Player-league simulation uses `state.rng`; anything in `rival-sim.ts` uses `state.rivalRng`; mandate generation uses `state.mandatesRng`. This keeps the golden snapshot deterministic.
+These must never cross — each subsystem draws only from its own stream. This keeps the golden snapshot deterministic no matter how many new systems get added.
 
 ### Core entity model
 
@@ -159,6 +168,10 @@ Key modeling invariants:
 - `FeaturedReport` / `FeaturedMoment` — pure derivation (no new state) that builds a rich goal-by-goal chronology for the handful of matches worth reading about (derbi, title race, goleada, remontada, hat-trick). Scoped to league `MatchReport`s only, since cup matches don't store per-goal detail.
 - `SeasonReport` — unlike `FeaturedReport`, this **is** persisted state (`state.seasonReports[]`), append-only, one per closed season. Materializes the end-of-season "newspaper": champion, awards, cup results, featured match, records, economy, notable transfers, rival-federation briefs, global ranking. Must be captured *inside* `closeSeason` because several of its source fields (`s.results`, `s.matchReports`, `s.lastEconomy`) are wiped or overwritten by later steps in the same pipeline — see `season-report.ts`.
 - `RivalSeasonRecord` — `finalizeRivalSeason` (`rival-sim.ts`) pushes **one record per division** (1ª and 2ª) per rival federation, not one per federation. `divisionOrden` distinguishes them; every consumer that wants "the federation's headline story" (world news, rival champions, inter-league cup champion lookup) must filter to `divisionOrden === 1` or it silently shows every rival federation twice.
+- `ClubPresident` / `RivalCommissioner` — Fase 17A narrative characters: one president per player-federation team (`presidents[]`, rotates ~8%/season), one commissioner per rival federation. Each has a `trait` that biases vote intention (17C) and a `grudge` (0-100) from broken pledges/ignored demands, reset on rotation.
+- `OpinionEntry` — Fase 17B: one snapshot per season in `state.opinionHistory[]` (`{ year, value, reasons[] }`); `state.publicOpinion` (0-100) is the live value, a third constituency alongside `boardConfidence` and `arraigo`.
+- `AssemblyProposal` / `ProposalKind` / `Pledge` — Fase 17C: `state.proposals[]` is the vote-in-flight ledger (7 `ProposalKind`s, simple or 2/3 majority, resolved at the top of `startSeason`/`advanceMatchday`); `state.pledges[]` is the append-only "book of promises" a commissioner made to win votes, verified at `closeSeason` by `pledges.ts`.
+- `IntegrityCase` / `CaseStatus` — Fase 17D: `state.integrityCases[]`, one entry per suspected match-fixing incident. `suspectTeamId` is the side with nothing at stake in the suspicious result — the one a Sancionar/Perdonar resolution targets. `strong` (margin ≥5 or repeat offender) gates the "Enterrar" (bury) option. A match-fixing sanction uses a sentinel `normId: 0` on the `Sanction` it pushes (never collides with a real norm id, which starts at 1).
 
 ### Backend architecture
 
@@ -170,11 +183,12 @@ The `game/` module controllers are split by domain to keep files manageable:
 | `season.controller.ts` | `POST /games/:id/start-season`, `POST /games/:id/advance`, `POST /games/:id/close-season` | Season lifecycle |
 | `competition.controller.ts` | `GET /games/:id/structure`, cups, own team | League structure & cups |
 | `economy.controller.ts` | Commercial actions | Revenue & spending |
-| `governance.controller.ts` | Norms, sanctions | Governance actions |
+| `governance.controller.ts` | Norms, sanctions, events, `GET/POST /games/:id/integrity[...]` | Governance actions & match-fixing integrity cases (Fase 17D) |
 | `negotiation.controller.ts` | Negotiation lifecycle | Adhesion negotiations |
 | `history.controller.ts` | Records, trajectories, chronicles | Read-only history |
 | `io.controller.ts` | `GET /games/:id/export`, `POST /games/import` | Save file export/import |
 | `mailbox.controller.ts` | `GET /games/:id/mailbox`, mark read/read-all, `POST /games/:id/demands/:demandId/resolve` | Commissioner inbox & club demands |
+| `assembly.controller.ts` | `GET /games/:id/assembly`, propose/withdraw/reveal/buy-vote/pledge | Club assembly proposals & pledge book (Fase 17C) |
 
 `history.controller.ts` additionally serves `GET /games/:id/federation-log` (narrative timeline) and `GET /games/:id/season-reports` (every closed-season newspaper edition, newest first).
 
@@ -208,7 +222,7 @@ Uses TanStack Router with file-based-style routes in `apps/frontend/src/routes/`
 
 Auth pages (`LoginPage`, `RequestAccessPage`, `ResetPasswordPage`, `ChangePasswordPage`) sit outside `GameLayout` and don't require authentication. `AdminPage` is behind `JwtAuthGuard` + `AdminGuard`.
 
-In-game pages: `DashboardPage`, `TeamsPage`, `TeamDetailPage`, `FederationsPage`, `FederationPage`, `NegotiationsPage`, `CupsPage`, `NormsPage`, `EventsPage`, `EconomyPage`, `PrizesPage`, `HistoryPage`, `StructurePage`, `MarketPage`, `TransfersPage`, `WorldPage`, `MailboxPage`.
+In-game pages: `DashboardPage`, `TeamsPage`, `TeamDetailPage`, `FederationsPage`, `FederationPage`, `NegotiationsPage`, `CupsPage`, `NormsPage` (tabs: Normas / Integridad — "Gobernanza" in the nav), `AssemblyPage`, `EventsPage`, `EconomyPage`, `PrizesPage`, `HistoryPage`, `StructurePage`, `MarketPage`, `TransfersPage`, `WorldPage`, `MailboxPage`.
 
 All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper that automatically attaches the JWT token from `localStorage`.
 
@@ -221,7 +235,7 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
 | `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
 | `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
-| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 16). Called once per load in `GameStateRepository`. |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 20). Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
@@ -246,6 +260,11 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `preseason.ts` | `preseasonChecklist()` — derives blocking/non-blocking pretemporada items (prizes configured, distribution set, etc.). The engine itself stays permissive; the backend enforces blockers before advancing the phase. |
 | `seed-data.ts` | UEFA seed data: 7 federations, 132 real teams |
 | `rng.ts` | Mulberry32 PRNG — deterministic, serializable as a single `u32` |
+| `characters.ts` | Fase 17A: `generatePresident`/`generateRivalCommissioner`, `presidentOf`, `rotatePresidents` (closeSeason), `addPresidentForTeam`/`removePresidentForTeam` (called wherever a team joins/leaves the player federation). Narrative-only traits in v1; feeds vote intention from 17C onward. |
+| `politics.ts` | Fase 17B: `closeSeasonOpinion` — 5 deterministic season-close deltas (title race, high scoring, cup final, new champion, ignored demands) + regression to the mean, no RNG. `earnPC`/`spendPC` — political capital (0-12), the spendable currency behind `accelerateNegotiation` and 17C/17D actions. |
+| `assembly.ts` | Fase 17C: the Club Assembly. `proposeMeasure`/`withdrawProposal`/`revealIntention`/`buyVote`/`pledgeForVote`/`resolveAllPendingProposals`/`applyApprovedProposal` (dispatches an approved proposal to the existing addNorm/removeNorm/setLeaguePrize/createCup/runLevelingLeague/setLeagueFormat functions). Vote-intention score = kind-specific interest + arraigo + president trait + pledge memory − grudge/4; ties resolved via `politicsRng`. Several governance actions (norms, league prize, leveling, cup format, recurring cups) now require assembly approval instead of unilateral commissioner action. |
+| `pledges.ts` | Fase 17C: `verifyPledges` closeSeason step — checks the 4 `PledgeKind`s (plaza_copa/mejora_reparto/exencion_norma/rescate_futuro) a commissioner made to win votes; fulfilling raises arraigo/PC, breaking tanks arraigo and raises the president's grudge. |
+| `integrity.ts` | Fase 17D: escándalos e integridad. Deterministic match-fixing candidate detector (`hasSomethingAtStake` mathematical-elimination heuristic over the last 5 matchdays) + `scandalRng`-gated case spawning (capped 2/season); `startInvestigation`/`archiveCase`/`buryCase`/`sanctionFixing`/`pardonFixing` commissioner actions; `closeSeasonIntegrity` — exposure decay/scandal roll + buried-case leak rolls, folding any prestige hit into the closing season's `ctx.prestigeDelta`. Impulses raise hidden `exposureRisk` directly in `applyImpulse` (engine.ts). |
 
 ### Dev build-order gotcha
 
@@ -277,6 +296,10 @@ If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, t
 - **Two-leg cups:** `'eliminatoria_ida_vuelta'` format; `computeTwoLegWinner()` resolves via aggregate → away goals → penalties.
 - **Match reports:** every simulated match appends a `MatchReport` to `state.matchReports` (matchday, goals, goalscorers, cards). Used by history and dashboard views.
 - **Season newspaper:** closing a season materializes a `SeasonReport` — a permanent, illustrated summary (champion, awards, cup results, featured match, records, economy, rival-federation briefs, global ranking) opened automatically-but-dismissibly in the frontend (`SeasonNewspaper.tsx`) right after `close-season` succeeds, and browsable forever after from History → "Ediciones anteriores". Backed by `state.seasonReports[]`, append-only.
+- **Club presidents & rival commissioners (Fase 17A):** narrative characters with a `trait` and a `grudge`. Presidents rotate ~8%/season; a team joining/leaving the player federation gets/loses a president via `addPresidentForTeam`/`removePresidentForTeam`.
+- **Public opinion & political capital (Fase 17B):** `publicOpinion` (0-100) is a third constituency alongside `boardConfidence` and `arraigo`, moved by deterministic season-close events (title race, goals, cup finals, ignored demands); `politicalCapital` (0-12) is earned by keeping promises/mandates and spent on `accelerateNegotiation`, buying assembly votes, or discounting a cover-up's leak risk.
+- **Club Assembly & book of promises (Fase 17C):** several previously-unilateral commissioner actions (new/removed norms, league prize distribution, leveling leagues, cup format changes, recurring cups) now require a passed assembly proposal instead. Presidents vote based on self-interest, arraigo, trait, and pledge memory; a commissioner can reveal intentions, buy votes, or pledge future favors to swing the outcome. Pledges are tracked and verified at `closeSeason` — broken promises tank arraigo and raise grudge.
+- **Escándalos e integridad (Fase 17D):** a hidden `exposureRisk` (0-95) accumulates from repeated impulse use and can blow up into an institutional scandal at `closeSeason` (prestige/opinion/confidence hit). A deterministic detector flags suspicious league results (a team with nothing at stake involved in a ≥3-goal upset against a team fighting for something); the commissioner can investigate, archive, bury, sanction, or pardon each case — burying carries a growing risk of a leak that costs even more than getting caught outright.
 
 ## CI/CD
 
