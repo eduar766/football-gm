@@ -20,7 +20,7 @@ import { PalmaresChart } from '../components/PalmaresChart';
 import { PageHero } from '../components/PageHero';
 import { EmptyState } from '../components/EmptyState';
 import { SeasonNewspaper } from '../components/SeasonNewspaper';
-import { AWARD_LABEL, AWARD_ICON, FED_LOG_STYLE, MEDAL_COLORS } from '../domain-labels';
+import { AWARD_LABEL, AWARD_ICON, FED_LOG_STYLE, MEDAL_COLORS, ERA_NAME } from '../domain-labels';
 
 function CompetitionRecordsTable({
   records,
@@ -197,6 +197,13 @@ export function HistoryPage() {
             style={{ fontWeight: 600 }}
           >
             Ediciones anteriores
+          </Tabs.Tab>
+          <Tabs.Tab
+            value="legado"
+            leftSection={<IconMedal size={16} />}
+            style={{ fontWeight: 600 }}
+          >
+            Legado
           </Tabs.Tab>
         </Tabs.List>
 
@@ -457,6 +464,43 @@ export function HistoryPage() {
             loading={seasonReports.isLoading}
             onOpen={setOpenReport}
           />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="legado">
+          <Paper p="md" style={{ border: '1px solid rgba(255,255,255,0.06)', borderLeft: '3px solid #F59E0B' }}>
+            <Text fw={700} mb="sm">Salón de la fama del comisionado</Text>
+            <Group gap="xs" mb="md">
+              {[1, 2, 3, 4].map((era) => {
+                const current = summary.data?.era ?? 1;
+                const done = era < current;
+                const active = era === current;
+                return (
+                  <Badge
+                    key={era}
+                    size="lg"
+                    variant={done ? 'filled' : active ? 'light' : 'outline'}
+                    color={done ? 'yellow' : active ? 'blue' : 'gray'}
+                  >
+                    {era}. {ERA_NAME[era]}
+                  </Badge>
+                );
+              })}
+            </Group>
+            {(summary.data?.eraHistory.length ?? 0) === 0 ? (
+              <Text c="dimmed" size="sm">Aún no se ha completado ninguna era.</Text>
+            ) : (
+              <Stack gap={6}>
+                {summary.data!.eraHistory.map((e) => (
+                  <Group key={e.era} gap="xs">
+                    <IconMedal size={16} color="#F59E0B" />
+                    <Text size="sm">
+                      Era {e.era} ({ERA_NAME[e.era]}) completada en el año {e.completedYear}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
+            )}
+          </Paper>
         </Tabs.Panel>
       </Tabs>
 

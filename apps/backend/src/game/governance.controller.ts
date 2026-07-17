@@ -13,6 +13,7 @@ import {
   ResolveCaseRequest,
   SanctionRequest,
   ResolveConspiracyActionRequest,
+  ResolveCensureMotionRequest,
 } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -92,5 +93,13 @@ export class GovernanceController {
     @Body(new ZodValidationPipe(ResolveConspiracyActionRequest)) body: ResolveConspiracyActionRequest,
   ) {
     return this.games.resolveConspiracyAction(id, body);
+  }
+
+  @Post(':id/censure-motion/resolve')
+  resolveCensureMotion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(ResolveCensureMotionRequest)) body: ResolveCensureMotionRequest,
+  ) {
+    return this.games.resolveCensureMotion(id, body);
   }
 }

@@ -4,6 +4,10 @@ import type { FeaturedReport } from './featured';
 // Board mandate: a seasonal objective issued by the federation's governing board.
 export type MandateType = 'prestige_min' | 'team_count' | 'positive_balance';
 
+// Fase 17G: three options are generated per season (one per difficulty); the
+// commissioner picks one in pretemporada (default 'medio' if never chosen).
+export type MandateDifficulty = 'facil' | 'medio' | 'dificil';
+
 export interface BoardMandate {
   id: number;
   type: MandateType;
@@ -11,6 +15,7 @@ export interface BoardMandate {
   target: number;
   year: number;
   met: boolean | null; // null while the season is in progress
+  difficulty: MandateDifficulty;
 }
 
 // Confederation (UEFA, CONMEBOL, etc.) — groups federations by region.
@@ -440,6 +445,12 @@ export interface Norm {
   id: number;
   tipo: NormType;
   valor: number;
+  // Fase 17G: creation year + which teams voted 'contra' when this norm was
+  // approved by the assembly — used by breaches() to apply a ~20% stricter
+  // effective threshold for opposing teams, but only in the norm's first
+  // year (norm.year === state.year).
+  year: number;
+  opposedTeamIds: number[];
 }
 
 export interface Sanction {
@@ -836,6 +847,15 @@ export interface GameState {
   nextMandateId: number;
   consecutiveMandateFails: number; // resets on success; 2 consecutive → -1 impulse/season
   mandatesRng: RngState;
+  // Fase 17G: three mandate options generated per season (one per
+  // difficulty); the commissioner picks one in pretemporada (a non-blocking
+  // preseason checklist item). If never chosen, startSeason auto-commits the
+  // 'medio' option. mandateBonusImpulses accumulates the "difícil" success
+  // reward and is liquidated into impulsesRemaining at reset-for-pretemporada,
+  // the same accumulate-then-liquidate shape as 17E's primetimeSeasonBonus.
+  mandateOptions: BoardMandate[];
+  mandateChosen: boolean;
+  mandateBonusImpulses: number;
   // Narrative layer (Batch 5): season chronicles + team position history.
   seasonChronicles: SeasonChronicle[];
   teamSeasonHistory: TeamSeasonSnapshot[];
@@ -924,6 +944,24 @@ export interface GameState {
   // active at a time; resolved/consummated ones move to conspiracyHistory.
   conspiracy: Conspiracy | null;
   conspiracyHistory: Conspiracy[];
+  // Fase 17G: eras y legado — the missing victory condition. era starts at 1
+  // (Fundacional) and ratchets up as milestones are met; 5 means era IV was
+  // completed (no era V — the game keeps going, era is a narrative summit,
+  // not a credits screen). eraMilestonesAchieved tracks progress within the
+  // *current* era only (reset to [] on every advance) so a milestone that
+  // regresses after being met still counts — achievements don't un-happen.
+  era: number;
+  eraHistory: Array<{ era: number; completedYear: number }>;
+  eraMilestonesAchieved: string[];
+  // Fase 17G: moción de censura — at most one successful survival per era.
+  censureUsedInEra: boolean;
+  // Opens when boardConfidence dips below 25 (intercepting the old direct
+  // destitución trigger). Blocks the *next* closeSeason until resolved via
+  // resolveCensureMotion — same "must act before progressing" spirit as
+  // pending GameEvents, enforced by the backend rather than GameEvent's own
+  // machinery (this is deterministic, not eventsRng-spawned, and has 3
+  // resolution modes that don't fit the actuar/ignorar shape).
+  censureMotion: { year: number } | null;
 }
 
 // Fase 17E: referee pool for hot matches (derby or a direct title/relegation
@@ -1079,6 +1117,9 @@ export interface SeasonReport {
   boardConfidence: SeasonReportBoardConfidence;
   mandate: SeasonReportMandate | null;
   structuralNotes: string[];
+  // Fase 17G: set only on the edition where an era was completed this
+  // season — the "special edition" the design calls for.
+  eraCompleted: { era: number } | null;
 
   // Deportes
   awards: SeasonReportAward[];
@@ -1187,7 +1228,7 @@ export interface ClubDemand {
 // Fase 14.4: Commissioner inbox message.
 export type MailboxCategory = 'peticion' | 'evento' | 'aviso' | 'hito' | 'financiero';
 export type MailboxStatus = 'sin_leer' | 'leido' | 'resuelto' | 'caducado';
-export type MailboxActionKind = 'rescue_request' | 'demand' | 'event' | 'integrity_case' | 'conspiracy';
+export type MailboxActionKind = 'rescue_request' | 'demand' | 'event' | 'integrity_case' | 'conspiracy' | 'censura';
 
 export interface MailboxMessage {
   id: number;
@@ -1224,7 +1265,9 @@ export type FederationLogType =
   | 'pledge_result'        // a pledge was fulfilled/broken (Fase 17C)
   | 'integrity_case'       // a match-fixing case was resolved or leaked (Fase 17D)
   | 'scandal'              // an institutional scandal fired at season close (Fase 17D)
-  | 'conspiracy';          // Superliga conspiracy lifecycle event (Fase 17F)
+  | 'conspiracy'           // Superliga conspiracy lifecycle event (Fase 17F)
+  | 'era'                  // an era milestone was completed (Fase 17G)
+  | 'censura';             // moción de censura opened/resolved (Fase 17G)
 
 export interface FederationLogEntry {
   id: number;

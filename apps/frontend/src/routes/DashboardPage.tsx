@@ -45,6 +45,8 @@ import { RivalResults } from '../components/dashboard/RivalResults';
 import { SeasonNewspaper } from '../components/SeasonNewspaper';
 import { DeskPanel } from '../components/dashboard/DeskPanel';
 import { ConspiracyBanner } from '../components/dashboard/ConspiracyBanner';
+import { MandatePicker } from '../components/dashboard/MandatePicker';
+import { CensureMotionBanner } from '../components/dashboard/CensureMotionBanner';
 
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -149,6 +151,7 @@ export function DashboardPage() {
 
   const over = summary.data?.seasonOver ?? false;
   const blocked = (summary.data?.pendingEventsCount ?? 0) > 0;
+  const censureMotion = summary.data?.censureMotion ?? null;
   const busy = mAdvanceMd.isPending || mAdvanceSeason.isPending || mClose.isPending || mCallReview.isPending || mEmergencyMeeting.isPending || mPostponeMatchday.isPending;
 
   return (
@@ -257,6 +260,10 @@ export function DashboardPage() {
                   ))}
                 </Stack>
               </Paper>
+            )}
+
+            {!summary.data?.mandateChosen && (
+              <MandatePicker gameId={gameId} options={summary.data?.mandateOptions ?? []} />
             )}
 
             <Stack gap={8} ml={52}>
@@ -492,12 +499,20 @@ export function DashboardPage() {
                     onConfirm: () => mClose.mutate(undefined as void),
                   })
                 }
-                disabled={!over || busy}
+                disabled={!over || busy || !!censureMotion}
                 loading={mClose.isPending}
               >
                 Cerrar temporada
               </Button>
             </Group>
+
+            {censureMotion && (
+              <CensureMotionBanner
+                gameId={gameId}
+                motion={censureMotion}
+                politicalCapital={summary.data?.politicalCapital ?? 0}
+              />
+            )}
 
             {/* Blocking alert: events must be resolved before advancing */}
             {blocked && (

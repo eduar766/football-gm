@@ -219,6 +219,20 @@ describe('conspiracy (Fase 17F)', () => {
   });
 });
 
+describe('eras (Fase 17G)', () => {
+  it('a player-less game never advances past era 1 across seasons (golden guard)', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 6);
+        expect(g.era).toBe(1);
+        expect(g.eraHistory).toEqual([]);
+        expect(g.eraMilestonesAchieved).toEqual([]);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

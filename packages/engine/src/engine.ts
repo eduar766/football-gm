@@ -2,13 +2,13 @@
 // No I/O, no React, no DB. structuredClone keeps it pure at the boundary while
 // staying readable inside. The imperative shell (backend) owns persistence.
 
-import { makeRng, randInt, rngNext } from './rng';
+import { makeRng, randInt, rngNext, type RngState } from './rng';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 import { buildDivisionFixtures } from './fixtures';
 import { simulateMatch } from './match';
 import { computeStandings, competitiveBalanceIndex, type StandingRow } from './standings';
 import { progressNegotiations, rivalPoachAttempt } from './negotiation';
-import { divisionName, PROMOTION_RELEGATION } from './structure';
+import { divisionName, playerLeagueTeamCount, PROMOTION_RELEGATION } from './structure';
 import {
   autoNegotiateTeamSponsors,
   generateContractOffers,
@@ -40,6 +40,7 @@ import { verifyPledges } from './pledges';
 import { closeSeasonIntegrity, detectAndSpawnCases, registerImpulseExposure, resolveInvestigation } from './integrity';
 import { applyDesk, generateReferee } from './desk';
 import { advanceConspiracy } from './conspiracy';
+import { evaluateEra } from './eras';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -71,6 +72,7 @@ import type {
   Fixture,
   GameState,
   GlobalRanking,
+  MandateDifficulty,
   Player,
   PlayerSeed,
   RivalCommissioner,
@@ -274,6 +276,21 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
   // A fresh game lands in pretemporada (§4.8): the commissioner sets up
   // competitions/contracts/prizes BEFORE calling startSeason, which builds the
   // calendar and switches the phase to temporada.
+
+  // Fase 17G: year-1 mandate options. Hoisted so the RNG stream survives into
+  // the returned state; prestigeBase(s) can't run yet (no state object
+  // exists), so startingPrestige stands in for both current and base
+  // prestige here — they're equal at creation anyway.
+  const mandatesRng = makeRng((seed ^ 0xb4a4d3c2) >>> 0);
+  const mandateOptions = generateMandateOptions(
+    mandatesRng,
+    startingPrestige,
+    startingPrestige,
+    teams.filter((t) => t.federationId === playerFederationId && t.divisionOrden !== null).length,
+    1,
+    1,
+  );
+
   return {
     seed: seed >>> 0,
     rng,
@@ -351,9 +368,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     nextRivalPlayerId: 1,
     rivalSeasonRecords: [],
     mandates: [],
-    nextMandateId: 1,
+    nextMandateId: 4, // 1-3 consumed by the year-1 mandateOptions above
     consecutiveMandateFails: 0,
-    mandatesRng: makeRng((seed ^ 0xb4a4d3c2) >>> 0),
+    mandatesRng,
+    mandateOptions,
+    mandateChosen: false,
+    mandateBonusImpulses: 0,
     seasonChronicles: [],
     teamSeasonHistory: [],
     recordBook: null,
@@ -402,6 +422,11 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     consecutiveEvasions: 0,
     conspiracy: null,
     conspiracyHistory: [],
+    era: 1,
+    eraHistory: [],
+    eraMilestonesAchieved: [],
+    censureUsedInEra: false,
+    censureMotion: null,
   };
 }
 
@@ -484,47 +509,68 @@ function accumulateFederationCoefficients(s: GameState): void {
 
 // ─── Board mandates (Batch 4) ────────────────────────────────────────────────
 
-function playerLeagueTeamCount(s: GameState): number {
-  return s.teams.filter(
-    (t) => t.federationId === s.playerFederationId && t.divisionOrden !== null,
-  ).length;
-}
+// Fase 17G: three options per season (one per difficulty), same mandatesRng.
+// Difficulty just scales the target relative to the base (medio) value the
+// single-mandate model used to produce — kept as pure primitives (not
+// `GameState`) so createGame can compute year-1 options before the state
+// object itself exists (prestigeBase(s) needs a full state, which doesn't
+// exist yet at that point — createGame passes startingPrestige for both).
+const MANDATE_DIFFICULTIES: MandateDifficulty[] = ['facil', 'medio', 'dificil'];
 
-function generateMandate(s: GameState): BoardMandate {
-  const roll = randInt(s.mandatesRng, 0, 2);
+function generateMandateFor(
+  rng: RngState,
+  difficulty: MandateDifficulty,
+  prestige: number,
+  prestigeBaseValue: number,
+  teamCount: number,
+  id: number,
+  year: number,
+): BoardMandate {
+  const roll = randInt(rng, 0, 2);
   if (roll === 0) {
     // Fase 15C: never ask for more than what the structural base would
     // still allow after regression — a board that's currently above its
     // base is expected to drift down a little each season regardless.
-    const target = Math.max(1, Math.min(s.prestige - 5, Math.round(prestigeBase(s)) - 3));
+    const base = Math.max(1, Math.min(prestige - 5, Math.round(prestigeBaseValue) - 3));
+    const target = difficulty === 'facil' ? Math.max(1, base - 8)
+      : difficulty === 'dificil' ? base + 8
+      : base;
     return {
-      id: s.nextMandateId,
-      type: 'prestige_min',
+      id, type: 'prestige_min', difficulty, year, met: null, target,
       description: `Mantener el prestigio por encima de ${target}`,
-      target,
-      year: s.year,
-      met: null,
     };
   } else if (roll === 1) {
-    const target = Math.max(2, playerLeagueTeamCount(s));
+    const base = Math.max(2, teamCount);
+    const target = difficulty === 'facil' ? Math.max(2, base - 2)
+      : difficulty === 'dificil' ? base + 2
+      : base;
     return {
-      id: s.nextMandateId,
-      type: 'team_count',
+      id, type: 'team_count', difficulty, year, met: null, target,
       description: `Mantener al menos ${target} equipos en la liga`,
-      target,
-      year: s.year,
-      met: null,
     };
   } else {
-    return {
-      id: s.nextMandateId,
-      type: 'positive_balance',
-      description: 'Cerrar la temporada con tesorería positiva',
-      target: 0,
-      year: s.year,
-      met: null,
-    };
+    const target = difficulty === 'facil' ? -1_500_000 : difficulty === 'dificil' ? 2_000_000 : 0;
+    const description = target < 0
+      ? 'Evitar pérdidas superiores a 1,5M€ esta temporada'
+      : target > 0
+        ? `Cerrar la temporada con tesorería positiva de al menos ${(target / 1_000_000).toFixed(1)}M€`
+        : 'Cerrar la temporada con tesorería positiva';
+    return { id, type: 'positive_balance', difficulty, year, met: null, target, description };
   }
+}
+
+function generateMandateOptions(
+  rng: RngState,
+  prestige: number,
+  prestigeBaseValue: number,
+  teamCount: number,
+  startId: number,
+  year: number,
+): BoardMandate[] {
+  let id = startId;
+  return MANDATE_DIFFICULTIES.map((d) =>
+    generateMandateFor(rng, d, prestige, prestigeBaseValue, teamCount, id++, year),
+  );
 }
 
 function checkMandate(mandate: BoardMandate, s: GameState): boolean {
@@ -534,10 +580,36 @@ function checkMandate(mandate: BoardMandate, s: GameState): boolean {
     case 'team_count':
       return playerLeagueTeamCount(s) >= mandate.target;
     case 'positive_balance':
-      return s.treasury >= 0;
+      return s.treasury >= mandate.target;
     default:
       return true;
   }
+}
+
+// Fase 17G: commissioner action — pick one of the season's 3 mandate
+// options during pretemporada. If never called, startSeason auto-commits
+// the 'medio' option (see there).
+export function chooseMandate(prev: GameState, mandateId: number): GameState {
+  if (prev.phase !== 'pretemporada' || prev.mandateChosen) return prev;
+  const option = prev.mandateOptions.find((m) => m.id === mandateId);
+  if (!option) return prev;
+  const s = structuredClone(prev);
+  s.mandates.push(option);
+  s.mandateChosen = true;
+  s.mandateOptions = [];
+  pushMail(s, {
+    year: s.year,
+    matchday: 0,
+    category: 'aviso',
+    title: 'Mandato elegido',
+    body: `Has aceptado el mandato de la junta (${option.difficulty}): ${option.description}.`,
+    actionKind: null,
+    refId: option.id,
+    teamId: null,
+    deadlineMatchday: null,
+    createdAtMatchday: 0,
+  });
+  return s;
 }
 
 // Build the season's calendar and switch to temporada. Called once per year
@@ -570,25 +642,32 @@ export function startSeason(prev: GameState): GameState {
   // Transfer vetoes are consumed at season start (outgoing transfers already ran above).
   s.transferVetoes = [];
 
-  // Issue board mandate for this season (uses independent mandatesRng).
+  // Fase 17G: commit the season's mandate. mandateOptions/mandateChosen were
+  // set up at the previous closeSeason's reset-for-pretemporada (or at
+  // createGame for year 1) — the commissioner may have already picked one
+  // via chooseMandate; if not, default to 'medio' now, before the calendar
+  // locks in.
   const alreadyHasMandate = s.mandates.some((m) => m.year === s.year);
-  if (!alreadyHasMandate) {
-    const mandate = generateMandate(s);
-    s.mandates.push(mandate);
-    s.nextMandateId++;
-    pushMail(s, {
-      year: s.year,
-      matchday: 0,
-      category: 'aviso',
-      title: 'Nuevo mandato de la junta',
-      body: `La junta te encomienda para esta temporada: ${mandate.description}.`,
-      actionKind: null,
-      refId: mandate.id,
-      teamId: null,
-      deadlineMatchday: null,
-      createdAtMatchday: 0,
-    });
+  if (!alreadyHasMandate && !s.mandateChosen) {
+    const fallback = s.mandateOptions.find((m) => m.difficulty === 'medio') ?? s.mandateOptions[0];
+    if (fallback) {
+      s.mandates.push(fallback);
+      s.mandateChosen = true;
+      pushMail(s, {
+        year: s.year,
+        matchday: 0,
+        category: 'aviso',
+        title: 'Mandato de la junta (por defecto)',
+        body: `No elegiste mandato en pretemporada — la junta asume el intermedio: ${fallback.description}.`,
+        actionKind: null,
+        refId: fallback.id,
+        teamId: null,
+        deadlineMatchday: null,
+        createdAtMatchday: 0,
+      });
+    }
   }
+  s.mandateOptions = [];
 
   // 5.4 — Chain events from the previous season (uses independent eventsRng).
   maybeChainEvents(s, s.year - 1);
@@ -1384,9 +1463,17 @@ const closeSeasonSteps: CloseSeasonStep[] = [
           }
         } else {
           s.consecutiveMandateFails = 0;
-          // Fase 17B: mandates are the one PC-earning hook already wired end
-          // to end (pledges/assembly/eras arrive in later sub-phases).
-          earnPC(s, 1, 'mandato cumplido');
+          // Fase 17G: PC/impulse rewards scale with the chosen difficulty —
+          // 'facil' only moves board confidence (see board.ts), 'medio' and
+          // 'dificil' also earn PC, and 'dificil' additionally banks a bonus
+          // impulse liquidated into next season's allowance (see
+          // reset-for-pretemporada).
+          if (currentMandate.difficulty !== 'facil') {
+            earnPC(s, 1, `mandato cumplido (${currentMandate.difficulty})`);
+          }
+          if (currentMandate.difficulty === 'dificil') {
+            s.mandateBonusImpulses += 1;
+          }
         }
         logFederation(s, {
           year: s.year,
@@ -1443,6 +1530,17 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       computeGlobalRanking(s);
       // 7.3: Accumulate federation coefficients from the freshly-computed ranking.
       accumulateFederationCoefficients(s);
+    },
+  },
+  {
+    // Fase 17G: eras y legado. Runs after federation coefficients + record
+    // book (250/260) so this close's rank/team-count are fresh, and before
+    // season-report-prescan (265) so a completed era can headline the
+    // newspaper. Gated on players.length so golden never ratchets milestones.
+    name: 'evaluate-era',
+    priority: 262,
+    run(s) {
+      evaluateEra(s);
     },
   },
   {
@@ -1510,7 +1608,10 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       s.matchReports = [];
       s.currentMatchday = 0;
       s.cupSchedule = [];
-      s.impulsesRemaining = s.impulsesPerSeason;
+      // Fase 17G: liquidate the "difícil mandate completed" bonus into the
+      // impulse allowance for the season about to start.
+      s.impulsesRemaining = s.impulsesPerSeason + s.mandateBonusImpulses;
+      s.mandateBonusImpulses = 0;
       s.pendingImpulses = [];
       s.impulseFavorCounts = {}; // Fase 17D: "repeated this season" tracking resets each close
       s.primetimeDrought = {}; // Fase 17E: "max -3/temporada" cap resets each close
@@ -1526,6 +1627,18 @@ const closeSeasonSteps: CloseSeasonStep[] = [
         t.prizesWithheld = false;
         t.matchesPlayedThisSeason = 0;
       }
+      // Fase 17G: generate next season's mandate options now, so they're
+      // ready for the pretemporada checklist (s.year already bumped at 260).
+      s.mandateOptions = generateMandateOptions(
+        s.mandatesRng,
+        s.prestige,
+        prestigeBase(s),
+        playerLeagueTeamCount(s),
+        s.nextMandateId,
+        s.year,
+      );
+      s.nextMandateId += 3;
+      s.mandateChosen = false;
     },
   },
   {

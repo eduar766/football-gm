@@ -10,9 +10,11 @@ import {
   removeNorm,
   sanctionTeam,
   startSeason,
+  type AssemblyProposal,
   type GameState,
   type StandingRow,
 } from '../src/index';
+import { applyApprovedProposal } from '../src/assembly';
 
 function withTeams(seed: number, strengths: number[]): GameState {
   return createGame(seed, {
@@ -91,6 +93,60 @@ describe('governance prestige pressure (§4.7)', () => {
       enforced = sanctionTeam(enforced, b.teamId, b.normId);
     enforced = closeSeason(advanceSeason(startSeason(enforced)));
     expect(ignored.prestige).toBeLessThan(enforced.prestige);
+  });
+});
+
+describe('norm opposition (Fase 17G)', () => {
+  it('an opposing team faces a ~20% stricter threshold in the norm\'s first year only', () => {
+    let s = withTeams(50, [65, 65, 65, 65, 65, 65, 65, 65, 65, 65]);
+    s = addNorm(s, 'tope_plantilla', 66); // valor 66: nobody breaches at face value (65 <= 66)
+    s.norms[0].opposedTeamIds = [1]; // team 1 voted contra
+    // Opposing team 1: effective threshold = round(66*0.8) = 53, and 65 > 53 -> breaches.
+    // Non-opposing team 2: threshold stays 66, and 65 <= 66 -> no breach.
+    const breachedIds = normBreaches(s).map((b) => b.teamId);
+    expect(breachedIds).toContain(1);
+    expect(breachedIds).not.toContain(2);
+  });
+
+  it('the tightening only applies in the norm\'s first year — it lapses afterward', () => {
+    let s = withTeams(51, [65, 65, 65, 65, 65, 65, 65, 65, 65, 65]);
+    s = addNorm(s, 'tope_plantilla', 66);
+    s.norms[0].opposedTeamIds = [1];
+    s.year += 1; // simulate a season having passed
+    expect(normBreaches(s).map((b) => b.teamId)).not.toContain(1);
+  });
+
+  it('minimo_competitivo tightens upward (harder to reach the minimum) for an opposing team', () => {
+    let s = withTeams(52, [50, 50, 50, 50, 50, 50, 50, 50, 50, 50]);
+    s = addNorm(s, 'minimo_competitivo', 45); // valor 45: nobody breaches at face value (50 >= 45)
+    s.norms[0].opposedTeamIds = [1];
+    // Opposing team 1: effective threshold = round(45*1.2) = 54, and 50 < 54 -> breaches.
+    const breachedIds = normBreaches(s).map((b) => b.teamId);
+    expect(breachedIds).toContain(1);
+    expect(breachedIds).not.toContain(2);
+  });
+
+  it('applyApprovedProposal captures contra voters onto the newly created norm', () => {
+    const s = withTeams(53, Array(10).fill(55));
+    const proposal: AssemblyProposal = {
+      id: 1,
+      kind: 'norma_nueva',
+      payload: { tipo: 'tope_plantilla', valor: 60 },
+      majority: 'simple',
+      year: s.year,
+      proposedAtMatchday: 0,
+      status: 'en_tramite',
+      resolvedAtMatchday: null,
+      votes: [
+        { teamId: 1, score: -30, intention: 'contra', revealed: true, bought: false, pledgeId: null, final: 'contra' },
+        { teamId: 2, score: 20, intention: 'favor', revealed: true, bought: false, pledgeId: null, final: 'favor' },
+        { teamId: 3, score: -25, intention: 'contra', revealed: true, bought: false, pledgeId: null, final: 'contra' },
+      ],
+    };
+    const next = applyApprovedProposal(s, proposal);
+    const norm = next.norms.find((n) => n.tipo === 'tope_plantilla')!;
+    expect(norm.opposedTeamIds.sort()).toEqual([1, 3]);
+    expect(norm.year).toBe(s.year);
   });
 });
 

@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApplyImpulseRequest } from '@football-gm/contracts';
+import { ApplyImpulseRequest, ChooseMandateRequest } from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GameOwnerGuard } from './game-owner.guard';
@@ -28,6 +28,14 @@ export class SeasonController {
   @Post(':id/start-season')
   startSeason(@Param('id', ParseIntPipe) id: number) {
     return this.games.startSeason(id);
+  }
+
+  @Post(':id/mandate')
+  chooseMandate(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(ChooseMandateRequest)) body: ChooseMandateRequest,
+  ) {
+    return this.games.chooseMandate(id, body.mandateId);
   }
 
   @Post(':id/advance-matchday')

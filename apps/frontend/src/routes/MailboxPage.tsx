@@ -17,13 +17,36 @@ const CATEGORY_STYLE: Record<MailboxCategory, { label: string; emoji: string; co
   financiero: { label: 'Financiero', emoji: '💰', color: 'green' },
 };
 
+// Fase 17G: "el mailbox agrupa por circunscripción" — a best-effort bucket
+// derived from actionKind (precise) falling back to category (coarse), since
+// messages don't carry a dedicated constituency field.
+type Constituency = 'junta' | 'clubes' | 'aficion' | 'casos';
+const CONSTITUENCY_LABEL: Record<Constituency, string> = {
+  junta: 'Junta', clubes: 'Clubes', aficion: 'Afición', casos: 'Casos',
+};
+function constituencyOf(m: MailboxMessageDto): Constituency {
+  switch (m.actionKind) {
+    case 'integrity_case': return 'casos';
+    case 'rescue_request':
+    case 'demand':
+    case 'conspiracy': return 'clubes';
+    case 'censura': return 'junta';
+    case 'event': return 'aficion';
+    default: break;
+  }
+  if (m.category === 'financiero' || m.category === 'hito') return 'junta';
+  return 'aficion';
+}
+
 type Filter = 'todos' | 'sin_leer';
+type ConstituencyFilter = 'todas' | Constituency;
 
 export function MailboxPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
   const id = Number(gameId);
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('todos');
+  const [constituency, setConstituency] = useState<ConstituencyFilter>('todas');
 
   const mailbox = useQuery({ queryKey: QK.mailbox(id), queryFn: () => api.mailbox(id) });
 
@@ -37,8 +60,8 @@ export function MailboxPage() {
     successMessage: 'Todo marcado como leído',
   });
   const resolveDemand = useMutationWithFeedback({
-    mutationFn: ({ demandId, accept }: { demandId: number; accept: boolean }) =>
-      api.resolveDemand(id, demandId, accept),
+    mutationFn: ({ demandId, mode }: { demandId: number; mode: 'aceptar' | 'rechazar' | 'contraoferta' }) =>
+      api.resolveDemand(id, demandId, mode),
     queryKeyToInvalidate: ['mailbox', 'summary', 'teams', 'economy', 'structure'],
     successMessage: 'Petición resuelta',
   });
@@ -54,7 +77,9 @@ export function MailboxPage() {
 
   const all = mailbox.data?.messages ?? [];
   const unread = mailbox.data?.unread ?? 0;
-  const messages = filter === 'sin_leer' ? all.filter((m) => m.status === 'sin_leer') : all;
+  const messages = all
+    .filter((m) => filter !== 'sin_leer' || m.status === 'sin_leer')
+    .filter((m) => constituency === 'todas' || constituencyOf(m) === constituency);
   const demandById = new Map((mailbox.data?.demands ?? []).map((d) => [d.id, d]));
 
   const onOpen = (m: MailboxMessageDto) => {
@@ -73,15 +98,28 @@ export function MailboxPage() {
         subtitle={unread > 0 ? `${unread} mensaje(s) sin leer` : 'Bandeja al día'}
       />
 
-      <Group justify="space-between" mb="md">
-        <SegmentedControl
-          value={filter}
-          onChange={(v) => setFilter(v as Filter)}
-          data={[
-            { label: 'Todos', value: 'todos' },
-            { label: `Sin leer (${unread})`, value: 'sin_leer' },
-          ]}
-        />
+      <Group justify="space-between" mb="md" wrap="wrap">
+        <Group gap="sm" wrap="wrap">
+          <SegmentedControl
+            value={filter}
+            onChange={(v) => setFilter(v as Filter)}
+            data={[
+              { label: 'Todos', value: 'todos' },
+              { label: `Sin leer (${unread})`, value: 'sin_leer' },
+            ]}
+          />
+          <SegmentedControl
+            value={constituency}
+            onChange={(v) => setConstituency(v as ConstituencyFilter)}
+            data={[
+              { label: 'Todas', value: 'todas' },
+              ...(Object.keys(CONSTITUENCY_LABEL) as Constituency[]).map((c) => ({
+                label: CONSTITUENCY_LABEL[c],
+                value: c,
+              })),
+            ]}
+          />
+        </Group>
         <Button
           variant="light"
           leftSection={<IconChecks size={16} />}
@@ -172,17 +210,30 @@ export function MailboxPage() {
                         loading={resolveDemand.isPending}
                         onClick={(e) => {
                           e.stopPropagation();
-                          resolveDemand.mutate({ demandId: demand.id, accept: true });
+                          resolveDemand.mutate({ demandId: demand.id, mode: 'aceptar' });
                         }}
                       >
                         Atender
                       </Button>
                       <Button
                         size="xs"
+                        variant="outline"
+                        color="yellow"
+                        title="Solo disponible con una propuesta de asamblea activa"
+                        loading={resolveDemand.isPending}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveDemand.mutate({ demandId: demand.id, mode: 'contraoferta' });
+                        }}
+                      >
+                        Contraoferta
+                      </Button>
+                      <Button
+                        size="xs"
                         variant="default"
                         onClick={(e) => {
                           e.stopPropagation();
-                          resolveDemand.mutate({ demandId: demand.id, accept: false });
+                          resolveDemand.mutate({ demandId: demand.id, mode: 'rechazar' });
                         }}
                       >
                         Rechazar

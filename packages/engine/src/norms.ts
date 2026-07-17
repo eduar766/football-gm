@@ -48,23 +48,40 @@ function valorActual(team: Team, norm: Norm, players: Player[]): number {
   }
 }
 
-function breaches(team: Team, norm: Norm, players: Player[]): boolean {
+// Fase 17G: a team that voted 'contra' when this norm was approved starts
+// with a mental `violationHistory` — a ~20% stricter effective threshold in
+// the norm's first year only. Deterministic (no new RNG): the tightening is
+// keyed off the recorded vote, not a probability roll.
+function effectiveThreshold(norm: Norm, opposed: boolean): number {
+  if (!opposed) return norm.valor;
+  switch (norm.tipo) {
+    case 'minimo_competitivo':
+    case 'minimo_cantera':
+      return Math.round(norm.valor * 1.2); // harder to reach the minimum
+    default:
+      return Math.round(norm.valor * 0.8); // harder to stay under the cap
+  }
+}
+
+function breaches(team: Team, norm: Norm, players: Player[], state: GameState): boolean {
   const actual = valorActual(team, norm, players);
+  const opposed = state.year === norm.year && norm.opposedTeamIds.includes(team.id);
+  const threshold = effectiveThreshold(norm, opposed);
   switch (norm.tipo) {
     case 'tope_plantilla':
-      return actual > norm.valor;      // too strong
+      return actual > threshold;      // too strong
     case 'minimo_competitivo':
-      return actual < norm.valor;      // too weak
+      return actual < threshold;      // too weak
     case 'tope_salarial':
-      return actual > norm.valor;      // too expensive
+      return actual > threshold;      // too expensive
     case 'tope_extrangeros':
-      return actual > norm.valor;      // too many foreigners
+      return actual > threshold;      // too many foreigners
     case 'minimo_cantera':
-      return actual < norm.valor;      // too few homegrown
+      return actual < threshold;      // too few homegrown
     case 'tope_edad_media':
-      return actual > norm.valor;      // squad too old
+      return actual > threshold;      // squad too old
     case 'tope_deficit':
-      return actual < -norm.valor;     // treasury below allowed deficit threshold
+      return actual < -threshold;     // treasury below allowed deficit threshold
     default:
       return false;
   }
@@ -86,7 +103,7 @@ export function normBreaches(state: GameState): NormBreach[] {
   for (const norm of state.norms) {
     for (const team of state.teams) {
       if (!isSubject(state, team)) continue;
-      if (!breaches(team, norm, state.players)) continue;
+      if (!breaches(team, norm, state.players, state)) continue;
       out.push({
         teamId: team.id,
         teamName: team.name,
@@ -125,7 +142,7 @@ export function addNorm(
   const s = structuredClone(prev);
   // At most one active norm per type — adding replaces.
   s.norms = s.norms.filter((n) => n.tipo !== tipo);
-  s.norms.push({ id: s.nextNormId, tipo, valor: v });
+  s.norms.push({ id: s.nextNormId, tipo, valor: v, year: s.year, opposedTeamIds: [] });
   s.nextNormId += 1;
   logFederation(s, {
     year: s.year,
@@ -154,7 +171,7 @@ export function sanctionTeam(
   const norm = prev.norms.find((n) => n.id === normId);
   const team = prev.teams.find((t) => t.id === teamId);
   if (!norm || !team) return prev;
-  if (!isSubject(prev, team) || !breaches(team, norm, prev.players)) return prev;
+  if (!isSubject(prev, team) || !breaches(team, norm, prev.players, prev)) return prev;
   if (isSanctioned(prev, teamId, normId, prev.year)) return prev;
 
   const s = structuredClone(prev);
@@ -243,7 +260,7 @@ export function governancePenalty(state: GameState): number {
   for (const norm of state.norms) {
     for (const team of state.teams) {
       if (!isSubject(state, team)) continue;
-      if (!breaches(team, norm, state.players)) continue;
+      if (!breaches(team, norm, state.players, state)) continue;
       if (!isSanctioned(state, team.id, norm.id, state.year)) unsanctioned++;
     }
   }
@@ -261,7 +278,7 @@ export function governanceBonus(state: GameState): number {
     for (const team of state.teams) {
       if (!isSubject(state, team)) continue;
       total++;
-      if (!breaches(team, norm, state.players)) compliant++;
+      if (!breaches(team, norm, state.players, state)) compliant++;
     }
   }
   if (total === 0) return 0;
@@ -279,7 +296,7 @@ export function teamMeetsNorm(state: GameState, team: Team, tipo: NormType): boo
   const norm = state.norms.find((n) => n.tipo === tipo);
   if (!norm) return false;
   if (!isSubject(state, team)) return false;
-  return !breaches(team, norm, state.players);
+  return !breaches(team, norm, state.players, state);
 }
 
 export function decayViolationHistory(s: GameState): void {

@@ -6,8 +6,9 @@ import {
   processExodus,
   PENALIZACION_IGNORAR,
   REWARD_ARRAIGO,
+  REWARD_ARRAIGO_CONTRAOFERTA,
 } from '../src/demands';
-import type { GameState } from '../src/index';
+import type { AssemblyProposal, GameState } from '../src/index';
 
 const SQUAD = [
   { name: 'A', posicion: 'DEL' as const, calidad: 60 },
@@ -64,13 +65,47 @@ describe('club demands (Fase 14.5)', () => {
     const arraigoBefore = g.teams[0].arraigo;
     const treasuryBefore = g.treasury;
 
-    g = resolveDemand(g, demand.id, true);
+    g = resolveDemand(g, demand.id, 'aceptar');
     const t = g.teams.find((x) => x.id === demand.teamId)!;
     expect(t.treasury).toBeGreaterThanOrEqual(0);
     expect(t.arraigo).toBe(arraigoBefore + REWARD_ARRAIGO);
     expect(g.treasury).toBeLessThan(treasuryBefore);
     expect(g.clubDemands.find((d) => d.id === demand.id)!.satisfied).toBe(true);
     expect(g.mailbox.find((m) => m.refId === demand.id && m.actionKind === 'rescue_request')!.status).toBe('resuelto');
+  });
+
+  it('rejects contraoferta when no assembly proposal is active — the condition has nothing to attach to', () => {
+    let g = gameWithRival(444);
+    g = startSeason(g);
+    g.teams[0].treasury = -3_000_000;
+    generateClubDemands(g, 1);
+    const demand = g.clubDemands.find((d) => !d.resolved)!;
+    expect(resolveDemand(g, demand.id, 'contraoferta')).toBe(g);
+  });
+
+  it('contraoferta with an active proposal: half the cost, half the arraigo reward, demand still satisfied', () => {
+    let g = gameWithRival(445);
+    g = startSeason(g);
+    g.teams[0].treasury = -3_000_000;
+    generateClubDemands(g, 1);
+    const demand = g.clubDemands.find((d) => !d.resolved)!;
+    const arraigoBefore = g.teams[0].arraigo;
+    const treasuryBefore = g.treasury;
+
+    const proposal: AssemblyProposal = {
+      id: 1, kind: 'norma_nueva', payload: { tipo: 'tope_plantilla', valor: 60 },
+      majority: 'simple', year: g.year, proposedAtMatchday: 0,
+      status: 'en_tramite', resolvedAtMatchday: null, votes: [],
+    };
+    g.proposals = [proposal];
+
+    g = resolveDemand(g, demand.id, 'contraoferta');
+    const t = g.teams.find((x) => x.id === demand.teamId)!;
+    expect(t.arraigo).toBe(arraigoBefore + REWARD_ARRAIGO_CONTRAOFERTA);
+    expect(REWARD_ARRAIGO_CONTRAOFERTA).toBeLessThan(REWARD_ARRAIGO);
+    const spent = treasuryBefore - g.treasury;
+    expect(spent).toBe(Math.round((demand.amount ?? 0) / 2));
+    expect(g.clubDemands.find((d) => d.id === demand.id)!.satisfied).toBe(true);
   });
 
   it('advanceMatchday spawns rescue demands for clubs in crisis', () => {

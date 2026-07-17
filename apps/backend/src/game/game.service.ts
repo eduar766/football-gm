@@ -24,6 +24,7 @@ import {
   createGame as engineCreateGame,
   createOwnTeam as engineCreateOwnTeam,
   cultivateArraigo as engineCultivateArraigo,
+  chooseMandate as engineChooseMandate,
   vetoTransfer as engineVetoTransfer,
   cancelTransferVeto as engineCancelTransferVeto,
   emergencyMeeting as engineEmergencyMeeting,
@@ -82,6 +83,7 @@ import {
   deskInbox as engineDeskInbox,
   setDeskDecisions as engineSetDeskDecisions,
   expelRingleader as engineExpelRingleader,
+  resolveCensureMotion as engineResolveCensureMotion,
   type DeskDecisions,
   type GameState,
 } from '@football-gm/engine';
@@ -131,6 +133,8 @@ import type {
   SetDeskDecisionsRequest,
   ConspiracyResponse,
   ResolveConspiracyActionRequest,
+  ResolveCensureMotionRequest,
+  ResolveDemandRequest,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -250,6 +254,11 @@ export class GameService {
         isPlayer: fed.isPlayer,
       },
       mandate: state.mandates.find((m) => m.year === state.year) ?? null,
+      mandateOptions: state.mandateOptions,
+      mandateChosen: state.mandateChosen,
+      era: state.era,
+      eraHistory: state.eraHistory,
+      censureMotion: state.censureMotion,
       consecutiveMandateFails: state.consecutiveMandateFails,
       headlines: generateHeadlines(state),
       lastChronicle: state.seasonChronicles.length > 0
@@ -630,6 +639,18 @@ export class GameService {
     }
   }
 
+  // Fase 17G: a moción de censura blocks the *next* closeSeason until
+  // resolved — same "must act before progressing" spirit as pending events,
+  // enforced here (imperative shell) since the engine only opens/tracks it.
+  private assertNoCensureMotion(state: GameState): void {
+    if (state.censureMotion) {
+      throw new BadRequestException({
+        code: 'CENSURE_MOTION_PENDING',
+        message: 'Hay una moción de censura abierta. Resuélvela antes de cerrar la temporada.',
+      });
+    }
+  }
+
   // Fase 14.3: the mandatory pre-season checklist is enforced here (imperative
   // shell), not in the pure engine — so unit tests / golden can still start a
   // season without wiring prizes.
@@ -736,6 +757,34 @@ export class GameService {
     });
   }
 
+  async chooseMandate(gameId: number, mandateId: number): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineChooseMandate(state, mandateId);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo elegir el mandato (fuera de pretemporada, ya elegido, u opción inválida)',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
+  async resolveCensureMotion(gameId: number, body: ResolveCensureMotionRequest): Promise<GameSummary> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineResolveCensureMotion(state, body.mode);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo resolver la moción (no hay moción abierta, PC insuficiente, o no hay méritos que invocar)',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      return this.summaryFrom(gameId, next);
+    });
+  }
+
   async postponeMatchday(gameId: number): Promise<GameSummary> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
@@ -822,6 +871,7 @@ export class GameService {
     return this.db.transaction(async (tx) => {
       const finished = await this.repo.loadState(gameId, tx);
       this.assertNotGameOver(finished);
+      this.assertNoCensureMotion(finished);
       if (finished.phase !== 'temporada' || !finished.seasonOver) {
         throw new BadRequestException('Season is not finished yet');
       }
@@ -3300,12 +3350,12 @@ export class GameService {
   async resolveDemand(
     gameId: number,
     demandId: number,
-    accept: boolean,
+    mode: ResolveDemandRequest['mode'],
     amount?: number,
   ): Promise<MailboxResponse> {
     return this.db.transaction(async (tx) => {
       const state = await this.repo.loadState(gameId, tx);
-      const next = engineResolveDemand(state, demandId, accept, amount);
+      const next = engineResolveDemand(state, demandId, mode, amount);
       if (next === state) {
         throw new BadRequestException(
           'No se pudo resolver la petición: ya resuelta o fondos insuficientes.',

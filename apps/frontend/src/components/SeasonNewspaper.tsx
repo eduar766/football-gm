@@ -25,7 +25,7 @@ import {
   type TablerIcon,
 } from '@tabler/icons-react';
 import type { FeaturedTagDto, SeasonReportDto } from '@football-gm/contracts';
-import { AWARD_LABEL, AWARD_ICON, CUP_TIPO_LABEL, FED_LOG_STYLE } from '../domain-labels';
+import { AWARD_LABEL, AWARD_ICON, CUP_TIPO_LABEL, FED_LOG_STYLE, ERA_NAME } from '../domain-labels';
 
 const FEATURED_TAG_LABEL: Record<FeaturedTagDto, string> = {
   derbi: 'Derbi',
@@ -120,6 +120,24 @@ function Masthead({ federationName, year, onClose }: { federationName: string; y
 function FrontPage({ report }: { report: SeasonReportDto }) {
   return (
     <Box className="stagger-item" mb="xl">
+      {report.eraCompleted && (
+        <Paper
+          p="sm"
+          mb="md"
+          style={{
+            border: '1px solid rgba(245,158,11,0.4)',
+            borderLeft: '3px solid #F59E0B',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.03))',
+          }}
+        >
+          <Group gap="xs">
+            <IconMedal size={20} color="#F59E0B" />
+            <Text fw={800} size="sm" tt="uppercase">
+              Edición especial — Era completada: {ERA_NAME[report.eraCompleted.era] ?? report.eraCompleted.era}
+            </Text>
+          </Group>
+        </Paper>
+      )}
       <Text
         style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1.3 }}
         mb="md"

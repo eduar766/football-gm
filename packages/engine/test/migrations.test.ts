@@ -244,3 +244,65 @@ describe('migrateState v21 -> v22 (Fase 17F: la conspiración de la Superliga)',
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v22 -> v23 (Fase 17G: mandatos negociables)', () => {
+  it('backfills difficulty="medio" on historical mandates and mandateChosen=true when one already exists for the current year', () => {
+    const g = createGame(214, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    legacy.mandates = [{ id: 1, type: 'positive_balance', description: 'x', target: 0, year: legacy.year, met: null }];
+    delete legacy.mandates[0].difficulty;
+    delete legacy.mandateOptions;
+    delete legacy.mandateChosen;
+    delete legacy.mandateBonusImpulses;
+    legacy.schemaVersion = 22;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(23);
+    expect(migrated.mandates[0].difficulty).toBe('medio');
+    expect(migrated.mandateOptions).toEqual([]);
+    expect(migrated.mandateChosen).toBe(true); // a mandate already exists for the current year
+    expect(migrated.mandateBonusImpulses).toBe(0);
+    expect(migrated.censureMotion).toBeNull();
+  });
+
+  it('backfills year/opposedTeamIds on pre-17G norms', () => {
+    const g = createGame(217, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    legacy.norms = [{ id: 1, tipo: 'tope_plantilla', valor: 60 }];
+    legacy.schemaVersion = 22;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.norms[0].year).toBe(0);
+    expect(migrated.norms[0].opposedTeamIds).toEqual([]);
+  });
+
+  it('sets mandateChosen=false when no mandate exists yet for the current year (pretemporada gap)', () => {
+    const g = createGame(215, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    legacy.mandates = [];
+    delete legacy.mandateOptions;
+    delete legacy.mandateChosen;
+    delete legacy.mandateBonusImpulses;
+    legacy.schemaVersion = 22;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.mandateOptions).toEqual([]);
+    expect(migrated.mandateChosen).toBe(false);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(216, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

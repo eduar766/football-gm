@@ -354,7 +354,14 @@ export function applyApprovedProposal(state: GameState, proposal: AssemblyPropos
   switch (proposal.kind) {
     case 'norma_nueva': {
       const { tipo, valor } = payload<NormaNuevaPayload>(proposal.payload);
-      return addNorm(state, tipo, valor);
+      const s = addNorm(state, tipo, valor);
+      // Fase 17G: capture opposing voters on the norm just created (last
+      // pushed by addNorm) — feeds breaches()'s first-year threshold tightening.
+      const norm = s.norms[s.norms.length - 1];
+      if (norm) {
+        norm.opposedTeamIds = proposal.votes.filter((v) => v.final === 'contra').map((v) => v.teamId);
+      }
+      return s;
     }
     case 'derogar_norma':
       return removeNorm(state, payload<DerogarNormaPayload>(proposal.payload).normId);

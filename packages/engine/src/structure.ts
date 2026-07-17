@@ -61,6 +61,16 @@ export function teamsInDivision(state: GameState, orden: number): Team[] {
   return state.teams.filter((t) => t.divisionOrden === orden);
 }
 
+// Player-federation teams currently competing (in a division). Lives here
+// (not engine.ts) so eras.ts and migrations.ts can both use it without a
+// circular import — migrations.ts imports eras.ts for backfillEra, and
+// engine.ts already imports CURRENT_SCHEMA_VERSION from migrations.ts.
+export function playerLeagueTeamCount(s: GameState): number {
+  return s.teams.filter(
+    (t) => t.federationId === s.playerFederationId && t.divisionOrden !== null,
+  ).length;
+}
+
 // Player-owned teams adhered via negotiation but not yet placed in a division.
 export function pendingIntegrationTeams(state: GameState): Team[] {
   return state.teams.filter(

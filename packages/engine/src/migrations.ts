@@ -3,10 +3,11 @@ import { divisionName } from './structure';
 import { generatePotencial } from './talent';
 import { generatePresident, generateRivalCommissioner } from './characters';
 import { generateReferee } from './desk';
+import { backfillEra } from './eras';
 import { makeRng } from './rng';
 import type { ClubPresident, GameState, Referee, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 22;
+export const CURRENT_SCHEMA_VERSION = 23;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -470,6 +471,49 @@ export function migrateState(state: GameState): GameState {
     if (!gs.conspiracyHistory) gs.conspiracyHistory = [];
 
     state.schemaVersion = 22;
+  }
+
+  // v22 → v23 (Fase 17G): negotiable mandates (difficulty tiers) + eras +
+  // moción de censura. Old saves get 'medio' backfilled on every historical
+  // mandate (the single-mandate model's implicit difficulty). mandateOptions
+  // is deliberately left empty here rather than generating a fresh set —
+  // doing so would need generateMandateOptions/prestigeBase/mandatesRng from
+  // engine.ts, and migrations.ts intentionally never imports back from
+  // engine.ts (engine.ts already imports CURRENT_SCHEMA_VERSION from here,
+  // and a reverse import would be circular). The only consequence is a save
+  // caught exactly between closeSeason and its first post-migration
+  // startSeason plays that one season without a mandate — self-heals at the
+  // next reset-for-pretemporada, which always regenerates fresh options.
+  if (v < 23) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    for (const m of gs.mandates ?? []) {
+      if (!m.difficulty) m.difficulty = 'medio';
+    }
+    const hasCurrentYearMandate = (gs.mandates ?? []).some((m: { year: number }) => m.year === gs.year);
+    if (!gs.mandateOptions) gs.mandateOptions = [];
+    if (gs.mandateChosen === undefined) gs.mandateChosen = hasCurrentYearMandate;
+    if (gs.mandateBonusImpulses === undefined) gs.mandateBonusImpulses = 0;
+
+    // Eras y legado: silently evaluate which era a veteran save already
+    // qualifies for (pure predicate, no rewards/mail replayed on load — see
+    // eras.ts's backfillEra doc comment).
+    if (gs.era === undefined) gs.era = backfillEra(state);
+    if (!gs.eraHistory) gs.eraHistory = [];
+    if (!gs.eraMilestonesAchieved) gs.eraMilestonesAchieved = [];
+    if (gs.censureUsedInEra === undefined) gs.censureUsedInEra = false;
+    if (gs.censureMotion === undefined) gs.censureMotion = null;
+
+    // Norm opposition: old norms predate the assembly vote-capture, so they
+    // never had opposing voters — 'year' defaults to the save's creation
+    // moment so the (now-past) "first year" tightening window can never
+    // retroactively apply to them.
+    for (const n of gs.norms ?? []) {
+      if (n.year === undefined) n.year = 0;
+      if (!n.opposedTeamIds) n.opposedTeamIds = [];
+    }
+
+    state.schemaVersion = 23;
   }
 
   return state;

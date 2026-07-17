@@ -68,6 +68,13 @@ export function preseasonChecklist(s: GameState): ChecklistItem[] {
       done: s.norms.length > 0,
       blocking: false,
     },
+    {
+      // Fase 17G: non-blocking — startSeason auto-commits 'medio' if never chosen.
+      id: 'mandato_elegido',
+      label: 'Elegir el mandato de la junta para esta temporada',
+      done: s.mandateChosen,
+      blocking: false,
+    },
   ];
 }
 

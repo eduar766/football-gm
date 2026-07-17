@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type {
   AwardType as EngineAwardType,
   CommercialContractType as EngineCommercialContractType,
+  MandateDifficulty as EngineMandateDifficulty,
   MandateType as EngineMandateType,
   NegotiationState as EngineNegotiationStateUnion,
   NormType as EngineNormType,
@@ -109,6 +110,10 @@ const _mandateTypeValues = [
   'prestige_min', 'team_count', 'positive_balance',
 ] as const satisfies [EngineMandateType, ...EngineMandateType[]];
 
+const _mandateDifficultyValues = [
+  'facil', 'medio', 'dificil',
+] as const satisfies [EngineMandateDifficulty, ...EngineMandateDifficulty[]];
+
 // Season lifecycle (§1, §4.8): pretemporada = setup window, temporada = playable.
 export const SeasonPhase = z.enum(_seasonPhaseValues);
 export type SeasonPhase = z.infer<typeof SeasonPhase>;
@@ -116,15 +121,37 @@ export type SeasonPhase = z.infer<typeof SeasonPhase>;
 export const MandateType = z.enum(_mandateTypeValues);
 export type MandateType = z.infer<typeof MandateType>;
 
+// Fase 17G: three options are generated per season; the commissioner picks
+// one in pretemporada (default 'medio' if never chosen).
+export const MandateDifficulty = z.enum(_mandateDifficultyValues);
+export type MandateDifficulty = z.infer<typeof MandateDifficulty>;
+
 export const BoardMandateDto = z.object({
   id: Id,
   type: MandateType,
+  difficulty: MandateDifficulty,
   description: z.string(),
   target: z.number().int(),
   year: z.number().int(),
   met: z.boolean().nullable(),
 });
 export type BoardMandateDto = z.infer<typeof BoardMandateDto>;
+
+export const ChooseMandateRequest = z.object({
+  mandateId: Id,
+});
+export type ChooseMandateRequest = z.infer<typeof ChooseMandateRequest>;
+
+// Fase 17G: moción de censura.
+export const CensureMotionDto = z.object({
+  year: z.number().int(),
+});
+export type CensureMotionDto = z.infer<typeof CensureMotionDto>;
+
+export const ResolveCensureMotionRequest = z.object({
+  mode: z.enum(['gastar_pc', 'defensa_meritos', 'aceptar']),
+});
+export type ResolveCensureMotionRequest = z.infer<typeof ResolveCensureMotionRequest>;
 
 // ── Batch 5: Narrativa emergente ─────────────────────────────────────────────
 
@@ -288,7 +315,7 @@ export const SeasonReportBriefDto = z.object({
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
     'president_change', 'political_capital', 'assembly_result', 'pledge_result',
-    'integrity_case', 'scandal', 'conspiracy',
+    'integrity_case', 'scandal', 'conspiracy', 'era', 'censura',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -313,6 +340,7 @@ export const SeasonReportDto = z.object({
     reasons: z.array(z.string()),
   }),
   mandate: z.object({ description: z.string(), met: z.boolean() }).nullable(),
+  eraCompleted: z.object({ era: z.number().int() }).nullable(),
   structuralNotes: z.array(z.string()),
 
   awards: z.array(SeasonReportAwardDto),
@@ -451,6 +479,11 @@ export const GameSummary = z.object({
   leagueFormat: z.enum(['ida', 'ida_vuelta']),
   federation: FederationBrief,
   mandate: BoardMandateDto.nullable().default(null),
+  mandateOptions: z.array(BoardMandateDto).default([]),
+  mandateChosen: z.boolean().default(false),
+  era: z.number().int().default(1),
+  eraHistory: z.array(z.object({ era: z.number().int(), completedYear: z.number().int() })).default([]),
+  censureMotion: CensureMotionDto.nullable().default(null),
   consecutiveMandateFails: z.number().int().default(0),
   headlines: z.array(HeadlineDto).default([]),
   lastChronicle: SeasonChronicleDto.nullable().default(null),
@@ -901,6 +934,8 @@ export const FederationLogType = z.enum([
   'integrity_case',
   'scandal',
   'conspiracy',
+  'era',
+  'censura',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 
@@ -926,7 +961,7 @@ export const MailboxCategory = z.enum(['peticion', 'evento', 'aviso', 'hito', 'f
 export type MailboxCategory = z.infer<typeof MailboxCategory>;
 export const MailboxStatus = z.enum(['sin_leer', 'leido', 'resuelto', 'caducado']);
 export type MailboxStatus = z.infer<typeof MailboxStatus>;
-export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event', 'integrity_case', 'conspiracy']);
+export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event', 'integrity_case', 'conspiracy', 'censura']);
 export type MailboxActionKind = z.infer<typeof MailboxActionKind>;
 
 export const MailboxMessageDto = z.object({
@@ -971,8 +1006,11 @@ export const MailboxResponse = z.object({
 });
 export type MailboxResponse = z.infer<typeof MailboxResponse>;
 
+// Fase 17G: widened from a boolean to a 3-way mode — 'contraoferta' partially
+// satisfies the demand (half cost, half arraigo reward), only offered while
+// an assembly proposal is active.
 export const ResolveDemandRequest = z.object({
-  accept: z.boolean(),
+  mode: z.enum(['aceptar', 'rechazar', 'contraoferta']),
   amount: z.number().int().nonnegative().optional(),
 });
 export type ResolveDemandRequest = z.infer<typeof ResolveDemandRequest>;

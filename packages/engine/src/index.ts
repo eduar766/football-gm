@@ -37,6 +37,7 @@ export {
   cultivateArraigo,
   vetoTransfer,
   cancelTransferVeto,
+  chooseMandate,
 } from './engine';
 
 // ── Structural actions (pretemporada) ────────────────────────────────────────
@@ -166,3 +167,6 @@ export type { DeskFixtureDto, DeskInboxResult } from './desk';
 
 // ── Conspiracy (Fase 17F) ──────────────────────────────────────────────────────
 export { expelRingleader } from './conspiracy';
+
+// ── Censure motion (Fase 17G) ───────────────────────────────────────────────────
+export { resolveCensureMotion } from './board';

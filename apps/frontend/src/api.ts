@@ -42,6 +42,7 @@ import type {
   DeskInboxResponse,
   SetDeskDecisionsRequest,
   ConspiracyResponse,
+  ResolveCensureMotionRequest,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -109,6 +110,11 @@ export const api = {
     req<PreseasonChecklistResponse>(`/games/${id}/preseason-checklist`),
   startSeason: (id: number) =>
     req<GameSummary>(`/games/${id}/start-season`, { method: 'POST' }),
+  chooseMandate: (id: number, mandateId: number) =>
+    req<GameSummary>(`/games/${id}/mandate`, {
+      method: 'POST',
+      body: JSON.stringify({ mandateId }),
+    }),
   advanceMatchday: (id: number) =>
     req<GameSummary>(`/games/${id}/advance-matchday`, { method: 'POST' }),
   advanceSeason: (id: number) =>
@@ -144,10 +150,10 @@ export const api = {
     req<MailboxResponse>(`/games/${id}/mailbox/${msgId}/read`, { method: 'POST' }),
   markAllMailRead: (id: number) =>
     req<MailboxResponse>(`/games/${id}/mailbox/read-all`, { method: 'POST' }),
-  resolveDemand: (id: number, demandId: number, accept: boolean, amount?: number) =>
+  resolveDemand: (id: number, demandId: number, mode: 'aceptar' | 'rechazar' | 'contraoferta', amount?: number) =>
     req<MailboxResponse>(`/games/${id}/demands/${demandId}/resolve`, {
       method: 'POST',
-      body: JSON.stringify({ accept, amount }),
+      body: JSON.stringify({ mode, amount }),
     }),
   federations: (id: number) => req<FederationListItem[]>(`/games/${id}/federations`),
   federationById: (id: number, fedId: number) =>
@@ -253,6 +259,11 @@ export const api = {
     req<IntegrityResponse>(`/games/${id}/integrity/cases/${caseId}/resolve`, {
       method: 'POST',
       body: JSON.stringify({ action, spendPcForDiscount }),
+    }),
+  resolveCensureMotion: (id: number, mode: ResolveCensureMotionRequest['mode']) =>
+    req<GameSummary>(`/games/${id}/censure-motion/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
     }),
   conspiracy: (id: number) => req<ConspiracyResponse>(`/games/${id}/conspiracy`),
   expelRingleader: (id: number) =>

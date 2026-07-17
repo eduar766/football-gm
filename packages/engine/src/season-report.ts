@@ -112,6 +112,12 @@ export function runSeasonReportAssemble(s: GameState, ctx: SeasonCloseContext): 
       ? { description: mandateEntry.description, met: mandateEntry.met }
       : null;
 
+  // Fase 17G: the "special edition" flag — set only on the close where the
+  // era actually completed (evaluateEra runs at priority 262, before this
+  // step at 305, and stamps eraHistory with the same reportYear semantics).
+  const eraEntry = s.eraHistory.find((e) => e.completedYear === reportYear);
+  const eraCompleted: SeasonReport['eraCompleted'] = eraEntry ? { era: eraEntry.era } : null;
+
   // Promotion/relegation notes only — exodus (team_left) is already covered
   // by `briefs` below (federationLog entries), no need to re-derive it here.
   const divisionOrdenBefore = ctx.meta.get(META_DIVISION_BEFORE) as Map<number, number | null>;
@@ -232,6 +238,7 @@ export function runSeasonReportAssemble(s: GameState, ctx: SeasonCloseContext): 
     prestige: { before: ctx.prestigeBefore, after: s.prestige, delta: ctx.prestigeDelta },
     boardConfidence,
     mandate,
+    eraCompleted,
     structuralNotes,
     awards,
     cupResults,

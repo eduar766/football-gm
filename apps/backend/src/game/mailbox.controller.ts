@@ -42,6 +42,6 @@ export class MailboxController {
     @Param('demandId', ParseIntPipe) demandId: number,
     @Body(new ZodValidationPipe(ResolveDemandRequest)) body: ResolveDemandRequest,
   ) {
-    return this.games.resolveDemand(id, demandId, body.accept, body.amount);
+    return this.games.resolveDemand(id, demandId, body.mode, body.amount);
   }
 }

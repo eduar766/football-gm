@@ -6,12 +6,20 @@
 // engine-only runs (golden) never trigger it. No RNG — golden-stable.
 
 import { pushMail } from './mailbox';
-import type { GameOverReason, GameState } from './types';
+import { logFederation } from './federation-log';
+import type { GameOverReason, GameState, MandateDifficulty } from './types';
 
 export const CONFIDENCE_START = 60;
 
-const D_MANDATE_OK = 8;
-const D_MANDATE_FAIL = -15;
+// Fase 17G: mandate confidence swings now scale with the chosen difficulty
+// (replaces the old flat D_MANDATE_OK/D_MANDATE_FAIL — a harder mandate is
+// worth more when met and forgiven more when missed, per the design's
+// "la derrota debe poder pelearse" framing).
+const MANDATE_CONFIDENCE: Record<MandateDifficulty, { met: number; failed: number }> = {
+  facil: { met: 2, failed: -12 },
+  medio: { met: 5, failed: -8 },
+  dificil: { met: 9, failed: -5 },
+};
 const D_PRESTIGE_UP = 5;
 const D_PRESTIGE_DOWN = -6;
 const D_TREASURY_NEG = -10;
@@ -43,12 +51,15 @@ export function evaluateBoardConfidence(s: GameState, prestigeDelta: number, int
   if (integrityDelta !== 0) reasons.push('escándalo de integridad');
 
   const mandate = s.mandates.find((m) => m.year === s.year);
-  if (mandate?.met === true) {
-    d += D_MANDATE_OK;
-    reasons.push('mandato cumplido');
-  } else if (mandate?.met === false) {
-    d += D_MANDATE_FAIL;
-    reasons.push('mandato fallido');
+  if (mandate) {
+    const swing = MANDATE_CONFIDENCE[mandate.difficulty];
+    if (mandate.met === true) {
+      d += swing.met;
+      reasons.push(`mandato cumplido (${mandate.difficulty})`);
+    } else if (mandate.met === false) {
+      d += swing.failed;
+      reasons.push(`mandato fallido (${mandate.difficulty})`);
+    }
   }
 
   if (prestigeDelta > 0) d += D_PRESTIGE_UP;
@@ -113,7 +124,58 @@ export function evaluateBoardConfidence(s: GameState, prestigeDelta: number, int
     });
   }
 
-  // ── Defeat conditions ──
+  // Fase 17G: moción de censura intercepts the confidence-driven destitución
+  // trigger — below 25, it opens a blocking motion (resolved via
+  // resolveCensureMotion) instead of firing gameOver immediately. A second
+  // motion within the same era is definitive: no survival options, straight
+  // to destitución. This has its own reason-priority slot, ahead of the
+  // other (unrelated) defeat conditions below.
+  if (s.boardConfidence.value < 25 && !s.censureMotion) {
+    if (s.censureUsedInEra) {
+      s.gameOver = {
+        reason: 'destitucion_confianza',
+        year: s.year,
+        message: GAME_OVER_MESSAGES.destitucion_confianza,
+      };
+      pushMail(s, {
+        year: s.year,
+        matchday: 0,
+        category: 'aviso',
+        title: 'Moción de censura definitiva',
+        body: 'Ya sobreviviste una moción de censura esta era. La junta no te da una segunda oportunidad. Has sido destituido.',
+        actionKind: null,
+        refId: null,
+        teamId: null,
+        deadlineMatchday: null,
+        createdAtMatchday: 0,
+      });
+    } else {
+      s.censureMotion = { year: s.year };
+      logFederation(s, {
+        year: s.year,
+        matchday: 0,
+        type: 'censura',
+        title: 'Moción de censura',
+        detail: `La confianza de la junta ha caído a ${s.boardConfidence.value}/100. Se abre una moción de censura.`,
+        value: null,
+        teamId: null,
+      });
+      pushMail(s, {
+        year: s.year,
+        matchday: 0,
+        category: 'aviso',
+        title: 'Moción de censura',
+        body: 'La junta ha abierto una moción de censura contra tu gestión. Resuélvela antes de cerrar la próxima temporada: gasta 6 PC, invoca una defensa por méritos (mandato cumplido o era completada este año), o acepta la destitución.',
+        actionKind: 'censura',
+        refId: null,
+        teamId: null,
+        deadlineMatchday: null,
+        createdAtMatchday: 0,
+      });
+    }
+  }
+
+  // ── Defeat conditions (unrelated to the confidence-driven censura path above) ──
   const competing = s.teams.filter(
     (t) => t.federationId === s.playerFederationId && t.divisionOrden !== null,
   ).length;
@@ -125,13 +187,12 @@ export function evaluateBoardConfidence(s: GameState, prestigeDelta: number, int
   const threeFails = decided.length >= 3 && decided.every((m) => m.met === false);
 
   let reason: GameOverReason | null = null;
-  if (s.boardConfidence.value <= 0) reason = 'destitucion_confianza';
-  else if (threeFails) reason = 'mandatos';
+  if (threeFails) reason = 'mandatos';
   else if ((s.negativeTreasurySeasons ?? 0) >= 2) reason = 'quiebra';
   else if (competing < 2) reason = 'liga_vacia';
   else if (teamsLeftTotal >= 3) reason = 'exodo';
 
-  if (reason) {
+  if (reason && !s.gameOver) {
     s.gameOver = { reason, year: s.year, message: GAME_OVER_MESSAGES[reason] };
     pushMail(s, {
       year: s.year,
@@ -146,4 +207,67 @@ export function evaluateBoardConfidence(s: GameState, prestigeDelta: number, int
       createdAtMatchday: 0,
     });
   }
+}
+
+// Fase 17G: commissioner action resolving an open moción de censura.
+// 'aceptar' is always available (accept destitución outright). 'gastar_pc'
+// and 'defensa_meritos' are unavailable once censureUsedInEra is true (a
+// second motion within the same era is definitive — see evaluateBoardConfidence).
+export function resolveCensureMotion(
+  prev: GameState,
+  mode: 'gastar_pc' | 'defensa_meritos' | 'aceptar',
+): GameState {
+  if (!prev.censureMotion) return prev;
+
+  if (mode === 'aceptar') {
+    const s = structuredClone(prev);
+    s.gameOver = {
+      reason: 'destitucion_confianza',
+      year: s.year,
+      message: GAME_OVER_MESSAGES.destitucion_confianza,
+    };
+    s.censureMotion = null;
+    logFederation(s, {
+      year: s.year, matchday: 0, type: 'censura',
+      title: 'Moción de censura: destitución aceptada',
+      detail: 'El comisionado acepta la destitución sin oponer defensa.',
+      value: null, teamId: null,
+    });
+    return s;
+  }
+
+  if (prev.censureUsedInEra) return prev; // definitive — only 'aceptar' works
+
+  const motion = prev.censureMotion;
+  if (mode === 'gastar_pc') {
+    if (prev.politicalCapital < 6) return prev;
+    const s = structuredClone(prev);
+    s.politicalCapital -= 6;
+    s.boardConfidence.value = 40;
+    s.censureUsedInEra = true;
+    s.censureMotion = null;
+    logFederation(s, {
+      year: s.year, matchday: 0, type: 'censura',
+      title: 'Moción de censura superada',
+      detail: 'El comisionado compra tiempo gastando 6 PC. La confianza sube a 40.',
+      value: -6, teamId: null,
+    });
+    return s;
+  }
+
+  // defensa_meritos
+  const meritOk = prev.mandates.find((m) => m.year === motion.year)?.met === true
+    || prev.eraHistory.some((e) => e.completedYear === motion.year);
+  if (!meritOk) return prev;
+  const s = structuredClone(prev);
+  s.boardConfidence.value = 35;
+  s.censureUsedInEra = true;
+  s.censureMotion = null;
+  logFederation(s, {
+    year: s.year, matchday: 0, type: 'censura',
+    title: 'Moción de censura superada por méritos',
+    detail: 'El comisionado invoca un mandato cumplido o una era completada. La junta se retracta. La confianza sube a 35.',
+    value: null, teamId: null,
+  });
+  return s;
 }

@@ -21,6 +21,9 @@ export const EXODUS_SEASONS = 2;                    // consecutive low-arraigo c
 export const INVERSION_DEMAND_PROB = 0.05;          // per-matchday chance of a stadium-investment ask
 export const ESTADIO_UPGRADE = 5_000;               // capacity added when a stadium ask is granted
 export const INVERSION_COST = 4_000_000;            // € a stadium ask costs the federation
+export const REWARD_ARRAIGO_CONTRAOFERTA = 3;        // Fase 17G: half-hearted satisfaction — half the cost, half the goodwill
+
+export type DemandResolutionMode = 'aceptar' | 'rechazar' | 'contraoferta';
 
 function playerTeams(s: GameState): Team[] {
   return s.teams.filter(
@@ -153,11 +156,14 @@ export function satisfyRescueDemand(s: GameState, teamId: number): void {
   markMailByRef(s, 'rescue_request', demand.id, 'resuelto');
 }
 
-// Attend or reject a club request from the inbox.
+// Attend, reject, or partially attend (Fase 17G) a club request from the inbox.
+// 'contraoferta' is only offered while an assembly proposal is active
+// ("una condición: el voto favorable del club en la propuesta activa, si la
+// hay") — half the cost, half the goodwill, no erosion.
 export function resolveDemand(
   prev: GameState,
   demandId: number,
-  accept: boolean,
+  mode: DemandResolutionMode,
   amount?: number,
 ): GameState {
   const existing = prev.clubDemands?.find((d) => d.id === demandId && !d.resolved);
@@ -168,42 +174,54 @@ export function resolveDemand(
   const team = s.teams.find((t) => t.id === demand.teamId);
   if (!team) return prev;
 
-  if (!accept) {
+  if (mode === 'rechazar') {
     ignoreDemand(s, demand);
     return s;
   }
 
+  if (mode === 'contraoferta' && !s.proposals.some((p) => p.status === 'en_tramite')) {
+    return prev; // no active proposal — the condition has nothing to attach to
+  }
+  const half = mode === 'contraoferta';
+
   if (demand.type === 'rescate') {
-    const inject = Math.max(0, Math.round(amount ?? demand.amount ?? 0));
+    const requested = Math.max(0, Math.round(amount ?? demand.amount ?? 0));
+    const inject = half ? Math.round(requested / 2) : requested;
     if (inject === 0 || s.treasury < inject) return prev; // can't afford
     s.treasury -= inject;
     team.treasury += inject;
     s.rescueLog.push({ year: s.year, teamId: team.id, teamName: team.name, amount: inject });
     logFederation(s, {
       year: s.year, matchday: demand.createdMatchday, type: 'rescue',
-      title: 'Rescate concedido', detail: `Atendiste la petición de ${team.name}: ${inject.toLocaleString('es-ES')} €`,
+      title: half ? 'Rescate parcial (contraoferta)' : 'Rescate concedido',
+      detail: `${half ? 'Contraoferta a' : 'Atendiste la petición de'} ${team.name}: ${inject.toLocaleString('es-ES')} €`,
       value: inject, teamId: team.id,
     });
   } else {
-    const cost = Math.max(0, Math.round(amount ?? demand.amount ?? INVERSION_COST));
+    const requested = Math.max(0, Math.round(amount ?? demand.amount ?? INVERSION_COST));
+    const cost = half ? Math.round(requested / 2) : requested;
     if (s.treasury < cost) return prev;
     s.treasury -= cost;
-    team.stadiumCapacity += ESTADIO_UPGRADE;
+    team.stadiumCapacity += half ? Math.round(ESTADIO_UPGRADE / 2) : ESTADIO_UPGRADE;
     logFederation(s, {
       year: s.year, matchday: demand.createdMatchday, type: 'sponsor_signed',
-      title: 'Inversión en estadio', detail: `Ampliaste el estadio de ${team.name} (+${ESTADIO_UPGRADE.toLocaleString('es-ES')} aforo)`,
+      title: half ? 'Inversión parcial en estadio (contraoferta)' : 'Inversión en estadio',
+      detail: `Ampliaste el estadio de ${team.name} (+${(half ? Math.round(ESTADIO_UPGRADE / 2) : ESTADIO_UPGRADE).toLocaleString('es-ES')} aforo)`,
       value: cost, teamId: team.id,
     });
   }
 
   demand.resolved = true;
   demand.satisfied = true;
-  team.arraigo = Math.min(100, team.arraigo + REWARD_ARRAIGO);
+  const reward = half ? REWARD_ARRAIGO_CONTRAOFERTA : REWARD_ARRAIGO;
+  team.arraigo = Math.min(100, team.arraigo + reward);
   markMailByRef(s, demand.type === 'rescate' ? 'rescue_request' : 'demand', demand.id, 'resuelto');
   pushMail(s, {
     year: s.year, matchday: demand.createdMatchday, category: 'aviso',
-    title: `${team.name} agradece tu apoyo`,
-    body: `Atendiste su petición. Su arraigo sube ${REWARD_ARRAIGO} puntos (ahora ${team.arraigo}).`,
+    title: half ? `${team.name} acepta a medias` : `${team.name} agradece tu apoyo`,
+    body: half
+      ? `Le ofreciste la mitad a cambio de su apoyo en la asamblea. Su arraigo sube ${reward} puntos (ahora ${team.arraigo}).`
+      : `Atendiste su petición. Su arraigo sube ${reward} puntos (ahora ${team.arraigo}).`,
     actionKind: null, refId: demand.id, teamId: team.id,
     deadlineMatchday: null, createdAtMatchday: demand.createdMatchday,
   });
