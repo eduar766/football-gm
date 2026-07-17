@@ -198,8 +198,6 @@ Season         →  Matchday    →  Match (2 teams)
 | Export/Import | Save game como JSON descargable/importable |
 | Migraciones de estado | `migrateState()` actualiza saves antiguos al esquema actual automáticamente |
 
-El diseño completo está en [`diseno-simulador-liga.md`](./diseno-simulador-liga.md) (español).
-
 ---
 
 <div align="center">
