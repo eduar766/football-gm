@@ -299,6 +299,10 @@ export function pardonFixing(prev: GameState, caseId: number): GameState {
   const t = s.teams.find((t) => t.id === c.suspectTeamId)!;
 
   t.arraigo = Math.min(100, t.arraigo + PARDON_ARRAIGO_BONUS);
+  // §5.3: the club owes you one — its president votes with the commissioner
+  // (+25 to his assembly vote score) for as long as he holds the chair.
+  const president = s.presidents.find((p) => p.teamId === t.id);
+  if (president) president.favorOwed = true;
   kase.status = 'enterrado';
   kase.leakRisk = PARDON_LEAK_RISK;
   kase.resolution = `Perdonado discretamente: ${t.name} no recibe sanción.`;

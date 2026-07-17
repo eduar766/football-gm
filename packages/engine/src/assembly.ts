@@ -42,6 +42,8 @@ import type {
 } from './types';
 
 const MAX_PENDING_PROPOSALS = 2;
+// 17D §5.3: vote-score bonus while a quietly-pardoned president holds the chair.
+const FAVOR_OWED_BONUS = 25;
 const MAX_MANUAL_REVEALS = 3;
 const BUY_VOTE_COST = 2;
 const REPROPOSE_COST = 4;
@@ -173,6 +175,7 @@ function computeVotes(state: GameState, kind: ProposalKind, p: ProposalPayload):
       + arraigoModifier(team)
       + traitModifier(trait, kind, p)
       + pledgeMemoryModifier(state, team.id, trait)
+      + (president?.favorOwed ? FAVOR_OWED_BONUS : 0) // 17D: a pardoned president votes with you
       - (president?.grudge ?? 0) / 4;
     return {
       teamId: team.id,

@@ -238,7 +238,7 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
 | `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
 | `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
-| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 23). Called once per load in `GameStateRepository`. |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 24). Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()`. Fase 17G: `Norm` gains `year`/`opposedTeamIds` (captured from the assembly proposal's `contra` voters at `applyApprovedProposal`'s `norma_nueva` branch); `breaches()` applies a ~20% stricter effective threshold for an opposing team, but only in the norm's first year (`norm.year === state.year`) — deterministic, no new RNG (the doc's own "probability" framing was in tension with its "no new RNG" constraint; resolved as a threshold tightening). |

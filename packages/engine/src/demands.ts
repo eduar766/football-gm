@@ -184,6 +184,17 @@ export function resolveDemand(
   }
   const half = mode === 'contraoferta';
 
+  // 17G (cerrado en el backlog pass): the condition is real — the club's vote
+  // on the active proposal is committed in exchange for the half-help. Same
+  // mechanic as buyVote (a bought vote always resolves 'favor'), paid in €
+  // instead of PC. First pending proposal, matching the doc's singular
+  // "la propuesta activa, si la hay".
+  if (half) {
+    const active = s.proposals.find((p) => p.status === 'en_tramite');
+    const vote = active?.votes.find((v) => v.teamId === demand.teamId);
+    if (vote && vote.final === null) vote.bought = true;
+  }
+
   if (demand.type === 'rescate') {
     const requested = Math.max(0, Math.round(amount ?? demand.amount ?? 0));
     const inject = half ? Math.round(requested / 2) : requested;

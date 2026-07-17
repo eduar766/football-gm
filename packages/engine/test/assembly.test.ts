@@ -353,3 +353,17 @@ describe('vote result lands in the mailbox (Fase 17C §4.9, cierre F17)', () => 
     expect(msg!.title).toContain(resolved.status === 'aprobada' ? 'aprobada' : 'rechazada');
   });
 });
+
+describe('favor del perdón (17D backlog pass) — a pardoned president votes with you', () => {
+  it('favorOwed adds +25 to the vote score vs the identical game without the debt', () => {
+    const base = playableGame();
+    const withFavor = structuredClone(base);
+    withFavor.presidents.find((p) => p.teamId === base.teams[0].id)!.favorOwed = true;
+
+    const a = proposeMeasure(base, 'norma_nueva', { tipo: 'tope_salarial', valor: 5_000_000 });
+    const b = proposeMeasure(withFavor, 'norma_nueva', { tipo: 'tope_salarial', valor: 5_000_000 });
+    const scoreWithout = a.proposals[0].votes.find((v) => v.teamId === base.teams[0].id)!.score;
+    const scoreWith = b.proposals[0].votes.find((v) => v.teamId === base.teams[0].id)!.score;
+    expect(scoreWith).toBe(scoreWithout + 25);
+  });
+});

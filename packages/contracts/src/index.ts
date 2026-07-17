@@ -631,8 +631,38 @@ export const ClubPresidentDto = z.object({
   trait: PresidentTrait,
   sinceYear: z.number().int(),
   grudge: z.number().int(),
+  favorOwed: z.boolean().default(false),
 });
 export type ClubPresidentDto = z.infer<typeof ClubPresidentDto>;
+
+// Fase 17A backlog pass: the club's political relationship with the
+// commissioner — pledges made to it, its assembly voting record, and its
+// demand history. All read-only projections from GameState.
+export const TeamRelationshipDto = z.object({
+  pledges: z.array(z.object({
+    // mirrors PledgeKind (declared later in this file — inline to avoid a TDZ reference)
+    kind: z.enum(['plaza_copa', 'mejora_reparto', 'exencion_norma', 'rescate_futuro']),
+    status: z.enum(['pendiente', 'cumplida', 'rota']),
+    madeYear: z.number().int(),
+    deadlineYear: z.number().int(),
+  })),
+  votes: z.array(z.object({
+    // mirrors ProposalKind (declared later in this file — inline to avoid a TDZ reference)
+    proposalKind: z.enum([
+      'norma_nueva', 'derogar_norma', 'cambio_reparto', 'copa_recurrente',
+      'expansion_division', 'cambio_formato', 'admision_acelerada',
+    ]),
+    year: z.number().int(),
+    result: z.enum(['favor', 'contra', 'indeciso']),
+    bought: z.boolean(),
+  })),
+  demands: z.array(z.object({
+    type: z.enum(['rescate', 'inversion_estadio']),
+    year: z.number().int(),
+    satisfied: z.boolean().nullable(),
+  })),
+});
+export type TeamRelationshipDto = z.infer<typeof TeamRelationshipDto>;
 
 export const RivalCommissionerDto = z.object({
   name: z.string(),
@@ -689,6 +719,8 @@ export const TeamDetail = z.object({
   isPlayerTeam: z.boolean().default(true),
   // Fase 17A: null for rival teams (only player-federation teams have one).
   president: ClubPresidentDto.nullable().default(null),
+  // Fase 17A backlog pass: political relationship history; null for rival teams.
+  relationship: TeamRelationshipDto.nullable().default(null),
   rival: z.object({
     divisionName: z.string().nullable(),
     position: z.number().int().nullable(), // current position in their own league

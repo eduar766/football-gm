@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Group,
+  Menu,
   MultiSelect,
   NumberInput,
   Paper,
@@ -25,10 +26,22 @@ import { QK } from '../query-keys';
 import type {
   AssemblyProposalDto,
   NormType,
+  PledgeKind,
   PresidentTrait,
   ProposalKind,
   ProposeMeasureRequest,
 } from '@football-gm/contracts';
+
+// Backlog pass: the full pledge menu — each entry is a concrete, verifiable
+// promise (engine's verifyPledges checks it at closeSeason). plaza_copa needs
+// a recurring cup; exencion_norma needs an active norm; the other two are
+// always available.
+export interface PledgeChoice {
+  kind: PledgeKind;
+  refId?: number;
+  amount?: number;
+  label: string;
+}
 
 const KIND_LABEL: Record<ProposalKind, string> = {
   norma_nueva: 'Nueva norma',
@@ -68,6 +81,7 @@ function ProposalCard({
   p,
   index,
   politicalCapital,
+  pledgeChoices,
   onReveal,
   onBuy,
   onPledge,
@@ -77,9 +91,10 @@ function ProposalCard({
   p: AssemblyProposalDto;
   index: number;
   politicalCapital: number;
+  pledgeChoices: PledgeChoice[];
   onReveal: (teamId: number) => void;
   onBuy: (teamId: number) => void;
-  onPledge: (teamId: number) => void;
+  onPledge: (teamId: number, choice: PledgeChoice) => void;
   onWithdraw?: () => void;
   busy?: boolean;
 }) {
@@ -158,11 +173,23 @@ function ProposalCard({
                         <IconCoin size={13} />
                       </Button>
                     </Tooltip>
-                    <Tooltip label="Prometer un rescate futuro a cambio del voto">
-                      <Button size="compact-xs" variant="light" color="orange" onClick={() => onPledge(v.teamId)}>
-                        <IconHandGrab size={13} />
-                      </Button>
-                    </Tooltip>
+                    <Menu shadow="md" width={260} position="bottom-end">
+                      <Menu.Target>
+                        <Tooltip label="Prometer algo a cambio del voto">
+                          <Button size="compact-xs" variant="light" color="orange">
+                            <IconHandGrab size={13} />
+                          </Button>
+                        </Tooltip>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Label>Libro de promesas</Menu.Label>
+                        {pledgeChoices.map((c, ci) => (
+                          <Menu.Item key={ci} onClick={() => onPledge(v.teamId, c)}>
+                            {c.label}
+                          </Menu.Item>
+                        ))}
+                      </Menu.Dropdown>
+                    </Menu>
                   </>
                 )}
                 {v.bought && <Badge size="xs" color="grape" variant="filled">comprado</Badge>}
@@ -184,6 +211,7 @@ export function AssemblyPage() {
   const teams = useQuery({ queryKey: QK.teams(id), queryFn: () => api.teams(id) });
   const norms = useQuery({ queryKey: QK.norms(id), queryFn: () => api.norms(id) });
   const negotiations = useQuery({ queryKey: QK.negotiations(id), queryFn: () => api.negotiations(id) });
+  const cups = useQuery({ queryKey: QK.cups(id), queryFn: () => api.cups(id) });
 
   const [kind, setKind] = useState<ProposalKind>('norma_nueva');
   const [normTipo, setNormTipo] = useState<NormType>('tope_plantilla');
@@ -218,11 +246,24 @@ export function AssemblyPage() {
     successMessage: 'Voto comprado',
   });
   const pledge = useMutationWithFeedback({
-    mutationFn: (vars: { proposalId: number; teamId: number }) =>
-      api.pledgeForVote(id, vars.proposalId, vars.teamId, 'rescate_futuro', undefined, 1_000_000),
+    mutationFn: (vars: { proposalId: number; teamId: number; choice: PledgeChoice }) =>
+      api.pledgeForVote(id, vars.proposalId, vars.teamId, vars.choice.kind, vars.choice.refId, vars.choice.amount),
     queryKeyToInvalidate: ['assembly'],
     successMessage: 'Promesa hecha — recuerda cumplirla',
   });
+
+  // Backlog pass: build the concrete pledge menu from current state — one
+  // entry per recurring cup (plaza_copa) and active norm (exención), plus the
+  // two always-available kinds.
+  const pledgeChoices: PledgeChoice[] = [
+    { kind: 'rescate_futuro', amount: 1_000_000, label: 'Rescate futuro garantizado (1M€)' },
+    { kind: 'mejora_reparto', label: 'Mejora de reparto (no bajará su cuota)' },
+    ...(cups.data?.cups ?? [])
+      .filter((c) => c.recurring)
+      .map((c) => ({ kind: 'plaza_copa' as const, refId: c.id, label: `Plaza en ${c.name}` })),
+    ...(norms.data?.norms ?? [])
+      .map((n) => ({ kind: 'exencion_norma' as const, refId: n.id, label: `Exención: ${NORM_TYPE_LABEL[n.tipo]}` })),
+  ];
 
   if (assembly.isLoading || !assembly.data) {
     return (
@@ -407,9 +448,10 @@ export function AssemblyPage() {
                   p={p}
                   index={i}
                   politicalCapital={a.politicalCapital}
+                  pledgeChoices={pledgeChoices}
                   onReveal={(teamId) => reveal.mutate({ proposalId: p.id, teamId })}
                   onBuy={(teamId) => buy.mutate({ proposalId: p.id, teamId })}
-                  onPledge={(teamId) => pledge.mutate({ proposalId: p.id, teamId })}
+                  onPledge={(teamId, choice) => pledge.mutate({ proposalId: p.id, teamId, choice })}
                   onWithdraw={() => withdraw.mutate(p.id)}
                   busy={withdraw.isPending}
                 />
@@ -429,6 +471,7 @@ export function AssemblyPage() {
                   p={p}
                   index={i}
                   politicalCapital={a.politicalCapital}
+                  pledgeChoices={[]}
                   onReveal={() => {}}
                   onBuy={() => {}}
                   onPledge={() => {}}

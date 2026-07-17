@@ -7,7 +7,7 @@ import { backfillEra } from './eras';
 import { makeRng } from './rng';
 import type { ClubPresident, GameState, Referee, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 23;
+export const CURRENT_SCHEMA_VERSION = 24;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -514,6 +514,19 @@ export function migrateState(state: GameState): GameState {
     }
 
     state.schemaVersion = 23;
+  }
+
+  // v23 → v24 (Fase 17 backlog pass): the pardoned-president favor. Old
+  // saves' presidents owe nothing — any pre-migration pardon predates the
+  // mechanic, so it isn't retro-credited.
+  if (v < 24) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    for (const p of gs.presidents ?? []) {
+      if (p.favorOwed === undefined) p.favorOwed = false;
+    }
+
+    state.schemaVersion = 24;
   }
 
   return state;

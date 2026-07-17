@@ -147,3 +147,24 @@ describe('exodus (Fase 14.5)', () => {
     expect(g.lowArraigoSeasons[t.id]).toBe(0);
   });
 });
+
+describe('contraoferta commits the vote (17G backlog pass)', () => {
+  it('resolving a demand via contraoferta marks the club\'s vote as bought on the active proposal', () => {
+    let g = gameWithRival(446);
+    g = startSeason(g);
+    g.teams[0].treasury = -3_000_000;
+    generateClubDemands(g, 1);
+    const demand = g.clubDemands.find((d) => !d.resolved)!;
+
+    const proposal: AssemblyProposal = {
+      id: 1, kind: 'norma_nueva', payload: { tipo: 'tope_plantilla', valor: 60 },
+      majority: 'simple', year: g.year, proposedAtMatchday: 0,
+      status: 'en_tramite', resolvedAtMatchday: null,
+      votes: [{ teamId: demand.teamId, score: -30, intention: 'contra', revealed: true, bought: false, pledgeId: null, final: null }],
+    };
+    g.proposals = [proposal];
+
+    g = resolveDemand(g, demand.id, 'contraoferta');
+    expect(g.proposals[0].votes[0].bought).toBe(true); // a bought vote always resolves 'favor'
+  });
+});

@@ -490,6 +490,16 @@ describe('commissioner actions', () => {
     const next = pardonFixing(g, kase.id);
     expect(next).toBe(g);
   });
+
+  it('pardonFixing leaves the president owing a favor (backlog pass); rotation reset covered in characters.test.ts', () => {
+    let g = playableGame();
+    const suspect = g.teams[0];
+    const kase = makeCase(g, { status: 'confirmado', suspectTeamId: suspect.id });
+    expect(g.presidents.find((p) => p.teamId === suspect.id)!.favorOwed).toBe(false);
+
+    g = pardonFixing(g, kase.id);
+    expect(g.presidents.find((p) => p.teamId === suspect.id)!.favorOwed).toBe(true);
+  });
 });
 
 describe('closeSeasonIntegrity — exposure decay/scandal roll and leak rolls', () => {

@@ -139,6 +139,11 @@ export interface ClubPresident {
   // vote intention from 17C onward; inert (stays 0) until then. Resets when
   // the president rotates.
   grudge: number;
+  // Fase 17D (§5.3, cerrado en el backlog pass): a quietly-pardoned
+  // match-fixing case leaves the president owing the commissioner a favor —
+  // +25 to his vote score for as long as HE holds the chair. Like grudge,
+  // the debt is the man's, not the institution's: resets on rotation.
+  favorOwed: boolean;
 }
 
 export interface RivalCommissioner {

@@ -15,7 +15,6 @@ import {
   callReview as engineCallReview,
   closeSeason as engineCloseSeason,
   computeStandings,
-  addNorm as engineAddNorm,
   applyImpulse as engineApplyImpulse,
   applyPointPenalties,
   cancelContract as engineCancelContract,
@@ -37,12 +36,9 @@ import {
   playerTier,
   pointPenaltiesForYear,
   postponeMatchday as enginePostponeMatchday,
-  removeNorm as engineRemoveNorm,
   resolveEvent as engineResolveEvent,
-  runLevelingLeague as engineRunLevelingLeague,
   sanctionTeam as engineSanctionTeam,
   setEconomyPolicy as engineSetEconomyPolicy,
-  setLeagueFormat as engineSetLeagueFormat,
   signContract as engineSignContract,
   startNegotiation as engineStartNegotiation,
   setNegotiationOfferValue as engineSetNegotiationOfferValue,
@@ -50,7 +46,6 @@ import {
   resolveAllPendingProposals as engineResolveAllPendingProposals,
   removePrize as engineRemovePrize,
   setCupPrize as engineSetCupPrize,
-  setLeaguePrize as engineSetLeaguePrize,
   startSeason as engineStartSeason,
   tierOf,
   wageBill,
@@ -68,7 +63,6 @@ import {
   resolveDemand as engineResolveDemand,
   preseasonChecklist,
   preseasonBlockers,
-  validateLevelingPlan,
   presidentOf,
   proposeMeasure as engineProposeMeasure,
   withdrawProposal as engineWithdrawProposal,
@@ -575,18 +569,8 @@ export class GameService {
     return { ok: true };
   }
 
-  async setLeagueFormat(
-    gameId: number,
-    format: 'ida' | 'ida_vuelta',
-  ): Promise<GameSummary> {
+  async setLeagueFormat(_gameId: number, _format: 'ida' | 'ida_vuelta'): Promise<GameSummary> {
     this.requireAssembly('cambio_formato', 'Cambiar el formato de liga ahora requiere una votación de la asamblea.');
-    return this.db.transaction(async (tx) => {
-      const state = await this.repo.loadState(gameId, tx);
-      this.assertPretemporada(state, 'cambiar el formato de la liga');
-      const next = engineSetLeagueFormat(state, format);
-      await this.repo.saveState(tx, gameId, next);
-      return this.summaryFrom(gameId, next);
-    });
   }
 
   /* ------------------------------------------------------- the loop */
@@ -610,12 +594,12 @@ export class GameService {
   }
 
   // Fase 17C: these 7 kinds of decision now require an assembly vote instead
-  // of a unilateral call. Thrown BEFORE any state is loaded/mutated. Typed as
-  // `void` rather than `never` on purpose: a `never` return makes TypeScript
-  // treat every unconditional call site's remaining method body as
-  // unreachable dead code, which cascades into spurious type errors in the
-  // (large, still logically valid) code left below each guard.
-  private requireAssembly(kind: ProposeMeasureRequest['kind'], message: string): void {
+  // of a unilateral call. Thrown BEFORE any state is loaded/mutated. Typed
+  // `never` so the always-throwing service methods below need no dead body
+  // after the guard (backlog pass: the old unreachable transaction bodies
+  // were deleted — the assembly's applyApprovedProposal in the engine is the
+  // only live path for these mutations now).
+  private requireAssembly(kind: ProposeMeasureRequest['kind'], message: string): never {
     throw new ConflictException({ requiresAssembly: true, kind, message });
   }
 
@@ -1155,70 +1139,8 @@ export class GameService {
     };
   }
 
-  async runLevelingLeague(gameId: number, plan?: LevelingPlan): Promise<StructureResponse> {
+  async runLevelingLeague(_gameId: number, _plan?: LevelingPlan): Promise<StructureResponse> {
     this.requireAssembly('expansion_division', 'Expandir divisiones ahora requiere una votación de la asamblea.');
-    return this.db.transaction(async (tx) => {
-      const state = await this.repo.loadState(gameId, tx);
-      this.assertPretemporada(state, 'celebrar la liga de nivelación');
-      if (state.treasury < 0) {
-        throw new BadRequestException(
-          'Tesorería en negativo: no puedes permitirte expandir la estructura (§5)',
-        );
-      }
-      // Fase 14.7: validate a supplied plan against the real pool for a clear 400.
-      if (plan) {
-        const poolSize = state.teams.filter(
-          (t) => t.federationId === state.playerFederationId,
-        ).length;
-        const reason = validateLevelingPlan(plan, poolSize);
-        if (reason) throw new BadRequestException(`Plan de nivelación inválido: ${reason}`);
-      }
-      const next = engineRunLevelingLeague(state, plan);
-      const map = await this.repo.engineToDbTeam(gameId, tx);
-      const leagueId = await this.playerLeagueId(gameId, tx);
-      const playerDivisionsNext = next.divisions.filter(
-        (d) => d.federationId === next.playerFederationId,
-      );
-      const divMap = await this.ensureDivisions(
-        tx,
-        gameId,
-        leagueId,
-        playerDivisionsNext,
-        next.teams,
-      );
-      for (const t of next.teams) {
-        if (t.federationId !== next.playerFederationId) continue;
-        const dbId = map.get(t.id);
-        if (dbId) {
-          await tx
-            .update(s.teams)
-            .set({
-              divisionId:
-                t.divisionOrden !== null
-                  ? (divMap.get(t.divisionOrden) ?? null)
-                  : null,
-            })
-            .where(eq(s.teams.id, dbId));
-        }
-      }
-      await this.repo.saveState(tx, gameId, next);
-      const toDto = (t: GameState['teams'][number]) => ({
-        teamId: map.get(t.id) ?? t.id,
-        name: t.name,
-        strength: t.strength,
-        arraigo: t.arraigo,
-      });
-      return {
-        divisions: playerDivisionsNext.map((d) => ({
-          orden: d.orden,
-          name: d.name,
-          teams: next.teams
-            .filter((t) => t.federationId === next.playerFederationId && t.divisionOrden === d.orden)
-            .map(toDto),
-        })),
-        pending: pendingIntegrationTeams(next).map(toDto),
-      };
-    });
   }
 
   // Suggest a random, unused club name for the create-team modal (Fase 14.2).
@@ -1512,7 +1434,38 @@ export class GameService {
 
     const enginePresident = engTeamId != null ? presidentOf(state, engTeamId) : undefined;
     const president = enginePresident
-      ? { name: enginePresident.name, trait: enginePresident.trait, sinceYear: enginePresident.sinceYear, grudge: enginePresident.grudge }
+      ? {
+          name: enginePresident.name,
+          trait: enginePresident.trait,
+          sinceYear: enginePresident.sinceYear,
+          grudge: enginePresident.grudge,
+          favorOwed: enginePresident.favorOwed,
+        }
+      : null;
+
+    // Fase 17A backlog pass: political relationship history — pledges made to
+    // this club, its assembly voting record, its demand history. Player teams only.
+    const relationship = engTeamId != null && isPlayerTeam
+      ? {
+          pledges: state.pledges
+            .filter((p) => p.teamId === engTeamId)
+            .map((p) => ({ kind: p.kind, status: p.status, madeYear: p.madeYear, deadlineYear: p.deadlineYear })),
+          votes: state.proposals
+            .filter((p) => p.status !== 'en_tramite')
+            .flatMap((p) => {
+              const v = p.votes.find((vv) => vv.teamId === engTeamId);
+              if (!v) return [];
+              return [{
+                proposalKind: p.kind,
+                year: p.year,
+                result: v.final ?? v.intention,
+                bought: v.bought,
+              }];
+            }),
+          demands: state.clubDemands
+            .filter((d) => d.teamId === engTeamId)
+            .map((d) => ({ type: d.type, year: d.year, satisfied: d.satisfied })),
+        }
       : null;
 
     const finance = engTeam && engTeam.federationId === state.playerFederationId
@@ -1554,6 +1507,7 @@ export class GameService {
       isPlayerTeam,
       rival,
       president,
+      relationship,
     };
   }
 
@@ -2649,23 +2603,8 @@ export class GameService {
     return this.prizesResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
-  async setLeaguePrize(
-    gameId: number,
-    pool: number,
-    shares: number[],
-  ): Promise<PrizesResponse> {
+  async setLeaguePrize(_gameId: number, _pool: number, _shares: number[]): Promise<PrizesResponse> {
     this.requireAssembly('cambio_reparto', 'Cambiar el reparto de la liga ahora requiere una votación de la asamblea.');
-    return this.db.transaction(async (tx) => {
-      const state = await this.repo.loadState(gameId, tx);
-      const next = engineSetLeaguePrize(state, pool, shares);
-      if (next === state) {
-        throw new BadRequestException(
-          'No se pueden definir premios fuera de pretemporada',
-        );
-      }
-      await this.repo.saveState(tx, gameId, next);
-      return this.prizesResponse(next, await this.repo.engineToDbTeam(gameId, tx));
-    });
   }
 
   async setCupPrize(
@@ -2897,26 +2836,12 @@ export class GameService {
     return this.normsResponse(state, await this.repo.engineToDbTeam(gameId));
   }
 
-  async addNorm(
-    gameId: number,
-    tipo: NormType,
-    valor: number,
-  ): Promise<NormsResponse> {
+  async addNorm(_gameId: number, _tipo: NormType, _valor: number): Promise<NormsResponse> {
     this.requireAssembly('norma_nueva', 'Crear una norma ahora requiere una votación de la asamblea.');
-    return this.db.transaction(async (tx) => {
-      const next = engineAddNorm(await this.repo.loadState(gameId, tx), tipo, valor);
-      await this.repo.saveState(tx, gameId, next);
-      return this.normsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
-    });
   }
 
-  async removeNorm(gameId: number, normId: number): Promise<NormsResponse> {
+  async removeNorm(_gameId: number, _normId: number): Promise<NormsResponse> {
     this.requireAssembly('derogar_norma', 'Derogar una norma ahora requiere una votación de la asamblea.');
-    return this.db.transaction(async (tx) => {
-      const next = engineRemoveNorm(await this.repo.loadState(gameId, tx), normId);
-      await this.repo.saveState(tx, gameId, next);
-      return this.normsResponse(next, await this.repo.engineToDbTeam(gameId, tx));
-    });
   }
 
   async sanctionTeam(

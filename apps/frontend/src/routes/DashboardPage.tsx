@@ -47,6 +47,7 @@ import { DeskPanel } from '../components/dashboard/DeskPanel';
 import { ConspiracyBanner } from '../components/dashboard/ConspiracyBanner';
 import { MandatePicker } from '../components/dashboard/MandatePicker';
 import { CensureMotionBanner } from '../components/dashboard/CensureMotionBanner';
+import { ConstituencyChart } from '../components/dashboard/ConstituencyChart';
 
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -832,6 +833,9 @@ export function DashboardPage() {
 
               {/* 11.1 — Rival league matchday results */}
               <RivalResults results={summary.data?.rivalLastMatchday ?? []} />
+
+              {/* Fase 17B backlog pass: junta + afición season-by-season */}
+              {summary.data && <ConstituencyChart summary={summary.data} />}
             </Stack>
           </Grid.Col>
         </Grid>

@@ -89,15 +89,18 @@ describe('characters (Fase 17A) — rotation at closeSeason', () => {
     expect(rate).toBeLessThan(0.16);
   });
 
-  it('a rotated president has grudge reset to 0', () => {
+  it('a rotated president has grudge and favorOwed reset', () => {
     let found = false;
     for (let seed = 1; seed <= 80; seed++) {
       const g = gameWithRival(seed);
+      // Seed every incumbent with a debt so the reset is observable on whoever rotates.
+      for (const p of g.presidents) p.favorOwed = true;
       const before = new Map(g.presidents.map((p) => [p.teamId, p.name]));
       const closed = closeOneSeason(g);
       const rotated = closed.presidents.find((p) => before.get(p.teamId) !== p.name);
       if (rotated) {
         expect(rotated.grudge).toBe(0);
+        expect(rotated.favorOwed).toBe(false);
         found = true;
         break;
       }

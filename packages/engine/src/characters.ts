@@ -31,6 +31,7 @@ export function generatePresident(rng: RngState, teamId: number, year: number): 
     trait: pickTrait(rng, PRESIDENT_TRAITS),
     sinceYear: year,
     grudge: 0,
+    favorOwed: false,
   };
 }
 
@@ -158,6 +159,7 @@ export function rotatePresidents(s: GameState): void {
     current.trait = next.trait;
     current.sinceYear = s.year;
     current.grudge = 0;
+    current.favorOwed = false; // debts (like grudges) belong to the man, not the chair
 
     logFederation(s, {
       year: s.year,

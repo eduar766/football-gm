@@ -492,7 +492,35 @@ const PRESIDENT_TRAIT_LABEL: Record<string, string> = {
   institucional: 'Institucional',
 };
 
-function PresidentBlock({ president }: { president: NonNullable<TeamDetail['president']> }) {
+const PLEDGE_KIND_LABEL: Record<string, string> = {
+  plaza_copa: 'Plaza en copa',
+  mejora_reparto: 'Mejora de reparto',
+  exencion_norma: 'Exención de norma',
+  rescate_futuro: 'Rescate garantizado',
+};
+
+const PROPOSAL_KIND_LABEL: Record<string, string> = {
+  norma_nueva: 'Norma nueva',
+  derogar_norma: 'Derogar norma',
+  cambio_reparto: 'Cambio de reparto',
+  copa_recurrente: 'Copa recurrente',
+  expansion_division: 'Expansión de división',
+  cambio_formato: 'Cambio de formato',
+  admision_acelerada: 'Admisión acelerada',
+};
+
+function PresidentBlock({
+  president,
+  relationship,
+}: {
+  president: NonNullable<TeamDetail['president']>;
+  relationship: TeamDetail['relationship'];
+}) {
+  const votes = relationship?.votes.slice(-5).reverse() ?? [];
+  const pledges = relationship?.pledges.slice(-5).reverse() ?? [];
+  const demands = relationship?.demands.slice(-5).reverse() ?? [];
+  const moodColor = president.grudge >= 50 ? 'red' : president.grudge >= 20 ? 'orange' : 'teal';
+
   return (
     <Box mt="xl">
       <Group gap="xs" mb="xs">
@@ -504,9 +532,71 @@ function PresidentBlock({ president }: { president: NonNullable<TeamDetail['pres
       >
         <Group justify="space-between" wrap="nowrap">
           <Text size="sm" fw={600}>{president.name}</Text>
-          <Badge size="xs" variant="light" color="yellow">{PRESIDENT_TRAIT_LABEL[president.trait] ?? president.trait}</Badge>
+          <Group gap={4} wrap="nowrap">
+            <Badge size="xs" variant="light" color="yellow">{PRESIDENT_TRAIT_LABEL[president.trait] ?? president.trait}</Badge>
+            {president.favorOwed && (
+              <Badge size="xs" variant="light" color="grape" title="Te debe un favor: su voto en la asamblea te favorece mientras siga en el cargo">
+                Te debe una
+              </Badge>
+            )}
+          </Group>
         </Group>
-        <Text size="xs" c="dimmed" mt={2}>Presidente desde {president.sinceYear}</Text>
+        <Group justify="space-between" mt={2}>
+          <Text size="xs" c="dimmed">Presidente desde {president.sinceYear}</Text>
+          <Badge size="xs" variant="outline" color={moodColor}>
+            {president.grudge >= 50 ? 'Resentido' : president.grudge >= 20 ? 'Molesto' : 'Sin rencor'}
+          </Badge>
+        </Group>
+
+        {(pledges.length > 0 || votes.length > 0 || demands.length > 0) && (
+          <Stack gap={6} mt="sm">
+            {pledges.length > 0 && (
+              <Box>
+                <Text size="xs" fw={700} c="dimmed">Promesas</Text>
+                {pledges.map((p, i) => (
+                  <Group key={i} gap={6} wrap="nowrap">
+                    <Badge
+                      size="xs"
+                      variant="dot"
+                      color={p.status === 'cumplida' ? 'green' : p.status === 'rota' ? 'red' : 'yellow'}
+                    >
+                      {p.status}
+                    </Badge>
+                    <Text size="xs">{PLEDGE_KIND_LABEL[p.kind] ?? p.kind} (año {p.madeYear}, vence {p.deadlineYear})</Text>
+                  </Group>
+                ))}
+              </Box>
+            )}
+            {votes.length > 0 && (
+              <Box>
+                <Text size="xs" fw={700} c="dimmed">Votos en la asamblea</Text>
+                {votes.map((v, i) => (
+                  <Group key={i} gap={6} wrap="nowrap">
+                    <Badge size="xs" variant="dot" color={v.result === 'favor' ? 'green' : v.result === 'contra' ? 'red' : 'gray'}>
+                      {v.result}
+                    </Badge>
+                    <Text size="xs">
+                      {PROPOSAL_KIND_LABEL[v.proposalKind] ?? v.proposalKind} (año {v.year}){v.bought ? ' · voto pactado' : ''}
+                    </Text>
+                  </Group>
+                ))}
+              </Box>
+            )}
+            {demands.length > 0 && (
+              <Box>
+                <Text size="xs" fw={700} c="dimmed">Peticiones</Text>
+                {demands.map((d, i) => (
+                  <Group key={i} gap={6} wrap="nowrap">
+                    <Badge size="xs" variant="dot" color={d.satisfied === true ? 'green' : d.satisfied === false ? 'red' : 'gray'}>
+                      {d.satisfied === true ? 'atendida' : d.satisfied === false ? 'ignorada' : 'abierta'}
+                    </Badge>
+                    <Text size="xs">{d.type === 'rescate' ? 'Rescate económico' : 'Inversión en estadio'} (año {d.year})</Text>
+                  </Group>
+                ))}
+              </Box>
+            )}
+          </Stack>
+        )}
       </Box>
     </Box>
   );
@@ -794,7 +884,7 @@ export function TeamDetailPage() {
           )}
 
           {/* Presidency (Fase 17A) — player teams only */}
-          {t.president && <PresidentBlock president={t.president} />}
+          {t.president && <PresidentBlock president={t.president} relationship={t.relationship} />}
         </Card>
       </Grid.Col>
 

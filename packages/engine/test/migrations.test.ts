@@ -306,3 +306,26 @@ describe('migrateState v22 -> v23 (Fase 17G: mandatos negociables)', () => {
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v23 -> v24 (Fase 17 backlog: favor del perdón)', () => {
+  it('backfills favorOwed=false on every president of an old save', () => {
+    const g = createGame(218, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    for (const p of legacy.presidents) delete p.favorOwed;
+    legacy.schemaVersion = 23;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(24);
+    expect(migrated.presidents.every((p) => p.favorOwed === false)).toBe(true);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(219, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});
