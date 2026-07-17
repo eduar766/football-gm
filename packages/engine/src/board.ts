@@ -26,6 +26,7 @@ const GAME_OVER_MESSAGES: Record<GameOverReason, string> = {
   exodo: 'Demasiados clubes han abandonado la federación bajo tu mando. Estás fuera.',
   mandatos: 'Has incumplido tres mandatos consecutivos de la junta. Se acabó.',
   liga_vacia: 'La liga se ha quedado sin equipos suficientes para competir. Fin del proyecto.',
+  escision: 'La mitad de la primera división se ha escindido para fundar la Superliga. La federación no sobrevive al cisma.',
 };
 
 // Called at closeSeason (before the year increment) with the season's prestige

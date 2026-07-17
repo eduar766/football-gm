@@ -7,7 +7,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { AddNormRequest, ResolveEventRequest, ResolveCaseRequest, SanctionRequest } from '@football-gm/contracts';
+import {
+  AddNormRequest,
+  ResolveEventRequest,
+  ResolveCaseRequest,
+  SanctionRequest,
+  ResolveConspiracyActionRequest,
+} from '@football-gm/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GameOwnerGuard } from './game-owner.guard';
@@ -73,5 +79,18 @@ export class GovernanceController {
     @Body(new ZodValidationPipe(ResolveCaseRequest)) body: ResolveCaseRequest,
   ) {
     return this.games.resolveCase(id, caseId, body);
+  }
+
+  @Get(':id/conspiracy')
+  conspiracy(@Param('id', ParseIntPipe) id: number) {
+    return this.games.getConspiracy(id);
+  }
+
+  @Post(':id/conspiracy/resolve')
+  resolveConspiracy(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(ResolveConspiracyActionRequest)) body: ResolveConspiracyActionRequest,
+  ) {
+    return this.games.resolveConspiracyAction(id, body);
   }
 }

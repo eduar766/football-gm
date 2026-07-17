@@ -288,7 +288,7 @@ export const SeasonReportBriefDto = z.object({
     'prestige_snapshot', 'sponsor_signed', 'negotiation_started', 'negotiation_effective',
     'team_created', 'team_left', 'rescue', 'norm_created', 'sanction', 'mandate_result', 'title',
     'president_change', 'political_capital', 'assembly_result', 'pledge_result',
-    'integrity_case', 'scandal',
+    'integrity_case', 'scandal', 'conspiracy',
   ]), // mirrors FederationLogType
   title: z.string(),
   detail: z.string(),
@@ -383,6 +383,7 @@ export const GameOverReason = z.enum([
   'exodo',
   'mandatos',
   'liga_vacia',
+  'escision',
 ]);
 export type GameOverReason = z.infer<typeof GameOverReason>;
 
@@ -416,6 +417,13 @@ export type OpinionEntryDto = z.infer<typeof OpinionEntryDto>;
 export const ExposureLevel = z.enum(['tranquilo', 'murmullos', 'prensa_pregunta']);
 export type ExposureLevel = z.infer<typeof ExposureLevel>;
 
+// Fase 17F: declared here (ahead of GameSummary) for the same TDZ reason as
+// ExposureLevel above. null on GameSummary means either no conspiracy is
+// active or it's still in 'rumor' — by design, the dashboard badge only
+// lights up from 'organizada' onward (narrative signals carry 'rumor').
+export const ConspiracyPhase = z.enum(['rumor', 'organizada', 'ultimatum', 'desactivada', 'consumada']);
+export type ConspiracyPhase = z.infer<typeof ConspiracyPhase>;
+
 export const GameSummary = z.object({
   id: Id,
   name: z.string(),
@@ -432,6 +440,7 @@ export const GameSummary = z.object({
   pendingProposalsCount: z.number().int().default(0),
   openIntegrityCasesCount: z.number().int().default(0),
   exposureLevel: ExposureLevel.default('tranquilo'),
+  conspiracyPhase: ConspiracyPhase.nullable().default(null),
   unreadMailCount: z.number().int().default(0),
   boardConfidence: BoardConfidenceDto.default({ value: 60, history: [] }),
   publicOpinion: z.number().int().default(50),
@@ -891,6 +900,7 @@ export const FederationLogType = z.enum([
   'pledge_result',
   'integrity_case',
   'scandal',
+  'conspiracy',
 ]);
 export type FederationLogType = z.infer<typeof FederationLogType>;
 
@@ -916,7 +926,7 @@ export const MailboxCategory = z.enum(['peticion', 'evento', 'aviso', 'hito', 'f
 export type MailboxCategory = z.infer<typeof MailboxCategory>;
 export const MailboxStatus = z.enum(['sin_leer', 'leido', 'resuelto', 'caducado']);
 export type MailboxStatus = z.infer<typeof MailboxStatus>;
-export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event', 'integrity_case']);
+export const MailboxActionKind = z.enum(['rescue_request', 'demand', 'event', 'integrity_case', 'conspiracy']);
 export type MailboxActionKind = z.infer<typeof MailboxActionKind>;
 
 export const MailboxMessageDto = z.object({
@@ -1724,6 +1734,43 @@ export const SetDeskDecisionsRequest = z.object({
   pressAnswer: PressAnswer.nullable().optional(),
 });
 export type SetDeskDecisionsRequest = z.infer<typeof SetDeskDecisionsRequest>;
+
+/* --------------------------------------------------- conspiracy (Fase 17F) */
+// ConspiracyPhase is declared earlier, right before GameSummary — see there.
+
+export const ConspiracyDemandKind = z.enum([
+  'mejora_reparto_grandes', 'plazas_copa_garantizadas', 'derogar_norma', 'inversion_estadios',
+]);
+export type ConspiracyDemandKind = z.infer<typeof ConspiracyDemandKind>;
+
+export const ConspiracyDemandDto = z.object({
+  kind: ConspiracyDemandKind,
+  met: z.boolean(),
+});
+export type ConspiracyDemandDto = z.infer<typeof ConspiracyDemandDto>;
+
+export const ConspiracyDto = z.object({
+  phase: ConspiracyPhase,
+  memberTeamIds: z.array(Id),
+  memberTeamNames: z.array(z.string()),
+  ringleaderTeamId: Id,
+  ringleaderTeamName: z.string(),
+  deadlineYear: z.number().int().nullable(),
+  demands: z.array(ConspiracyDemandDto),
+});
+export type ConspiracyDto = z.infer<typeof ConspiracyDto>;
+
+// conspiracy is null when there's no active conspiracy, or it's still in
+// 'rumor' — that phase has no dedicated UI by design (narrative signals only).
+export const ConspiracyResponse = z.object({
+  conspiracy: ConspiracyDto.nullable(),
+});
+export type ConspiracyResponse = z.infer<typeof ConspiracyResponse>;
+
+export const ResolveConspiracyActionRequest = z.object({
+  action: z.literal('expulsar_cabecilla'),
+});
+export type ResolveConspiracyActionRequest = z.infer<typeof ResolveConspiracyActionRequest>;
 
 export const CupMatchDto = z.object({
   homeTeamId: z.number().int(),

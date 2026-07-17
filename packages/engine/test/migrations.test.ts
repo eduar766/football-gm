@@ -219,3 +219,28 @@ describe('migrateState v20 -> v21 (Fase 17E: el despacho semanal)', () => {
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v21 -> v22 (Fase 17F: la conspiración de la Superliga)', () => {
+  it('backfills a null conspiracy and empty history on an old save', () => {
+    const g = createGame(212, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.conspiracy;
+    delete legacy.conspiracyHistory;
+    legacy.schemaVersion = 21;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(22);
+    expect(migrated.conspiracy).toBeNull();
+    expect(migrated.conspiracyHistory).toEqual([]);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(213, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

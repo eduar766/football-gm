@@ -6,7 +6,7 @@ import { generateReferee } from './desk';
 import { makeRng } from './rng';
 import type { ClubPresident, GameState, Referee, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 21;
+export const CURRENT_SCHEMA_VERSION = 22;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -459,6 +459,17 @@ export function migrateState(state: GameState): GameState {
     if (gs.consecutiveEvasions === undefined) gs.consecutiveEvasions = 0;
 
     state.schemaVersion = 21;
+  }
+
+  // v21 → v22 (Fase 17F): la conspiración de la Superliga. Old saves start
+  // with no conspiracy in progress and an empty history.
+  if (v < 22) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (gs.conspiracy === undefined) gs.conspiracy = null;
+    if (!gs.conspiracyHistory) gs.conspiracyHistory = [];
+
+    state.schemaVersion = 22;
   }
 
   return state;

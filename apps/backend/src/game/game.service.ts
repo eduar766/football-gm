@@ -81,6 +81,7 @@ import {
   pardonFixing as enginePardonFixing,
   deskInbox as engineDeskInbox,
   setDeskDecisions as engineSetDeskDecisions,
+  expelRingleader as engineExpelRingleader,
   type DeskDecisions,
   type GameState,
 } from '@football-gm/engine';
@@ -128,6 +129,8 @@ import type {
   ResolveCaseRequest,
   DeskInboxResponse,
   SetDeskDecisionsRequest,
+  ConspiracyResponse,
+  ResolveConspiracyActionRequest,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -228,6 +231,7 @@ export class GameService {
         (c) => c.status === 'abierto' || c.status === 'investigando' || c.status === 'confirmado',
       ).length,
       exposureLevel: this.exposureLevelFor(state),
+      conspiracyPhase: this.conspiracyPhaseFor(state),
       unreadMailCount: unreadMailCount(state),
       boardConfidence: state.boardConfidence ?? { value: 60, history: [] },
       publicOpinion: state.publicOpinion ?? 50,
@@ -2429,6 +2433,56 @@ export class GameService {
       await this.repo.saveState(tx, gameId, next);
       const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       return this.deskInboxResponse(next, engToDb);
+    });
+  }
+
+  /* ------------------------------------- conspiracy (Fase 17F) */
+
+  // null while there's no conspiracy or it's still in 'rumor' — by design
+  // that phase has no dedicated UI, only narrative signals (mailbox/log).
+  private conspiracyPhaseFor(state: GameState) {
+    if (!state.conspiracy || state.conspiracy.phase === 'rumor') return null;
+    return state.conspiracy.phase;
+  }
+
+  private conspiracyResponse(state: GameState, engToDb: Map<number, number>): ConspiracyResponse {
+    const c = state.conspiracy;
+    if (!c || c.phase === 'rumor') return { conspiracy: null };
+    const teamName = new Map(state.teams.map((t) => [t.id, t.name]));
+    return {
+      conspiracy: {
+        phase: c.phase,
+        memberTeamIds: c.memberTeamIds.map((id) => engToDb.get(id) ?? id),
+        memberTeamNames: c.memberTeamIds.map((id) => teamName.get(id) ?? '—'),
+        ringleaderTeamId: engToDb.get(c.ringleaderTeamId) ?? c.ringleaderTeamId,
+        ringleaderTeamName: teamName.get(c.ringleaderTeamId) ?? '—',
+        deadlineYear: c.deadlineYear || null,
+        demands: c.demands.map((d) => ({ kind: d.kind, met: d.met })),
+      },
+    };
+  }
+
+  async getConspiracy(gameId: number): Promise<ConspiracyResponse> {
+    const state = await this.repo.loadState(gameId);
+    const engToDb = await this.repo.engineToDbTeam(gameId);
+    return this.conspiracyResponse(state, engToDb);
+  }
+
+  // body only ever carries the single 'expulsar_cabecilla' action today — kept
+  // as a parameter (validated by the zod schema at the controller) so the
+  // signature doesn't need to change if a second conspiracy action arrives.
+  async resolveConspiracyAction(gameId: number, _body: ResolveConspiracyActionRequest): Promise<ConspiracyResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const next = engineExpelRingleader(state);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo expulsar al cabecilla (no hay conspiración pública activa)',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
+      return this.conspiracyResponse(next, engToDb);
     });
   }
 

@@ -61,6 +61,7 @@ export function MailboxPage() {
     if (m.status === 'sin_leer') markRead.mutate(m.id);
     if (m.actionKind === 'event') navigate({ to: '/games/$gameId/events', params: { gameId } });
     if (m.actionKind === 'integrity_case') navigate({ to: '/games/$gameId/norms', params: { gameId } });
+    if (m.actionKind === 'conspiracy') navigate({ to: '/games/$gameId', params: { gameId } });
   };
 
   return (

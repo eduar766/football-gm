@@ -6,6 +6,7 @@ import { IconBuilding, IconCrown, IconTrophy, IconUserPlus } from '@tabler/icons
 import { api } from '../api';
 import { useMutationWithFeedback } from '../useMutationWithFeedback';
 import { QK } from '../query-keys';
+import { ConspiracyBanner } from '../components/dashboard/ConspiracyBanner';
 
 const COMMISSIONER_TRAIT_LABEL: Record<string, string> = {
   agresivo: 'Agresivo',
@@ -80,6 +81,7 @@ export function FederationPage() {
 
   return (
     <div className="page-enter">
+      {f.isPlayer && <ConspiracyBanner gameId={gameId} />}
       <Card
         p="xl"
         radius="lg"

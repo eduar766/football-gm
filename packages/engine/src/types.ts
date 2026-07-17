@@ -919,6 +919,11 @@ export interface GameState {
   primetimeDrought: Record<number, number>; // teamId → consecutive matchdays not chosen
   primetimeSeasonBonus: number; // accumulates each matchday, liquidated by processEconomy at closeSeason
   consecutiveEvasions: number; // resets on institucional/populista
+  // Fase 17F: la conspiración de la Superliga — the dark mirror of adhesion.
+  // Reuses politicsRng exclusively (no new stream). At most one conspiracy
+  // active at a time; resolved/consummated ones move to conspiracyHistory.
+  conspiracy: Conspiracy | null;
+  conspiracyHistory: Conspiracy[];
 }
 
 // Fase 17E: referee pool for hot matches (derby or a direct title/relegation
@@ -1106,13 +1111,45 @@ export interface SeasonReport {
   briefs: { type: FederationLogType; title: string; detail: string; teamId: number | null }[];
 }
 
+// Fase 17F: la conspiración de la Superliga — a late-game dark mirror of
+// adhesion. Neglected big clubs (low arraigo, top-quartile strength) plot to
+// leave and join/form a rival superliga. One transition per closeSeason:
+// rumor (undiscoverable except via narrative signals) -> organizada (named,
+// appeasable by raising arraigo) -> ultimatum (concrete demands, a deadline)
+// -> desactivada (appeased or demands met) | consumada (members leave for
+// the rival federation with the highest coefficient willing to take them).
+export type ConspiracyPhase = 'rumor' | 'organizada' | 'ultimatum' | 'desactivada' | 'consumada';
+
+export type ConspiracyDemandKind =
+  | 'mejora_reparto_grandes'   // liga prize pool must grow >=15% vs. baseline
+  | 'plazas_copa_garantizadas' // every member must sit in a recurring cup's participants
+  | 'derogar_norma'            // a specific norm must be repealed
+  | 'inversion_estadios';      // members' combined stadium capacity must grow
+
+export interface ConspiracyDemand {
+  kind: ConspiracyDemandKind;
+  refId: number | null;    // normId (derogar_norma) / cupId (plazas_copa_garantizadas)
+  baseline: number | null; // liga pool / combined stadium capacity at ultimatum start
+  met: boolean;
+}
+
+export interface Conspiracy {
+  phase: ConspiracyPhase;
+  memberTeamIds: number[];
+  ringleaderTeamId: number;
+  startedYear: number;
+  demands: ConspiracyDemand[];
+  deadlineYear: number; // set when entering 'ultimatum'; 0 until then
+}
+
 // Fase 14.8: board confidence + defeat (destitution).
 export type GameOverReason =
   | 'destitucion_confianza'
   | 'quiebra'
   | 'exodo'
   | 'mandatos'
-  | 'liga_vacia';
+  | 'liga_vacia'
+  | 'escision';
 
 export interface BoardConfidenceEntry {
   year: number;
@@ -1150,7 +1187,7 @@ export interface ClubDemand {
 // Fase 14.4: Commissioner inbox message.
 export type MailboxCategory = 'peticion' | 'evento' | 'aviso' | 'hito' | 'financiero';
 export type MailboxStatus = 'sin_leer' | 'leido' | 'resuelto' | 'caducado';
-export type MailboxActionKind = 'rescue_request' | 'demand' | 'event' | 'integrity_case';
+export type MailboxActionKind = 'rescue_request' | 'demand' | 'event' | 'integrity_case' | 'conspiracy';
 
 export interface MailboxMessage {
   id: number;
@@ -1186,7 +1223,8 @@ export type FederationLogType =
   | 'assembly_result'      // a proposal was approved/rejected by the assembly (Fase 17C)
   | 'pledge_result'        // a pledge was fulfilled/broken (Fase 17C)
   | 'integrity_case'       // a match-fixing case was resolved or leaked (Fase 17D)
-  | 'scandal';             // an institutional scandal fired at season close (Fase 17D)
+  | 'scandal'              // an institutional scandal fired at season close (Fase 17D)
+  | 'conspiracy';          // Superliga conspiracy lifecycle event (Fase 17F)
 
 export interface FederationLogEntry {
   id: number;

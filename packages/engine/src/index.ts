@@ -163,3 +163,6 @@ export {
 // ── Desk (Fase 17E) ────────────────────────────────────────────────────────────
 export { deskInbox, setDeskDecisions } from './desk';
 export type { DeskFixtureDto, DeskInboxResult } from './desk';
+
+// ── Conspiracy (Fase 17F) ──────────────────────────────────────────────────────
+export { expelRingleader } from './conspiracy';

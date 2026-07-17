@@ -206,6 +206,19 @@ describe('desk (Fase 17E)', () => {
   });
 });
 
+describe('conspiracy (Fase 17F)', () => {
+  it('a player-less game never starts a conspiracy across seasons (golden guard)', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 6);
+        expect(g.conspiracy).toBeNull();
+        expect(g.conspiracyHistory).toEqual([]);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

@@ -39,6 +39,7 @@ import { resolveAllPendingProposals } from './assembly';
 import { verifyPledges } from './pledges';
 import { closeSeasonIntegrity, detectAndSpawnCases, registerImpulseExposure, resolveInvestigation } from './integrity';
 import { applyDesk, generateReferee } from './desk';
+import { advanceConspiracy } from './conspiracy';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -399,6 +400,8 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     primetimeDrought: {},
     primetimeSeasonBonus: 0,
     consecutiveEvasions: 0,
+    conspiracy: null,
+    conspiracyHistory: [],
   };
 }
 
@@ -1249,6 +1252,17 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     priority: 167,
     run(s) {
       Object.assign(s, resolveAllPendingProposals(s));
+    },
+  },
+  {
+    // Fase 17F: la conspiración de la Superliga. Runs after pledges are
+    // verified (165/167 — broken pledges this year feed the aggravating-
+    // factor check) and before opinion/confidence (175/240, which read its
+    // consequences). Gated on players.length inside → golden-safe.
+    name: 'advance-conspiracy',
+    priority: 168,
+    run(s) {
+      advanceConspiracy(s);
     },
   },
   {

@@ -41,6 +41,7 @@ import type {
   ResolveCaseAction,
   DeskInboxResponse,
   SetDeskDecisionsRequest,
+  ConspiracyResponse,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -252,6 +253,12 @@ export const api = {
     req<IntegrityResponse>(`/games/${id}/integrity/cases/${caseId}/resolve`, {
       method: 'POST',
       body: JSON.stringify({ action, spendPcForDiscount }),
+    }),
+  conspiracy: (id: number) => req<ConspiracyResponse>(`/games/${id}/conspiracy`),
+  expelRingleader: (id: number) =>
+    req<ConspiracyResponse>(`/games/${id}/conspiracy/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'expulsar_cabecilla' }),
     }),
   events: (id: number) => req<EventsResponse>(`/games/${id}/events`),
   resolveEvent: (id: number, eventId: number, action: EventAction) =>

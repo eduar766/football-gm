@@ -44,6 +44,7 @@ import { MatchReports } from '../components/dashboard/MatchReports';
 import { RivalResults } from '../components/dashboard/RivalResults';
 import { SeasonNewspaper } from '../components/SeasonNewspaper';
 import { DeskPanel } from '../components/dashboard/DeskPanel';
+import { ConspiracyBanner } from '../components/dashboard/ConspiracyBanner';
 
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -437,6 +438,9 @@ export function DashboardPage() {
                 </Box>
               )}
             </Group>
+
+            {/* La conspiración de la Superliga (Fase 17F): only renders from phase 'organizada' onward */}
+            {!over && <ConspiracyBanner gameId={gameId} />}
 
             {/* El despacho (Fase 17E): optional per-matchday flavor, auto-resolves if ignored */}
             {!over && phase === 'temporada' && <DeskPanel gameId={gameId} />}
