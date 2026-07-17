@@ -159,3 +159,7 @@ export {
   sanctionFixing,
   pardonFixing,
 } from './integrity';
+
+// ── Desk (Fase 17E) ────────────────────────────────────────────────────────────
+export { deskInbox, setDeskDecisions } from './desk';
+export type { DeskFixtureDto, DeskInboxResult } from './desk';

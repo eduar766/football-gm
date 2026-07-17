@@ -1672,6 +1672,59 @@ export const ResolveCaseRequest = z.object({
 });
 export type ResolveCaseRequest = z.infer<typeof ResolveCaseRequest>;
 
+/* -------------------------------------------------------- desk (Fase 17E) */
+
+export const RefereeTrait = z.enum(['estricto', 'permisivo', 'estrella', 'novato']);
+export type RefereeTrait = z.infer<typeof RefereeTrait>;
+
+export const RefereeDto = z.object({
+  id: Id,
+  name: z.string(),
+  trait: RefereeTrait,
+  hotMatchesClean: z.number().int(),
+  lastHotMatchday: z.number().int(),
+});
+export type RefereeDto = z.infer<typeof RefereeDto>;
+
+export const DeskFixtureDto = z.object({
+  homeId: Id,
+  homeName: z.string(),
+  awayId: Id,
+  awayName: z.string(),
+});
+export type DeskFixtureDto = z.infer<typeof DeskFixtureDto>;
+
+export const PressAnswer = z.enum(['institucional', 'populista', 'evasiva']);
+export type PressAnswer = z.infer<typeof PressAnswer>;
+
+const DeskMatchRef = z.object({ homeId: Id, awayId: Id });
+const DeskRefereeAssignment = z.object({ homeId: Id, awayId: Id, refereeId: Id });
+
+export const DeskDecisionsDto = z.object({
+  matchday: z.number().int(),
+  primetimeMatch: DeskMatchRef.nullable(),
+  refereeAssignments: z.array(DeskRefereeAssignment),
+  pressAnswer: PressAnswer.nullable(),
+});
+export type DeskDecisionsDto = z.infer<typeof DeskDecisionsDto>;
+
+export const DeskInboxResponse = z.object({
+  matchday: z.number().int(),
+  primetimeCandidates: z.array(DeskFixtureDto),
+  hotMatches: z.array(DeskFixtureDto),
+  availableReferees: z.array(RefereeDto),
+  pressQuestionEligible: z.boolean(),
+  pending: DeskDecisionsDto.nullable(),
+});
+export type DeskInboxResponse = z.infer<typeof DeskInboxResponse>;
+
+export const SetDeskDecisionsRequest = z.object({
+  primetimeMatch: DeskMatchRef.nullable().optional(),
+  refereeAssignments: z.array(DeskRefereeAssignment).optional(),
+  pressAnswer: PressAnswer.nullable().optional(),
+});
+export type SetDeskDecisionsRequest = z.infer<typeof SetDeskDecisionsRequest>;
+
 export const CupMatchDto = z.object({
   homeTeamId: z.number().int(),
   homeTeamName: z.string(),

@@ -43,6 +43,7 @@ import { HeadlinesFeed } from '../components/dashboard/HeadlinesFeed';
 import { MatchReports } from '../components/dashboard/MatchReports';
 import { RivalResults } from '../components/dashboard/RivalResults';
 import { SeasonNewspaper } from '../components/SeasonNewspaper';
+import { DeskPanel } from '../components/dashboard/DeskPanel';
 
 export function DashboardPage() {
   const { gameId } = useParams({ strict: false }) as { gameId: string };
@@ -436,6 +437,9 @@ export function DashboardPage() {
                 </Box>
               )}
             </Group>
+
+            {/* El despacho (Fase 17E): optional per-matchday flavor, auto-resolves if ignored */}
+            {!over && phase === 'temporada' && <DeskPanel gameId={gameId} />}
 
             {/* Primary actions row */}
             <Group>

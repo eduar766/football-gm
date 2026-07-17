@@ -136,6 +136,28 @@ export function maybeSpawnEvent(s: GameState, matchday: number): void {
   mailForEvent(s, event);
 }
 
+// Fase 17E: a referee-linked polémica, spawned by desk.ts from deskRng (never
+// eventsRng) when a hot match's assigned referee rolls unlucky. Reuses the
+// existing arbitraje_dudoso event shape/mailbox flow — the referee never
+// touches the match result, only this spawn probability.
+export function spawnRefereeEvent(s: GameState, matchday: number, teamId: number): void {
+  const teamName = s.teams.find((t) => t.id === teamId)?.name ?? null;
+  const event: GameEvent = {
+    id: s.nextEventId++,
+    year: s.year,
+    matchday,
+    tipo: 'arbitraje_dudoso',
+    status: 'pendiente',
+    teamId,
+    message: buildMessage('arbitraje_dudoso', teamName),
+    resolvedAction: null,
+    severity: SEVERITY_MAP.arbitraje_dudoso,
+    chainedFromId: null,
+  };
+  s.events.push(event);
+  mailForEvent(s, event);
+}
+
 function mirrorPlayerPrestige(s: GameState): void {
   const pf = s.federations.find((f) => f.id === s.playerFederationId);
   if (pf) pf.prestige = s.prestige;

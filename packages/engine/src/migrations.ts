@@ -2,9 +2,11 @@ import { CONFEDERATIONS } from './seed-data';
 import { divisionName } from './structure';
 import { generatePotencial } from './talent';
 import { generatePresident, generateRivalCommissioner } from './characters';
-import type { ClubPresident, GameState, RivalCommissioner } from './types';
+import { generateReferee } from './desk';
+import { makeRng } from './rng';
+import type { ClubPresident, GameState, Referee, RivalCommissioner } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 20;
+export const CURRENT_SCHEMA_VERSION = 21;
 
 /**
  * Applies all schema patches needed to bring an old serialized GameState up to
@@ -436,6 +438,27 @@ export function migrateState(state: GameState): GameState {
     if (!gs.impulseFavorCounts) gs.impulseFavorCounts = {};
 
     state.schemaVersion = 20;
+  }
+
+  // v20 → v21 (Fase 17E): el despacho semanal — prime time, árbitros,
+  // prensa. Old saves get a fresh 8-referee pool (one-shot RNG, same seed
+  // constant as createGame) and neutral desk counters.
+  if (v < 21) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gs = state as any;
+    if (!gs.referees) {
+      const refereeSeedRng = makeRng((state.seed ^ 0x27d4eb2f) >>> 0);
+      let nextRefereeId = 1;
+      const referees: Referee[] = Array.from({ length: 8 }, () => generateReferee(refereeSeedRng, nextRefereeId++));
+      gs.referees = referees;
+      gs.nextRefereeId = nextRefereeId;
+    }
+    if (gs.deskPending === undefined) gs.deskPending = null;
+    if (!gs.primetimeDrought) gs.primetimeDrought = {};
+    if (gs.primetimeSeasonBonus === undefined) gs.primetimeSeasonBonus = 0;
+    if (gs.consecutiveEvasions === undefined) gs.consecutiveEvasions = 0;
+
+    state.schemaVersion = 21;
   }
 
   return state;

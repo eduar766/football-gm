@@ -186,3 +186,36 @@ describe('migrateState v19 -> v20 (Fase 17D: escándalos e integridad)', () => {
     expect(JSON.stringify(migrated)).toBe(before);
   });
 });
+
+describe('migrateState v20 -> v21 (Fase 17E: el despacho semanal)', () => {
+  it('backfills an 8-referee pool and neutral desk counters on an old save', () => {
+    const g = createGame(210, { teams: [{ name: 'Legacy FC', strength: 50 }] });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = structuredClone(g) as any;
+    delete legacy.referees;
+    delete legacy.nextRefereeId;
+    delete legacy.deskPending;
+    delete legacy.primetimeDrought;
+    delete legacy.primetimeSeasonBonus;
+    delete legacy.consecutiveEvasions;
+    legacy.schemaVersion = 20;
+
+    const migrated = migrateState(legacy as GameState);
+
+    expect(migrated.schemaVersion).toBeGreaterThanOrEqual(21);
+    expect(migrated.referees).toHaveLength(8);
+    expect(migrated.nextRefereeId).toBe(9);
+    expect(migrated.deskPending).toBeNull();
+    expect(migrated.primetimeDrought).toEqual({});
+    expect(migrated.primetimeSeasonBonus).toBe(0);
+    expect(migrated.consecutiveEvasions).toBe(0);
+  });
+
+  it('is a no-op on an already-current save', () => {
+    const g = createGame(211, { teams: [{ name: 'X FC', strength: 50 }] });
+    const before = JSON.stringify(g);
+    const migrated = migrateState(structuredClone(g));
+    expect(JSON.stringify(migrated)).toBe(before);
+  });
+});

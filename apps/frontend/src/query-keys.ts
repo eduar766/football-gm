@@ -26,5 +26,6 @@ export const QK = {
   seasonReports: (id: number) => ['seasonReports', id],
   assembly: (id: number) => ['assembly', id],
   integrity: (id: number) => ['integrity', id],
+  desk: (id: number) => ['desk', id],
   games: () => ['games'],
 } as const;

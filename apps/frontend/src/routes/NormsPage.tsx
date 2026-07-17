@@ -39,6 +39,45 @@ const TIPO_LABEL: Record<NormType, string> = {
 const formatValor = (tipo: NormType, valor: number) =>
   tipo === 'tope_salarial' || tipo === 'tope_deficit' ? money(valor) : String(valor);
 
+const REFEREE_TRAIT_LABEL: Record<string, string> = {
+  estricto: 'Estricto',
+  permisivo: 'Permisivo',
+  estrella: 'Estrella',
+  novato: 'Novato',
+};
+
+function RefereeTable({ gameId }: { gameId: string }) {
+  const id = Number(gameId);
+  const desk = useQuery({ queryKey: QK.desk(id), queryFn: () => api.desk(id) });
+  if (desk.isLoading || !desk.data) return null;
+
+  return (
+    <Paper p="md" mt="md" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+      <Text fw={700} mb="sm">Árbitros</Text>
+      <Table>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Nombre</Table.Th>
+            <Table.Th>Rasgo</Table.Th>
+            <Table.Th ta="right">Partidos calientes limpios</Table.Th>
+            <Table.Th ta="right">Última jornada caliente</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {desk.data.availableReferees.map((r) => (
+            <Table.Tr key={r.id}>
+              <Table.Td fw={600}>{r.name}</Table.Td>
+              <Table.Td>{REFEREE_TRAIT_LABEL[r.trait] ?? r.trait}</Table.Td>
+              <Table.Td ta="right">{r.hotMatchesClean}</Table.Td>
+              <Table.Td ta="right">{r.lastHotMatchday || '—'}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Paper>
+  );
+}
+
 function IntegrityTab({ gameId }: { gameId: string }) {
   const id = Number(gameId);
   const integrity = useQuery({ queryKey: QK.integrity(id), queryFn: () => api.integrity(id) });
@@ -179,6 +218,8 @@ function IntegrityTab({ gameId }: { gameId: string }) {
           </Table.Tbody>
         </Table>
       )}
+
+      <RefereeTable gameId={gameId} />
     </>
   );
 }

@@ -908,6 +908,41 @@ export interface GameState {
   nextCaseId: number;
   // teamId → times favored by an impulse this season (resets at closeSeason).
   impulseFavorCounts: Record<number, number>;
+  // Fase 17E: el despacho semanal — prime time, árbitros, prensa. Uses
+  // deskRng exclusively (seeded since 17A, unused until here). Entirely
+  // optional flavor: a commissioner who never opens the desk gets the same
+  // deterministic auto-resolution every matchday (no-RNG primetime pick,
+  // round-robin referees), same as before this sub-phase existed.
+  referees: Referee[];
+  nextRefereeId: number;
+  deskPending: DeskDecisions | null;
+  primetimeDrought: Record<number, number>; // teamId → consecutive matchdays not chosen
+  primetimeSeasonBonus: number; // accumulates each matchday, liquidated by processEconomy at closeSeason
+  consecutiveEvasions: number; // resets on institucional/populista
+}
+
+// Fase 17E: referee pool for hot matches (derby or a direct title/relegation
+// duel in the season's last 5 matchdays). Referees never touch the match
+// result — they only modulate the spawn chance of a linked `arbitraje_dudoso`
+// event, rolled from deskRng.
+export type RefereeTrait = 'estricto' | 'permisivo' | 'estrella' | 'novato';
+
+export interface Referee {
+  id: number;
+  name: string;
+  trait: RefereeTrait;
+  hotMatchesClean: number; // consecutive clean hot matches; 4 as novato -> promotes to estricto
+  lastHotMatchday: number; // 0 = never officiated a hot match; drives estrella fatigue (max 1-in-3)
+}
+
+// Staged by the commissioner via setDeskDecisions before advancing; consumed
+// (and cleared) by applyDesk at the top of advanceMatchday. Unset fields
+// auto-resolve deterministically.
+export interface DeskDecisions {
+  matchday: number;
+  primetimeMatch: { homeId: number; awayId: number } | null;
+  refereeAssignments: Array<{ homeId: number; awayId: number; refereeId: number }>;
+  pressAnswer: 'institucional' | 'populista' | 'evasiva' | null;
 }
 
 // Fase 17D: deterministic match-fixing candidate detector + commissioner

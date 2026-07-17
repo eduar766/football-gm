@@ -191,6 +191,21 @@ describe('integrity (Fase 17D)', () => {
   });
 });
 
+describe('desk (Fase 17E)', () => {
+  it('a player-less game never touches desk state across seasons (referees, drought, bonus all inert)', () => {
+    fc.assert(
+      fc.property(seed(), (sd) => {
+        const g = playSeasons(createGame(sd), 4);
+        expect(g.deskPending).toBeNull();
+        expect(g.primetimeDrought).toEqual({});
+        expect(g.primetimeSeasonBonus).toBe(0);
+        expect(g.consecutiveEvasions).toBe(0);
+      }),
+      { numRuns: 25 },
+    );
+  });
+});
+
 describe('impulses', () => {
   it('cannot spend more impulses than allowed and never goes negative', () => {
     let g = startSeason(createGame(2024));

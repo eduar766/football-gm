@@ -79,6 +79,9 @@ import {
   buryCase as engineBuryCase,
   sanctionFixing as engineSanctionFixing,
   pardonFixing as enginePardonFixing,
+  deskInbox as engineDeskInbox,
+  setDeskDecisions as engineSetDeskDecisions,
+  type DeskDecisions,
   type GameState,
 } from '@football-gm/engine';
 import { GameStateImportSchema } from '@football-gm/contracts';
@@ -123,6 +126,8 @@ import type {
   IntegrityCaseDto,
   ExposureLevel,
   ResolveCaseRequest,
+  DeskInboxResponse,
+  SetDeskDecisionsRequest,
 } from '@football-gm/contracts';
 import type { Database } from '../db/drizzle';
 import { DRIZZLE } from '../db/drizzle.module';
@@ -2344,6 +2349,86 @@ export class GameService {
       await this.repo.saveState(tx, gameId, next);
       const engToDb = await this.repo.engineToDbTeam(gameId, tx);
       return this.integrityResponse(next, engToDb);
+    });
+  }
+
+  /* ------------------------------------- desk (Fase 17E) */
+
+  private deskInboxResponse(state: GameState, engToDb: Map<number, number>): DeskInboxResponse {
+    const remap = (f: { homeId: number; homeName: string; awayId: number; awayName: string }) => ({
+      homeId: engToDb.get(f.homeId) ?? f.homeId,
+      homeName: f.homeName,
+      awayId: engToDb.get(f.awayId) ?? f.awayId,
+      awayName: f.awayName,
+    });
+    const inbox = engineDeskInbox(state);
+    return {
+      matchday: inbox.matchday,
+      primetimeCandidates: inbox.primetimeCandidates.map(remap),
+      hotMatches: inbox.hotMatches.map(remap),
+      availableReferees: inbox.availableReferees,
+      pressQuestionEligible: inbox.pressQuestionEligible,
+      pending: inbox.pending
+        ? {
+            matchday: inbox.pending.matchday,
+            primetimeMatch: inbox.pending.primetimeMatch
+              ? {
+                  homeId: engToDb.get(inbox.pending.primetimeMatch.homeId) ?? inbox.pending.primetimeMatch.homeId,
+                  awayId: engToDb.get(inbox.pending.primetimeMatch.awayId) ?? inbox.pending.primetimeMatch.awayId,
+                }
+              : null,
+            refereeAssignments: inbox.pending.refereeAssignments.map((ra) => ({
+              homeId: engToDb.get(ra.homeId) ?? ra.homeId,
+              awayId: engToDb.get(ra.awayId) ?? ra.awayId,
+              refereeId: ra.refereeId,
+            })),
+            pressAnswer: inbox.pending.pressAnswer,
+          }
+        : null,
+    };
+  }
+
+  async getDesk(gameId: number): Promise<DeskInboxResponse> {
+    const state = await this.repo.loadState(gameId);
+    const engToDb = await this.repo.engineToDbTeam(gameId);
+    return this.deskInboxResponse(state, engToDb);
+  }
+
+  async setDesk(gameId: number, body: SetDeskDecisionsRequest): Promise<DeskInboxResponse> {
+    return this.db.transaction(async (tx) => {
+      const state = await this.repo.loadState(gameId, tx);
+      const dbToEng = await this.dbToEngineTeamMap(gameId, tx);
+
+      const patch: Partial<Omit<DeskDecisions, 'matchday'>> = {};
+      if (body.primetimeMatch !== undefined) {
+        if (body.primetimeMatch === null) {
+          patch.primetimeMatch = null;
+        } else {
+          const homeId = dbToEng.get(body.primetimeMatch.homeId);
+          const awayId = dbToEng.get(body.primetimeMatch.awayId);
+          if (homeId == null || awayId == null) throw new BadRequestException('Equipo no encontrado');
+          patch.primetimeMatch = { homeId, awayId };
+        }
+      }
+      if (body.refereeAssignments !== undefined) {
+        patch.refereeAssignments = body.refereeAssignments.map((ra) => {
+          const homeId = dbToEng.get(ra.homeId);
+          const awayId = dbToEng.get(ra.awayId);
+          if (homeId == null || awayId == null) throw new BadRequestException('Equipo no encontrado');
+          return { homeId, awayId, refereeId: ra.refereeId };
+        });
+      }
+      if (body.pressAnswer !== undefined) patch.pressAnswer = body.pressAnswer;
+
+      const next = engineSetDeskDecisions(state, patch);
+      if (next === state) {
+        throw new BadRequestException(
+          'No se pudo guardar la decisión (jornada no disponible, partido o árbitro no válido)',
+        );
+      }
+      await this.repo.saveState(tx, gameId, next);
+      const engToDb = await this.repo.engineToDbTeam(gameId, tx);
+      return this.deskInboxResponse(next, engToDb);
     });
   }
 

@@ -9,7 +9,9 @@ export function generateHeadlines(state: GameState): Headline[] {
   if (state.phase !== 'temporada' || state.currentMatchday === 0) return headlines;
 
   const teamById = new Map(state.teams.map((t) => [t.id, t]));
-  const lastMd = state.currentMatchday;
+  // currentMatchday points to the NEXT (unplayed) matchday between advances —
+  // matchReports for the matchday just played sit at currentMatchday - 1.
+  const lastMd = state.currentMatchday - 1;
 
   // ── Last matchday events (player federation) ─────────────────────────────
   const lastReports = state.matchReports.filter(

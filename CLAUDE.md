@@ -124,7 +124,7 @@ Do **not** add ad-hoc defaults in `loadState()` — all backward-compat patches 
 - `state.mandatesRng` — board mandate generation (seeded from game seed via XOR constant).
 - `state.politicsRng` — public opinion / political capital effects (Fase 17B), incl. the indeciso-vote tie-break in `assembly.ts` (Fase 17C).
 - `state.scandalRng` — match-fixing candidate detection, investigation outcomes, and scandal/leak rolls (Fase 17D `integrity.ts`).
-- `state.deskRng` — reserved, seeded since 17A, not yet consumed by any shipped sub-phase.
+- `state.deskRng` — el despacho semanal (Fase 17E): referee-linked event rolls, referee target selection, press-question roll. Seeded since 17A, first consumed by `desk.ts`.
 
 These must never cross — each subsystem draws only from its own stream. This keeps the golden snapshot deterministic no matter how many new systems get added.
 
@@ -172,6 +172,8 @@ Key modeling invariants:
 - `OpinionEntry` — Fase 17B: one snapshot per season in `state.opinionHistory[]` (`{ year, value, reasons[] }`); `state.publicOpinion` (0-100) is the live value, a third constituency alongside `boardConfidence` and `arraigo`.
 - `AssemblyProposal` / `ProposalKind` / `Pledge` — Fase 17C: `state.proposals[]` is the vote-in-flight ledger (7 `ProposalKind`s, simple or 2/3 majority, resolved at the top of `startSeason`/`advanceMatchday`); `state.pledges[]` is the append-only "book of promises" a commissioner made to win votes, verified at `closeSeason` by `pledges.ts`.
 - `IntegrityCase` / `CaseStatus` — Fase 17D: `state.integrityCases[]`, one entry per suspected match-fixing incident. `suspectTeamId` is the side with nothing at stake in the suspicious result — the one a Sancionar/Perdonar resolution targets. `strong` (margin ≥5 or repeat offender) gates the "Enterrar" (bury) option. A match-fixing sanction uses a sentinel `normId: 0` on the `Sanction` it pushes (never collides with a real norm id, which starts at 1).
+- `Referee` / `RefereeTrait` — Fase 17E: `state.referees[]`, a fixed pool of 8 (`estricto`/`permisivo`/`estrella`/`novato`). Never affects a match result — only modulates the spawn chance of a linked event. `hotMatchesClean` tracks progression (4 clean as novato → estricto); `lastHotMatchday` drives estrella fatigue (max 1-in-3 hot matchdays).
+- `DeskDecisions` — Fase 17E: `state.deskPending`, staged by the commissioner before `advanceMatchday` consumes and clears it. Its mere presence for the current matchday is the gate that turns on all of `applyDesk`'s side effects — see `desk.ts`'s table row.
 
 ### Backend architecture
 
@@ -189,6 +191,7 @@ The `game/` module controllers are split by domain to keep files manageable:
 | `io.controller.ts` | `GET /games/:id/export`, `POST /games/import` | Save file export/import |
 | `mailbox.controller.ts` | `GET /games/:id/mailbox`, mark read/read-all, `POST /games/:id/demands/:demandId/resolve` | Commissioner inbox & club demands |
 | `assembly.controller.ts` | `GET /games/:id/assembly`, propose/withdraw/reveal/buy-vote/pledge | Club assembly proposals & pledge book (Fase 17C) |
+| `desk.controller.ts` | `GET/POST /games/:id/desk` | El despacho semanal: prime time, referees, press question (Fase 17E) |
 
 `history.controller.ts` additionally serves `GET /games/:id/federation-log` (narrative timeline) and `GET /games/:id/season-reports` (every closed-season newspaper edition, newest first).
 
@@ -235,7 +238,7 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `match.ts` | `simulateMatch` — Poisson-distributed goals, cards, goalscorers; appends to `state.matchReports` |
 | `fixtures.ts` | `generateFixtures` — double round-robin via circle method with Fisher-Yates shuffle for variety per season |
 | `structure.ts` | League structure helpers: `competingTeams`, `teamsInDivision`, `pendingIntegrationTeams`, `MAX_DIVISION_SIZE`, `PROMOTION_RELEGATION`, `divisionName` |
-| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 20). Called once per load in `GameStateRepository`. |
+| `migrations.ts` | `migrateState(state)` — brings any serialized `GameState` up to `CURRENT_SCHEMA_VERSION` (currently 21). Called once per load in `GameStateRepository`. |
 | `economy.ts` | Commercial contracts, revenue, costs, `processEconomy` at season close; offer-value deductions from negotiations |
 | `negotiation.ts` | Negotiation lifecycle, requirements generation/reveal/check, rival poach attempts, `poachCooldowns` |
 | `norms.ts` | Norm creation, breach detection, `valorActual()`, `governanceBonus()` |
@@ -265,6 +268,7 @@ All API calls go through `apps/frontend/src/api.ts` — a typed fetch wrapper th
 | `assembly.ts` | Fase 17C: the Club Assembly. `proposeMeasure`/`withdrawProposal`/`revealIntention`/`buyVote`/`pledgeForVote`/`resolveAllPendingProposals`/`applyApprovedProposal` (dispatches an approved proposal to the existing addNorm/removeNorm/setLeaguePrize/createCup/runLevelingLeague/setLeagueFormat functions). Vote-intention score = kind-specific interest + arraigo + president trait + pledge memory − grudge/4; ties resolved via `politicsRng`. Several governance actions (norms, league prize, leveling, cup format, recurring cups) now require assembly approval instead of unilateral commissioner action. |
 | `pledges.ts` | Fase 17C: `verifyPledges` closeSeason step — checks the 4 `PledgeKind`s (plaza_copa/mejora_reparto/exencion_norma/rescate_futuro) a commissioner made to win votes; fulfilling raises arraigo/PC, breaking tanks arraigo and raises the president's grudge. |
 | `integrity.ts` | Fase 17D: escándalos e integridad. Deterministic match-fixing candidate detector (`hasSomethingAtStake` mathematical-elimination heuristic over the last 5 matchdays) + `scandalRng`-gated case spawning (capped 2/season); `startInvestigation`/`archiveCase`/`buryCase`/`sanctionFixing`/`pardonFixing` commissioner actions; `closeSeasonIntegrity` — exposure decay/scandal roll + buried-case leak rolls, folding any prestige hit into the closing season's `ctx.prestigeDelta`. Impulses raise hidden `exposureRisk` directly in `applyImpulse` (engine.ts). |
+| `desk.ts` | Fase 17E: el despacho semanal. `deskInbox` (pure per-matchday trays: prime time, hot-match referees, press question) / `setDeskDecisions` (stage) / `applyDesk` (called at the top of `advanceMatchday`). **Only acts when `state.deskPending` exists for the current matchday** — a passive commissioner who never calls `setDeskDecisions` draws zero `deskRng` and mutates nothing (opt-in per matchday, not a background auto-pilot — see the sub-phase note in "Key game mechanics" for why). Reuses `detectRivalries` (derby) and `hasSomethingAtStake` (title/relegation duel) from other modules to detect "hot" matches; referees never touch a match result, only the spawn chance of a linked `arbitraje_dudoso` event via `events.ts`'s `spawnRefereeEvent`. |
 
 ### Dev build-order gotcha
 
@@ -300,6 +304,7 @@ If you see `TS7016: Could not find a declaration file`, run `pnpm build` once, t
 - **Public opinion & political capital (Fase 17B):** `publicOpinion` (0-100) is a third constituency alongside `boardConfidence` and `arraigo`, moved by deterministic season-close events (title race, goals, cup finals, ignored demands); `politicalCapital` (0-12) is earned by keeping promises/mandates and spent on `accelerateNegotiation`, buying assembly votes, or discounting a cover-up's leak risk.
 - **Club Assembly & book of promises (Fase 17C):** several previously-unilateral commissioner actions (new/removed norms, league prize distribution, leveling leagues, cup format changes, recurring cups) now require a passed assembly proposal instead. Presidents vote based on self-interest, arraigo, trait, and pledge memory; a commissioner can reveal intentions, buy votes, or pledge future favors to swing the outcome. Pledges are tracked and verified at `closeSeason` — broken promises tank arraigo and raise grudge.
 - **Escándalos e integridad (Fase 17D):** a hidden `exposureRisk` (0-95) accumulates from repeated impulse use and can blow up into an institutional scandal at `closeSeason` (prestige/opinion/confidence hit). A deterministic detector flags suspicious league results (a team with nothing at stake involved in a ≥3-goal upset against a team fighting for something); the commissioner can investigate, archive, bury, sanction, or pardon each case — burying carries a growing risk of a leak that costs even more than getting caught outright.
+- **El despacho semanal (Fase 17E):** three optional per-matchday decisions — pick the prime-time fixture (a bonus TV revenue accumulator, liquidated at `closeSeason`; never picking the same club 8+ consecutive times costs arraigo), assign a referee to a "hot" match (derby or a direct title/relegation duel in the last 5 matchdays — the referee's trait only modulates the odds of a linked `arbitraje_dudoso` event, never the result), and answer a press question after a strong headline (institucional/populista/evasiva, each with a different opinion/confidence trade-off; 3 evasivas in a row costs opinion). **Strictly opt-in per matchday** — `applyDesk` only runs when the commissioner staged at least one decision that matchday; a passive playthrough draws zero extra RNG and stays byte-identical to before this sub-phase existed. Embedded as a compact card on the Dashboard, not its own page.
 
 ## CI/CD
 

@@ -182,6 +182,12 @@ export function processEconomy(s: GameState): {
     merchandiseRevenue *= opinionMultiplier;
   }
 
+  // Fase 17E: prime-time TV bonus, accumulated per matchday by desk.ts and
+  // liquidated here — a flat addition, not scaled by the opinion multiplier
+  // above (it's already-negotiated broadcasting money, not gate/merch mood).
+  matchdayRevenue += s.primetimeSeasonBonus;
+  s.primetimeSeasonBonus = 0;
+
   const income = contractIncome + matchdayRevenue + merchandiseRevenue;
 
   // Batch 3: committed revenue shares for teams that adhesed with an offerValue.

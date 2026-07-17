@@ -39,6 +39,8 @@ import type {
   PledgeKind,
   IntegrityResponse,
   ResolveCaseAction,
+  DeskInboxResponse,
+  SetDeskDecisionsRequest,
 } from '@football-gm/contracts';
 import { TOKEN_KEY, API } from './constants';
 import { ApiError } from './api-error';
@@ -238,6 +240,12 @@ export const api = {
     req<NormsResponse>(`/games/${id}/sanctions`, {
       method: 'POST',
       body: JSON.stringify({ teamId, normId }),
+    }),
+  desk: (id: number) => req<DeskInboxResponse>(`/games/${id}/desk`),
+  setDesk: (id: number, body: SetDeskDecisionsRequest) =>
+    req<DeskInboxResponse>(`/games/${id}/desk`, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
   integrity: (id: number) => req<IntegrityResponse>(`/games/${id}/integrity`),
   resolveCase: (id: number, caseId: number, action: ResolveCaseAction, spendPcForDiscount?: boolean) =>

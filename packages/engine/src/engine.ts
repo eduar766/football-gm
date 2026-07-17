@@ -38,6 +38,7 @@ import { closeSeasonOpinion, earnPC } from './politics';
 import { resolveAllPendingProposals } from './assembly';
 import { verifyPledges } from './pledges';
 import { closeSeasonIntegrity, detectAndSpawnCases, registerImpulseExposure, resolveInvestigation } from './integrity';
+import { applyDesk, generateReferee } from './desk';
 import { pushMail } from './mailbox';
 import { generateClubDemands, expireDemands, processExodus } from './demands';
 import { evaluateBoardConfidence, CONFIDENCE_START } from './board';
@@ -263,6 +264,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     .filter((f) => !f.isPlayer)
     .map((f) => generateRivalCommissioner(charactersRng, f.id, 1));
 
+  // Fase 17E: 8 referees, one-shot RNG derived from the seed — consumed once
+  // here and never again. Weekly desk logic draws from deskRng instead.
+  const refereeSeedRng = makeRng((seed ^ 0x27d4eb2f) >>> 0);
+  let nextRefereeId = 1;
+  const referees = Array.from({ length: 8 }, () => generateReferee(refereeSeedRng, nextRefereeId++));
+
   // A fresh game lands in pretemporada (§4.8): the commissioner sets up
   // competitions/contracts/prizes BEFORE calling startSeason, which builds the
   // calendar and switches the phase to temporada.
@@ -386,6 +393,12 @@ export function createGame(seed: number, options: CreateGameOptions = {}): GameS
     integrityCases: [],
     nextCaseId: 1,
     impulseFavorCounts: {},
+    referees,
+    nextRefereeId,
+    deskPending: null,
+    primetimeDrought: {},
+    primetimeSeasonBonus: 0,
+    consecutiveEvasions: 0,
   };
 }
 
@@ -699,6 +712,11 @@ export function advanceMatchday(prev: GameState): GameState {
   // Fase 17C: any proposal made since the last advance resolves now — "se
   // resuelve al avanzar la siguiente jornada". Cheap: capped at 2 pending.
   s = resolveAllPendingProposals(s);
+  // Fase 17E: el despacho — locks in prime time/referees for THIS matchday
+  // (auto-resolving anything unset) and resolves any press question about
+  // the matchday just played. Must run before the fixture loop below so
+  // primetime/referee state is settled before kickoff.
+  applyDesk(s);
   const md = s.currentMatchday;
   const byId = new Map(s.teams.map((t) => [t.id, t]));
   const playingTeams = new Set<number>();
@@ -1481,6 +1499,8 @@ const closeSeasonSteps: CloseSeasonStep[] = [
       s.impulsesRemaining = s.impulsesPerSeason;
       s.pendingImpulses = [];
       s.impulseFavorCounts = {}; // Fase 17D: "repeated this season" tracking resets each close
+      s.primetimeDrought = {}; // Fase 17E: "max -3/temporada" cap resets each close
+      s.deskPending = null;
       s.seasonOver = false;
       // Reset event-driven temporary effects.
       s.eventStrengthPenalty = 0;
