@@ -4,7 +4,7 @@
 
 import { rngNext } from './rng';
 import { logFederation } from './federation-log';
-import { addPresidentForTeam, removePresidentForTeam } from './characters';
+import { addPresidentForTeam, presidentOf, presidentQuote, removePresidentForTeam } from './characters';
 import { spendPC } from './politics';
 import type { Federation, GameState, Negotiation, NegotiationRequirement, Team } from './types';
 
@@ -300,12 +300,17 @@ export function progressNegotiations(s: GameState): void {
         n.state = 'effective';
         if (n.byFederationId === s.playerFederationId) {
           addPresidentForTeam(s, team.id);
+          // Fase 17A: the freshly-appointed president gets a voice in the log.
+          const president = presidentOf(s, team.id);
+          const quote = president
+            ? ` Su presidente, ${president.name}: «${presidentQuote(president.trait, 'adhesion')}»`
+            : '';
           logFederation(s, {
             year: s.year,
             matchday: 0,
             type: 'negotiation_effective',
             title: 'Equipo incorporado',
-            detail: `${team.name} se unió a tu federación (pendiente de ubicar en la nivelación)`,
+            detail: `${team.name} se unió a tu federación (pendiente de ubicar en la nivelación).${quote}`,
             value: null,
             teamId: team.id,
           });

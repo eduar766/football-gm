@@ -16,6 +16,7 @@ import { rngNext } from './rng';
 import { presidentOf } from './characters';
 import { spendPC } from './politics';
 import { logFederation } from './federation-log';
+import { pushMail } from './mailbox';
 import { addNorm, removeNorm } from './norms';
 import { setLeaguePrize } from './prizes';
 import { createCup } from './cups';
@@ -409,6 +410,19 @@ export function resolveProposal(prev: GameState, proposalId: number): GameState 
     detail: `${p.kind} — ${favor}/${total} votos a favor`,
     value: null,
     teamId: null,
+  });
+  // Fase 17C (§4.9): the vote result also lands in the commissioner's inbox.
+  pushMail(s, {
+    year: s.year,
+    matchday: s.currentMatchday,
+    category: passed ? 'hito' : 'aviso',
+    title: passed ? 'Propuesta aprobada por la asamblea' : 'Propuesta rechazada por la asamblea',
+    body: `La votación sobre "${p.kind}" se resolvió con ${favor}/${total} votos a favor${passed ? ' — la medida entra en vigor.' : ' — no alcanzó la mayoría necesaria.'}`,
+    actionKind: null,
+    refId: p.id,
+    teamId: null,
+    deadlineMatchday: null,
+    createdAtMatchday: s.currentMatchday,
   });
 
   if (passed) s = applyApprovedProposal(s, p);

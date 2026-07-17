@@ -8,7 +8,7 @@
 import { rngNext } from './rng';
 import { pushMail, markMailByRef } from './mailbox';
 import { logFederation } from './federation-log';
-import { removePresidentForTeam } from './characters';
+import { presidentOf, presidentQuote, removePresidentForTeam } from './characters';
 import type { ClubDemand, GameState, Team } from './types';
 
 // Tunables — kept together so playtesting can adjust them fast.
@@ -191,10 +191,15 @@ export function resolveDemand(
     s.treasury -= inject;
     team.treasury += inject;
     s.rescueLog.push({ year: s.year, teamId: team.id, teamName: team.name, amount: inject });
+    // Fase 17A: the club's president thanks (or half-thanks) the commissioner.
+    const president = presidentOf(s, team.id);
+    const quote = president && !half
+      ? ` ${president.name}: «${presidentQuote(president.trait, 'rescate')}»`
+      : '';
     logFederation(s, {
       year: s.year, matchday: demand.createdMatchday, type: 'rescue',
       title: half ? 'Rescate parcial (contraoferta)' : 'Rescate concedido',
-      detail: `${half ? 'Contraoferta a' : 'Atendiste la petición de'} ${team.name}: ${inject.toLocaleString('es-ES')} €`,
+      detail: `${half ? 'Contraoferta a' : 'Atendiste la petición de'} ${team.name}: ${inject.toLocaleString('es-ES')} €.${quote}`,
       value: inject, teamId: team.id,
     });
   } else {

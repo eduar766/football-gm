@@ -8,7 +8,8 @@ import {
   startSeason,
   type GameState,
 } from '../src/index';
-import { presidentOf } from '../src/characters';
+import { presidentOf, presidentQuote, rivalCommissionerQuote } from '../src/characters';
+import { generateHeadlines } from '../src/headlines';
 import { progressNegotiations } from '../src/negotiation';
 import { processExodus } from '../src/demands';
 
@@ -208,5 +209,43 @@ describe('characters (Fase 17A) — property invariant', () => {
       }),
       { numRuns: 25 },
     );
+  });
+});
+
+describe('character quotes (Fase 17A, cierre F17)', () => {
+  it('presidentQuote covers every (trait, context) pair with a non-empty deterministic string', () => {
+    const traits = ['leal', 'ambicioso', 'tradicionalista', 'mercenario', 'institucional'] as const;
+    const contexts = ['racha_victorias', 'racha_derrotas', 'adhesion', 'rescate', 'sancion'] as const;
+    for (const t of traits) {
+      for (const c of contexts) {
+        const q = presidentQuote(t, c);
+        expect(q.length).toBeGreaterThan(0);
+        expect(presidentQuote(t, c)).toBe(q); // deterministic
+      }
+    }
+  });
+
+  it('rivalCommissionerQuote covers every (trait, context) pair', () => {
+    const traits = ['agresivo', 'conservador', 'corrupto', 'visionario', 'diplomatico'] as const;
+    for (const t of traits) {
+      expect(rivalCommissionerQuote(t, 'goleada').length).toBeGreaterThan(0);
+      expect(rivalCommissionerQuote(t, 'sorpresa').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('a 4-win streak produces a presidente_declara headline quoting the streak team\'s president', () => {
+    const g = startSeason(gameWithRival(77));
+    const team = g.teams[0];
+    // Fabricate a clean 4-win streak for team 1.
+    g.results = [2, 3, 4, 5].map((opponent, i) => ({
+      matchday: i + 1, divisionOrden: 1, homeId: team.id, awayId: g.teams[opponent % g.teams.length].id,
+      homeGoals: 2, awayGoals: 0,
+    }));
+    g.currentMatchday = 5;
+    const headlines = generateHeadlines(g);
+    const quote = headlines.find((h) => h.type === 'presidente_declara');
+    expect(quote).toBeDefined();
+    expect(quote!.teamId).toBe(team.id);
+    expect(quote!.text).toContain(presidentOf(g, team.id)!.name);
   });
 });

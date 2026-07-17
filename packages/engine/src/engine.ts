@@ -23,6 +23,7 @@ import {
   decayViolationHistory,
   governancePenalty,
   governanceBonus,
+  normBreaches,
   pointPenaltiesForYear,
 } from './norms';
 import {
@@ -1140,6 +1141,12 @@ const closeSeasonSteps: CloseSeasonStep[] = [
     priority: 55,
     run(s) {
       s.governanceStreak = governanceBonus(s) > 0 ? s.governanceStreak + 1 : 0;
+      // Fase 17B (§3.3): a season closing with norms on the books and zero
+      // breaches earns political capital. Gated on players.length so
+      // player-less runs (golden) never touch PC/federationLog from here.
+      if (s.players.length > 0 && s.norms.length > 0 && normBreaches(s).length === 0) {
+        earnPC(s, 1, 'todas las normas cumplidas al cierre');
+      }
     },
   },
   {

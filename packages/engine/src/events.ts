@@ -47,6 +47,14 @@ const ARRAIGO_ACT_HIT = 3;
 const ARRAIGO_IGNORE_BONUS = 1;
 const PRESTIGE_CADUCO_HIT = 2;
 
+// Fase 17B (§3.2 "deltas intra-temporada"): the 3 event types with a public
+// component — resolving them moves publicOpinion. Acting reads as defending
+// the game's integrity; ignoring reads as looking away. Only fires on the
+// player's explicit resolveEvent call, so passive/golden runs never move.
+const PUBLIC_EVENT_TYPES: EventType[] = ['arbitraje_dudoso', 'incidente_aficion', 'manipulacion_resultados'];
+const OPINION_ACT_BONUS = 3;
+const OPINION_IGNORE_HIT = 4;
+
 const TYPES: EventType[] = [
   'arbitraje_dudoso',
   'incidente_aficion',
@@ -222,12 +230,18 @@ export function resolveEvent(
         break;
     }
 
+    if (PUBLIC_EVENT_TYPES.includes(event.tipo)) {
+      s.publicOpinion = Math.min(100, s.publicOpinion + OPINION_ACT_BONUS);
+    }
     event.status = 'resuelto_actuar';
   } else {
     const ignorePrestigeCost = event.severity === 'alta' ? 4 : event.severity === 'media' ? 2 : 1;
     s.prestige = Math.max(0, s.prestige - ignorePrestigeCost);
     mirrorPlayerPrestige(s);
     if (team) team.arraigo = Math.min(100, team.arraigo + ARRAIGO_IGNORE_BONUS);
+    if (PUBLIC_EVENT_TYPES.includes(event.tipo)) {
+      s.publicOpinion = Math.max(0, s.publicOpinion - OPINION_IGNORE_HIT);
+    }
     event.status = 'resuelto_ignorar';
   }
   event.resolvedAction = action;

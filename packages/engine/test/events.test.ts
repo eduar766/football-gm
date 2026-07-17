@@ -123,3 +123,31 @@ describe('determinism with events', () => {
     expect(JSON.stringify(run())).toBe(JSON.stringify(run()));
   });
 });
+
+describe('public-component events move opinion (Fase 17B §3.2, cierre F17)', () => {
+  function withSyntheticEvent(tipo: 'arbitraje_dudoso' | 'crisis_economica_club'): GameState {
+    const g = startSeason(createGame(505, { startingTreasury: 100_000_000, teams: squadedTeams(6) }));
+    g.events.push({
+      id: g.nextEventId++, year: g.year, matchday: 1, tipo,
+      status: 'pendiente', teamId: g.teams[0].id, message: 'x',
+      resolvedAction: null, severity: 'media', chainedFromId: null,
+    });
+    return g;
+  }
+
+  it('acting on a public event raises opinion; ignoring lowers it', () => {
+    const base = withSyntheticEvent('arbitraje_dudoso');
+    const before = base.publicOpinion;
+    const acted = resolveEvent(base, base.events.at(-1)!.id, 'actuar');
+    expect(acted.publicOpinion).toBe(Math.min(100, before + 3));
+    const ignored = resolveEvent(base, base.events.at(-1)!.id, 'ignorar');
+    expect(ignored.publicOpinion).toBe(Math.max(0, before - 4));
+  });
+
+  it('non-public events leave opinion untouched either way', () => {
+    const base = withSyntheticEvent('crisis_economica_club');
+    const before = base.publicOpinion;
+    expect(resolveEvent(base, base.events.at(-1)!.id, 'actuar').publicOpinion).toBe(before);
+    expect(resolveEvent(base, base.events.at(-1)!.id, 'ignorar').publicOpinion).toBe(before);
+  });
+});

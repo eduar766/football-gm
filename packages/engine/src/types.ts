@@ -382,7 +382,9 @@ export type HeadlineType =
   | 'goleada'
   | 'sorpresa'
   | 'racha_victorias'
-  | 'racha_derrotas';
+  | 'racha_derrotas'
+  | 'presidente_declara'          // Fase 17A: a club president's quote on a streak
+  | 'comisionado_rival_declara';  // Fase 17A: a rival commissioner's quote on their league's news
 
 export interface Headline {
   type: HeadlineType;

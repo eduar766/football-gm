@@ -177,3 +177,40 @@ describe('determinism with norms', () => {
     expect(JSON.stringify(run())).toBe(JSON.stringify(run()));
   });
 });
+
+describe('norm compliance earns PC at close (Fase 17B §3.3, cierre F17)', () => {
+  const SQUAD = [
+    { name: 'A', posicion: 'DEL' as const, calidad: 60 },
+    { name: 'B', posicion: 'MED' as const, calidad: 55 },
+  ];
+  const playable = (seed: number, strengths: number[]) =>
+    createGame(seed, {
+      startingTreasury: 100_000_000,
+      teams: strengths.map((s, i) => ({ name: `T${i + 1}`, strength: s, arraigo: 50, squad: SQUAD })),
+    });
+
+  it('a season closing with a norm on the books and zero breaches earns +1 PC', () => {
+    let g = playable(60, Array(6).fill(55));
+    g = addNorm(g, 'tope_plantilla', 99); // nobody can breach
+    g = startSeason(g);
+    const pcBefore = g.politicalCapital;
+    g = closeSeason(advanceSeason(g));
+    expect(g.politicalCapital).toBeGreaterThanOrEqual(Math.min(12, pcBefore + 1));
+    expect(g.federationLog.some((e) => e.type === 'political_capital' && e.detail.includes('normas cumplidas'))).toBe(true);
+  });
+
+  it('no PC when a breach exists at close', () => {
+    let g = playable(61, [80, 55, 55, 55, 55, 55]);
+    g = addNorm(g, 'tope_plantilla', 60); // T1 breaches
+    g = startSeason(g);
+    g = closeSeason(advanceSeason(g));
+    expect(g.federationLog.some((e) => e.type === 'political_capital' && e.detail.includes('normas cumplidas'))).toBe(false);
+  });
+
+  it('no PC when there are no norms at all', () => {
+    let g = playable(62, Array(6).fill(55));
+    g = startSeason(g);
+    g = closeSeason(advanceSeason(g));
+    expect(g.federationLog.some((e) => e.type === 'political_capital' && e.detail.includes('normas cumplidas'))).toBe(false);
+  });
+});

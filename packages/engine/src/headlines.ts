@@ -2,6 +2,7 @@
 // All pure functions over GameState.
 
 import { computeStandings } from './standings';
+import { presidentOf, presidentQuote, rivalCommissionerQuote } from './characters';
 import type { GameState, Headline, Rivalry, TeamSeasonSnapshot } from './types';
 
 export function generateHeadlines(state: GameState): Headline[] {
@@ -65,6 +66,11 @@ export function generateHeadlines(state: GameState): Headline[] {
       return gF > gA ? 'W' : gF < gA ? 'L' : 'D';
     });
 
+    // Fase 17A: the streak team's president speaks — one quote max per
+    // matchday to keep the feed readable. Deterministic (trait-keyed table).
+    const quoteAlready = headlines.some((h) => h.type === 'presidente_declara');
+    const president = presidentOf(state, team.id);
+
     if (outcomes.every((o) => o === 'W')) {
       headlines.push({
         type: 'racha_victorias',
@@ -72,6 +78,14 @@ export function generateHeadlines(state: GameState): Headline[] {
         teamId: team.id,
         importance: 2,
       });
+      if (president && !quoteAlready) {
+        headlines.push({
+          type: 'presidente_declara',
+          text: `${president.name} (${team.name}): «${presidentQuote(president.trait, 'racha_victorias')}»`,
+          teamId: team.id,
+          importance: 1,
+        });
+      }
     } else if (outcomes.every((o) => o === 'L')) {
       headlines.push({
         type: 'racha_derrotas',
@@ -79,6 +93,14 @@ export function generateHeadlines(state: GameState): Headline[] {
         teamId: team.id,
         importance: 2,
       });
+      if (president && !quoteAlready) {
+        headlines.push({
+          type: 'presidente_declara',
+          text: `${president.name} (${team.name}): «${presidentQuote(president.trait, 'racha_derrotas')}»`,
+          teamId: team.id,
+          importance: 1,
+        });
+      }
     }
   }
 
@@ -97,6 +119,11 @@ export function generateHeadlines(state: GameState): Headline[] {
     const wGoals = r.homeGoals > r.awayGoals ? r.homeGoals : r.awayGoals;
     const lGoals = r.homeGoals > r.awayGoals ? r.awayGoals : r.homeGoals;
 
+    // Fase 17A: the rival federation's commissioner comments on their own
+    // league's news (max one quote across the whole rival section).
+    const commissioner = state.rivalCommissioners.find((c) => c.federationId === r.federationId);
+    const rivalQuoteAlready = rivalHeadlines.some((h) => h.type === 'comisionado_rival_declara');
+
     if (diff >= 4 && winnerName && loserName) {
       rivalHeadlines.push({
         type: 'goleada',
@@ -106,6 +133,16 @@ export function generateHeadlines(state: GameState): Headline[] {
         rivalFederationId: r.federationId,
         isRival: true,
       });
+      if (commissioner && !rivalQuoteAlready) {
+        rivalHeadlines.push({
+          type: 'comisionado_rival_declara',
+          text: `${commissioner.name} (${fedName}): «${rivalCommissionerQuote(commissioner.trait, 'goleada')}»`,
+          teamId: null,
+          importance: 1,
+          rivalFederationId: r.federationId,
+          isRival: true,
+        });
+      }
     } else if (r.isShock && winnerName && loserName) {
       rivalHeadlines.push({
         type: 'sorpresa',
@@ -115,6 +152,16 @@ export function generateHeadlines(state: GameState): Headline[] {
         rivalFederationId: r.federationId,
         isRival: true,
       });
+      if (commissioner && !rivalQuoteAlready) {
+        rivalHeadlines.push({
+          type: 'comisionado_rival_declara',
+          text: `${commissioner.name} (${fedName}): «${rivalCommissionerQuote(commissioner.trait, 'sorpresa')}»`,
+          teamId: null,
+          importance: 1,
+          rivalFederationId: r.federationId,
+          isRival: true,
+        });
+      }
     }
   }
 

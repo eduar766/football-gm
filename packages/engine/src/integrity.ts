@@ -98,6 +98,14 @@ export function detectAndSpawnCases(s: GameState, md: number): void {
   const windowStart = Math.max(1, md - (DETECTION_WINDOW - 1));
   const byId = new Map(s.teams.map((t) => [t.id, t]));
 
+  // Variant 2 of the detector (§5.3): the bottom side winning away by ≥3 at
+  // the leader's ground is suspicious on its own — both sides have stakes,
+  // but the result is impossible enough that the suspicion falls on the
+  // leader (who lost inexplicably at home).
+  const sorted = [...table].sort((a, b) => b.points - a.points || b.goalDiff - a.goalDiff);
+  const leaderId = sorted.length >= 4 ? sorted[0].teamId : null;
+  const colistaId = sorted.length >= 4 ? sorted[sorted.length - 1].teamId : null;
+
   for (const r of div1Results) {
     if (r.matchday < windowStart || r.matchday > md) continue;
     if (s.integrityCases.filter((c) => c.year === s.year).length >= CASE_CAP_PER_SEASON) return;
@@ -105,13 +113,17 @@ export function detectAndSpawnCases(s: GameState, md: number): void {
 
     const margin = Math.abs(r.homeGoals - r.awayGoals);
     if (margin < SUSPICIOUS_MARGIN) continue;
+    const colistaShock =
+      leaderId !== null && colistaId !== null &&
+      r.homeId === leaderId && r.awayId === colistaId &&
+      r.awayGoals - r.homeGoals >= SUSPICIOUS_MARGIN;
     const homeStake = hasSomethingAtStake(table, r.homeId, remaining);
     const awayStake = hasSomethingAtStake(table, r.awayId, remaining);
-    if (homeStake === awayStake) continue; // both or neither at stake — not suspicious
+    if (!colistaShock && homeStake === awayStake) continue; // both or neither at stake — not suspicious
 
     if (rngNext(s.scandalRng) >= CANDIDATE_MATERIALIZE_P) continue; // detected, didn't stick
 
-    const suspectTeamId = homeStake ? r.awayId : r.homeId;
+    const suspectTeamId = colistaShock ? r.homeId : homeStake ? r.awayId : r.homeId;
     const repeatOffender = s.integrityCases.some((c) => c.suspectTeamId === suspectTeamId);
     const strong = margin >= STRONG_MARGIN || repeatOffender;
     const homeName = byId.get(r.homeId)?.name ?? 'Desconocido';
@@ -124,7 +136,9 @@ export function detectAndSpawnCases(s: GameState, md: number): void {
       homeId: r.homeId,
       awayId: r.awayId,
       suspectTeamId,
-      suspicion: `${homeName} ${r.homeGoals}-${r.awayGoals} ${awayName} (jornada ${r.matchday}): ${margin} goles de diferencia entre un equipo sin nada en juego y otro que se lo jugaba todo.`,
+      suspicion: colistaShock
+        ? `${homeName} ${r.homeGoals}-${r.awayGoals} ${awayName} (jornada ${r.matchday}): el líder cae goleado en casa contra el colista. Nadie se explica el resultado.`
+        : `${homeName} ${r.homeGoals}-${r.awayGoals} ${awayName} (jornada ${r.matchday}): ${margin} goles de diferencia entre un equipo sin nada en juego y otro que se lo jugaba todo.`,
       strong,
       status: 'abierto',
       investigationEndsMatchday: null,

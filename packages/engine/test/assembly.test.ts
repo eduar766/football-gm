@@ -337,3 +337,19 @@ describe('golden safety (Fase 17C)', () => {
     expect(g.pledges).toEqual([]);
   });
 });
+
+describe('vote result lands in the mailbox (Fase 17C §4.9, cierre F17)', () => {
+  it('resolving a proposal pushes an inbox message with the outcome', () => {
+    let g = playableGame();
+    g = proposeMeasure(g, 'norma_nueva', { tipo: 'tope_salarial', valor: 5_000_000 });
+    const proposalId = g.proposals[0].id;
+    const mailBefore = g.mailbox.length;
+    g = resolveProposal(g, proposalId);
+    const resolved = g.proposals.find((p) => p.id === proposalId)!;
+    expect(resolved.status === 'aprobada' || resolved.status === 'rechazada').toBe(true);
+    const msg = g.mailbox.slice(mailBefore).find((m) => m.refId === proposalId);
+    expect(msg).toBeDefined();
+    expect(msg!.category).toBe(resolved.status === 'aprobada' ? 'hito' : 'aviso');
+    expect(msg!.title).toContain(resolved.status === 'aprobada' ? 'aprobada' : 'rechazada');
+  });
+});

@@ -4,6 +4,7 @@
 
 import { wageBill } from './salaries';
 import { logFederation } from './federation-log';
+import { presidentOf, presidentQuote } from './characters';
 import type { StandingRow } from './standings';
 import type { GameState, Norm, NormBreach, NormType, Player, Team } from './types';
 
@@ -205,12 +206,17 @@ export function sanctionTeam(
   s.nextSanctionId += 1;
   if (!s.violationHistory[teamId]) s.violationHistory[teamId] = {};
   s.violationHistory[teamId][normId] = prevCount + 1;
+  // Fase 17A: the sanctioned club's president reacts in the log.
+  const president = presidentOf(s, teamId);
+  const quote = president
+    ? ` ${president.name}: «${presidentQuote(president.trait, 'sancion')}»`
+    : '';
   logFederation(s, {
     year: s.year,
     matchday: 0,
     type: 'sanction',
     title: 'Sanción impuesta',
-    detail: `${team.name}: ${motivo} (−${escalatedPoints} pts)`,
+    detail: `${team.name}: ${motivo} (−${escalatedPoints} pts).${quote}`,
     value: escalatedPoints,
     teamId,
   });

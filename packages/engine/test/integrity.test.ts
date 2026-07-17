@@ -272,6 +272,54 @@ describe('detectAndSpawnCases', () => {
     detectAndSpawnCases(g, suspiciousMd);
     expect(g.integrityCases.filter((c) => c.year === g.year).length).toBe(2);
   });
+
+  it('variant 2 (cierre F17): the colista beating the leader away by >=3 is suspicious even with both at stake — suspect is the leader', () => {
+    const { g, suspiciousMd, t8 } = buildDetectorGame(1, 3);
+    const t1 = g.teams[0].id; // runaway leader per buildDetectorGame; t8 is the pointless colista
+    // Overwrite the last result: leader collapses 0-3 at home against the colista.
+    g.results[g.results.length - 1] = {
+      matchday: suspiciousMd,
+      divisionOrden: 1,
+      homeId: t1,
+      awayId: t8,
+      homeGoals: 0,
+      awayGoals: 3,
+    };
+    let sawCase = false;
+    for (let seed = 1; seed <= 30 && !sawCase; seed++) {
+      const clone = structuredClone(g);
+      clone.scandalRng = { s: seed };
+      detectAndSpawnCases(clone, suspiciousMd);
+      if (clone.integrityCases.length > 0) {
+        sawCase = true;
+        const kase = clone.integrityCases[0];
+        expect(kase.homeId).toBe(t1);
+        expect(kase.awayId).toBe(t8);
+        expect(kase.suspectTeamId).toBe(t1); // the leader who lost inexplicably at home
+        expect(kase.suspicion).toContain('líder');
+      }
+    }
+    expect(sawCase).toBe(true);
+  });
+
+  it('variant 2 negative: the colista winning away at a NON-leader with both at stake is still not suspicious', () => {
+    const { g, suspiciousMd, t8 } = buildDetectorGame(1, 3);
+    const t7 = g.teams[6].id; // relegation-zone side, has stakes, not the leader
+    g.results[g.results.length - 1] = {
+      matchday: suspiciousMd,
+      divisionOrden: 1,
+      homeId: t7,
+      awayId: t8,
+      homeGoals: 0,
+      awayGoals: 3,
+    };
+    for (let seed = 1; seed <= 10; seed++) {
+      const clone = structuredClone(g);
+      clone.scandalRng = { s: seed };
+      detectAndSpawnCases(clone, suspiciousMd);
+      expect(clone.integrityCases).toEqual([]);
+    }
+  });
 });
 
 describe('resolveInvestigation', () => {
